@@ -277,3 +277,23 @@ lightning_logs/
 *.tmp
 *.log
 
+
+# Additional local data formats and provider credentials
+*.7z
+*.rar
+*.bz2
+*.xz
+*.tgz
+*.tif
+*.tiff
+*.nc
+*.nc4
+*.grib
+*.grib2
+*.zarr/
+*.safetensors
+.cdsapirc
+.copernicusmarine/
+.aws/
+secrets/
+*.pem

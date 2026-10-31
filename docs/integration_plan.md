@@ -1,0 +1,13 @@
+# Integration plan
+
+1. Agree on the shared dataclasses, coordinate order, UTC timestamps and units. Each team starts independently with small, explicitly synthetic example inputs in its branch. Fixture outputs must be labelled and must never be presented as real detection, drift or optimization results. Do not add fake implementations to production interfaces.
+2. Detection implements model/training/evaluation and exports masks using `DetectionOutput`. Do not import the current data loader into orchestration: it performs data reads during import. A future change requires separate review.
+3. Implement a georeferencing adapter using original CRS, raster transform, crop offsets and acquisition time. If unavailable, retain `oil_coordinates=None` and stop the real pipeline at detection. Obtain a verified UTC release time separately; it is not currently a DetectionOutput field.
+4. Drift validates geographic release parameters and environmental coverage, normalizes wind/current variables and configures OpenDrift. Export timestamped positions and duration for each requested 6/12/24-hour simulation. Agree on particle ensembles and file export/versioning before extending the initial single-track contract.
+5. Agree on how trajectory regions become `ResponseTarget` instances, including demand volumes and priorities. Supply fleet specifications and navigable travel costs. Optimization returns ordered routes, assignments, estimates and honest solver status; compare with a baseline under the same conditions.
+6. Dashboard renders imagery and pixel masks separately from geographic trajectory/route views. Call adapters from explicit actions, expose unfinished interfaces and validation failures, and retain local artifact paths. Add caching and background execution only when needed.
+7. Integrate through small PRs: contract review, adapter checks, then an end-to-end scenario with documented provenance. Validate component metrics, environmental alignment, routing feasibility and dashboard behavior before reporting results.
+
+Use branches such as `feature/detection-loader`, `feature/drift-forcing` and `feature/dashboard-views`. Keep `main` reviewable; request review from the project lead and affected interface owners. Never commit imagery, masks, checkpoints, credentials or generated outputs. Do not change shared fields without coordinating consumers.
+
+`requirements.txt` lists planned packages without unverified version pins. Teams manually choose a compatible environment; OpenDrift may need additional native/platform setup. Record tested versions after a successful team setup. No dependency installation, data download or algorithm execution is part of this scaffold.

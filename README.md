@@ -189,3 +189,16 @@ This project is currently a research prototype. Oil detection, drift simulation,
 Satellite image segmentation datasets may not include the geolocation information required for oil-drift modeling. Georeferenced imagery and appropriate environmental data will be incorporated during integration.
 
 Developed for the Ericsson Sustainability Challenge 2026.
+
+
+## Collaborative scaffold
+
+The project now has starter interfaces for the ten-member team. Segmentation training, evaluation, drift simulation and route optimization remain unimplemented and raise `NotImplementedError`. The dashboard displays scaffold status only. Existing progress statements above are retained from the original README and were not revalidated during setup.
+
+Start with [architecture](docs/architecture.md), [team assignments](docs/team_tasks.md), [integration plan](docs/integration_plan.md), [data resources](docs/datasets.md), and [shared contracts](shared/README.md). Component responsibilities are in each module README.
+
+Create a local environment manually with `python -m venv .venv`, activate it on Windows with `.venv\Scripts\Activate.ps1`, then install the planned stack with `python -m pip install -r requirements.txt` after reviewing platform compatibility, especially OpenDrift. Nothing is installed automatically; versions remain unpinned until tested. Launch the status dashboard from the repository root with `streamlit run dashboard/app.py`.
+
+Existing `detection/visualization.py` is preserved; `detection/visualize_data.py` is a compatibility launcher. Existing scripts may read local data immediately when run or imported. Keep imagery/masks in ignored local directories and do not add datasets to Git.
+
+Use one feature branch per task and pull requests reviewed by the lead and affected component owners. Validate interfaces and clearly label synthetic examples. See [tests](tests/README.md) for the planned checks.
