@@ -225,6 +225,8 @@ data/
 datasets/
 images/
 masks/
+detection/images/
+detection/masks/
 *.zip
 *.tar
 *.gz
