@@ -218,3 +218,60 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Datasets
+data/
+datasets/
+images/
+masks/
+*.zip
+*.tar
+*.gz
+
+# Trained models and checkpoints
+models/
+checkpoints/
+*.pth
+*.pt
+*.h5
+*.ckpt
+*.onnx
+
+# Python environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.key
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+__MACOSX/
+._*
+
+# Training outputs
+runs/
+logs/
+outputs/
+wandb/
+lightning_logs/
+
+# Temporary files
+*.tmp
+*.log
+
