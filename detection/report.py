@@ -1,6 +1,7 @@
 """Per-image metrics, threshold sweep and ranked galleries for a checkpoint.
 
 Run from repo root:
+  python -m detection.report --checkpoint models/oil_unet/best.pth
 """
 import argparse
 import csv
