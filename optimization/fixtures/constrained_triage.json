@@ -1,0 +1,65 @@
+{
+  "scenario_name": "constrained_triage",
+  "vessels": [
+    {
+      "vessel_id": "RAK-SCOUT-01",
+      "location": {
+        "latitude": 25.975,
+        "longitude": 56.055
+      },
+      "speed_m_per_s": 9.26,
+      "capacity_m3": 50.0,
+      "available_hours": 6.0
+    },
+    {
+      "vessel_id": "RAK-SKIMMER-01",
+      "location": {
+        "latitude": 25.975,
+        "longitude": 56.055
+      },
+      "speed_m_per_s": 6.17,
+      "capacity_m3": 100.0,
+      "available_hours": 8.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "RAK-PRIORITY-PORT-APPROACH",
+      "location": {
+        "latitude": 25.99,
+        "longitude": 56.01
+      },
+      "oil_volume_m3": 60.0
+    },
+    {
+      "target_id": "RAK-PRIORITY-COASTAL",
+      "location": {
+        "latitude": 25.92,
+        "longitude": 55.93
+      },
+      "oil_volume_m3": 50.0
+    },
+    {
+      "target_id": "RAK-LARGE-OFFSHORE-1",
+      "location": {
+        "latitude": 26.04,
+        "longitude": 55.85
+      },
+      "oil_volume_m3": 120.0
+    },
+    {
+      "target_id": "RAK-LARGE-OFFSHORE-2",
+      "location": {
+        "latitude": 26.12,
+        "longitude": 55.8
+      },
+      "oil_volume_m3": 150.0
+    }
+  ],
+  "summary": {
+    "num_vessels": 2,
+    "total_fleet_capacity_m3": 150.0,
+    "num_targets": 4,
+    "total_oil_volume_m3": 380.0
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "scenario_id": "demo_hard_01",
+  "note": "synthetic example. Positions and numbers are placeholders, Nihal will replace them. Check the positions with: python -m optimization.sea_check --scenario optimization/examples/scenario_demo_hard.json --plot check.png",
+  "vessels": [
+    {
+      "vessel_id": "V1",
+      "location": {"latitude": 25.40, "longitude": 55.00},
+      "speed_m_per_s": 5.0,
+      "capacity_m3": 200,
+      "available_hours": 14
+    },
+    {
+      "vessel_id": "V2",
+      "location": {"latitude": 25.95, "longitude": 54.30},
+      "speed_m_per_s": 4.0,
+      "capacity_m3": 150,
+      "available_hours": 14
+    },
+    {
+      "vessel_id": "V3",
+      "location": {"latitude": 26.30, "longitude": 53.60},
+      "speed_m_per_s": 6.0,
+      "capacity_m3": 120,
+      "available_hours": 10
+    }
+  ],
+  "targets": [
+    {"target_id": "T1", "location": {"latitude": 25.70, "longitude": 54.20}, "oil_volume_m3": 90},
+    {"target_id": "T2", "location": {"latitude": 26.10, "longitude": 53.80}, "oil_volume_m3": 60},
+    {"target_id": "T3", "location": {"latitude": 25.50, "longitude": 54.60}, "oil_volume_m3": 130},
+    {"target_id": "T4", "location": {"latitude": 26.20, "longitude": 54.90}, "oil_volume_m3": 50},
+    {"target_id": "T5", "location": {"latitude": 25.85, "longitude": 53.70}, "oil_volume_m3": 110},
+    {"target_id": "T6", "location": {"latitude": 25.45, "longitude": 53.80}, "oil_volume_m3": 70},
+    {"target_id": "T7", "location": {"latitude": 26.15, "longitude": 54.40}, "oil_volume_m3": 80},
+    {"target_id": "T8", "location": {"latitude": 25.60, "longitude": 54.95}, "oil_volume_m3": 100}
+  ]
+}
