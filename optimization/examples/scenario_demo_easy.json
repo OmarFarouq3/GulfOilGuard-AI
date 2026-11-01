@@ -1,0 +1,25 @@
+{
+  "scenario_id": "demo_easy_01",
+  "note": "synthetic example. Positions and numbers are placeholders, Nihal will replace them.",
+  "vessels": [
+    {
+      "vessel_id": "V1",
+      "location": {"latitude": 25.40, "longitude": 55.00},
+      "speed_m_per_s": 5.0,
+      "capacity_m3": 200,
+      "available_hours": 12
+    },
+    {
+      "vessel_id": "V2",
+      "location": {"latitude": 25.95, "longitude": 54.30},
+      "speed_m_per_s": 4.0,
+      "capacity_m3": 150,
+      "available_hours": 12
+    }
+  ],
+  "targets": [
+    {"target_id": "T1", "location": {"latitude": 25.80, "longitude": 54.50}, "oil_volume_m3": 120},
+    {"target_id": "T2", "location": {"latitude": 26.05, "longitude": 54.00}, "oil_volume_m3": 80},
+    {"target_id": "T3", "location": {"latitude": 25.60, "longitude": 54.90}, "oil_volume_m3": 100}
+  ]
+}
