@@ -6,7 +6,7 @@ Prepared for GulfOilGuard-AI (Hack for Earth, Ericsson Sustainability Challenge 
 
 The UAE depends on seawater desalination for drinking water, and its large plants sit on the coast. A UAE University modelling study focused on five coastal desalination plants that produce more than 90% of the country's desalinated water. It mapped, for each plant, the wind direction that pushes oil toward it and the shortest time a slick needs to reach it [11]. An earlier study from the same group coupled a 3-D Gulf circulation model with an oil spill model and checked the drift against the historical Al-Ahmadi spill [10].
 
-Spills on the UAE coast are recurring, not hypothetical. In October 2024 oil reached beaches near Snoopy Island in Fujairah, and the Fujairah Environment Authority sent an anti-pollution crew to contain it [16]. In 2013 a spill from a ship off Fujairah damaged about 2 km of beach and was reported as a possible risk to the Qidfa desalination plant [17].
+Spills on the UAE coast are recurring, not hypothetical. The most recent is the October 2026 spill from the damaged tanker Gem No. 2, struck around 9 to 10 October. By 30 October the slick was concentrated off Umm Al Quwain, oil had reached about 30 km of coastline from Umm Al Quwain to Al Marjan Island, and beaches in Umm Al Quwain, Sharjah and Ras Al Khaimah were closed. Authorities used maritime, aerial and satellite surveillance to monitor it [18]. We are considering this area as our simulation region, so this is the most relevant real case for the demo. In October 2024 oil reached beaches near Snoopy Island in Fujairah, and the Fujairah Environment Authority sent an anti-pollution crew to contain it [16]. In 2013 a spill from a ship off Fujairah damaged about 2 km of beach and was reported as a possible risk to the Qidfa desalination plant [17].
 
 **Pitch angle.** Our pipeline can answer the operational question raised in [11]: if oil is detected here now, how many hours until it reaches a desalination intake, and which vessels should go where first.
 
@@ -27,7 +27,7 @@ Spills on the UAE coast are recurring, not hypothetical. In October 2024 oil rea
 
 1. U-Net is a reasonable baseline. On M4D its oil-class IoU matched DeepLabv3+ [1].
 2. Numbers from different datasets cannot be compared directly. SOS is binary and has larger oil regions; M4D includes look-alikes. Team A should report oil-class Dice and IoU on a held-out split and state which dataset they come from.
-3. All these datasets are image crops (JPG or PNG). They do not keep the geographic transform, so pixel positions cannot be converted to latitude and longitude. This confirms the georeferencing gate in `docs/architecture.md`. For a real end-to-end demo we need either a georeferenced Sentinel-1 GeoTIFF scene, or a clearly labelled synthetic release point.
+3. The dataset crops we currently have lack verified geographic metadata. They are JPG or PNG crops without a recorded CRS, affine transform or crop offset, so detected pixels cannot be converted to latitude and longitude. This is the georeferencing gate in `docs/architecture.md`. Until we have a georeferenced Sentinel-1 scene (for example a GeoTIFF with its transform), detection results stay in pixel space (`oil_coordinates=None`), and any release point passed to drift must be labelled synthetic.
 4. Before claiming Gulf coverage, check the original SOS paper [2] for the scene locations. Do not assume them.
 
 ## 3. Drift prediction (Team B)
@@ -96,8 +96,10 @@ We cannot say the system detects spills in real time, gives operational forecast
 
 [14] Google, "OR-Tools," [Online]. Available: https://developers.google.com/optimization
 
-[15] "Diffusion-based data augmentation and knowledge distillation with generated soft labels solving data scarcity problems of SAR oil spill segmentation," arXiv:2412.08116, 2024. (Author list to be added.)
+[15] J. Moon, J. Yun, J. Kim, J. Lee, and M. Kim, "Diffusion-based data augmentation and knowledge distillation with generated soft labels solving data scarcity problems of SAR oil spill segmentation," arXiv:2412.08116v2, Mar. 2025.
 
 [16] "Investigation begins after oil spill cleared from Fujairah coastline," *The National*, Oct. 19, 2024.
 
 [17] "U.A.E.: Oil spill damages Fujairah's beach, may affect desalination plant," *Business Insurance*, Jul. 15, 2013.
+
+[18] "UAE oil spill: Everything we know as beaches close and clean-up drive continues," *The National*, Oct. 29, 2026 (updated Oct. 31, 2026).
