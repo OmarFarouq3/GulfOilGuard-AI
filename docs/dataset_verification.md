@@ -44,6 +44,17 @@ I also visualized an example (`palsar_1260.png`) to compare the radar image, ori
 
 The binary conversion preserved the main labeled regions in this example, although small differences were visible around the edges.
 
+### Intermediate Grayscale Pixel Analysis
+
+To measure how widespread intermediate grayscale values are, all 6,455 training masks were analyzed.
+
+- **1,847 masks (28.61%)** contain intermediate grayscale pixel values between 1 and 254.
+- **6,105,247 pixels (1.44%)** out of 423,034,880 total training mask pixels contain intermediate grayscale values.
+
+Although 28.61% of training masks contain intermediate grayscale values, these represent only 1.44% of all training mask pixels.
+
+These results help assess how widespread intermediate grayscale values are in the training dataset and provide useful information for evaluating mask preprocessing.
+
 ## 4. Conclusion
 
 The dataset passed the image-mask matching, readability, and dimension checks. No exact duplicate images were detected across the training and validation sets.
