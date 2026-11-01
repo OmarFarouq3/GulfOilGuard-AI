@@ -52,10 +52,13 @@ def display_path(path: Path) -> str:
 
 
 # --- JSON ----------------------------------------------------------------------
+# The cached readers take the file's mtime as ``stamp``. It must not start with "_":
+# st.cache_data leaves underscore-prefixed parameters out of the cache key, which would
+# keep serving the old contents after a file changes.
 
 
 @st.cache_data(show_spinner=False)
-def _read_json_cached(path_str: str, _mtime: float) -> tuple[Any, str | None]:
+def _read_json_cached(path_str: str, stamp: float) -> tuple[Any, str | None]:
     path = Path(path_str)
     try:
         return json.loads(path.read_text(encoding="utf-8")), None
@@ -112,9 +115,9 @@ def _geometry_problem(geometry: Any) -> str | None:
 
 
 @st.cache_data(show_spinner=False)
-def _read_geojson_cached(path_str: str, _mtime: float) -> tuple[dict | None, str | None]:
+def _read_geojson_cached(path_str: str, stamp: float) -> tuple[dict | None, str | None]:
     path = Path(path_str)
-    data, warning = _read_json_cached(path_str, _mtime)
+    data, warning = _read_json_cached(path_str, stamp)
     if warning:
         return None, warning
     name = display_path(path)
@@ -164,7 +167,7 @@ def read_geojson(path: Path) -> tuple[dict | None, str | None]:
 
 
 @st.cache_data(show_spinner=False)
-def _read_image_cached(path_str: str, _mtime: float) -> tuple[bytes | None, str | None]:
+def _read_image_cached(path_str: str, stamp: float) -> tuple[bytes | None, str | None]:
     path = Path(path_str)
     try:
         raw = path.read_bytes()
