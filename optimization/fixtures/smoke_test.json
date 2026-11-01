@@ -1,0 +1,65 @@
+{
+  "scenario_name": "smoke_test",
+  "vessels": [
+    {
+      "vessel_id": "V-FAST-01",
+      "location": {
+        "latitude": 24.526,
+        "longitude": 54.375
+      },
+      "speed_m_per_s": 10.29,
+      "capacity_m3": 50.0,
+      "available_hours": 8.0
+    },
+    {
+      "vessel_id": "V-OSRV-01",
+      "location": {
+        "latitude": 24.526,
+        "longitude": 54.375
+      },
+      "speed_m_per_s": 7.2,
+      "capacity_m3": 200.0,
+      "available_hours": 12.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "TGT-01",
+      "location": {
+        "latitude": 24.65,
+        "longitude": 54.21
+      },
+      "oil_volume_m3": 25.0
+    },
+    {
+      "target_id": "TGT-02",
+      "location": {
+        "latitude": 24.72,
+        "longitude": 54.15
+      },
+      "oil_volume_m3": 35.0
+    },
+    {
+      "target_id": "TGT-03",
+      "location": {
+        "latitude": 24.69,
+        "longitude": 54.02
+      },
+      "oil_volume_m3": 40.0
+    },
+    {
+      "target_id": "TGT-04",
+      "location": {
+        "latitude": 24.78,
+        "longitude": 54.08
+      },
+      "oil_volume_m3": 20.0
+    }
+  ],
+  "summary": {
+    "num_vessels": 2,
+    "total_fleet_capacity_m3": 250.0,
+    "num_targets": 4,
+    "total_oil_volume_m3": 120.0
+  }
+}

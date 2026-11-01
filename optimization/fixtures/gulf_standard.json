@@ -1,0 +1,123 @@
+{
+  "scenario_name": "gulf_standard",
+  "vessels": [
+    {
+      "vessel_id": "FRV-HAWK",
+      "location": {
+        "latitude": 24.526,
+        "longitude": 54.375
+      },
+      "speed_m_per_s": 11.32,
+      "capacity_m3": 60.0,
+      "available_hours": 10.0
+    },
+    {
+      "vessel_id": "OSRV-AL-DANA",
+      "location": {
+        "latitude": 25.011,
+        "longitude": 55.061
+      },
+      "speed_m_per_s": 7.72,
+      "capacity_m3": 250.0,
+      "available_hours": 16.0
+    },
+    {
+      "vessel_id": "OSRV-QATAR-ONE",
+      "location": {
+        "latitude": 25.918,
+        "longitude": 51.551
+      },
+      "speed_m_per_s": 6.94,
+      "capacity_m3": 300.0,
+      "available_hours": 20.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "SPILL-PATCH-01",
+      "location": {
+        "latitude": 25.25,
+        "longitude": 53.4
+      },
+      "oil_volume_m3": 45.0
+    },
+    {
+      "target_id": "SPILL-PATCH-02",
+      "location": {
+        "latitude": 25.28,
+        "longitude": 53.45
+      },
+      "oil_volume_m3": 30.0
+    },
+    {
+      "target_id": "SPILL-PATCH-03",
+      "location": {
+        "latitude": 25.32,
+        "longitude": 53.38
+      },
+      "oil_volume_m3": 55.0
+    },
+    {
+      "target_id": "SPILL-PATCH-04",
+      "location": {
+        "latitude": 25.36,
+        "longitude": 53.42
+      },
+      "oil_volume_m3": 25.0
+    },
+    {
+      "target_id": "SPILL-PATCH-05",
+      "location": {
+        "latitude": 25.4,
+        "longitude": 53.35
+      },
+      "oil_volume_m3": 60.0
+    },
+    {
+      "target_id": "SPILL-PATCH-06",
+      "location": {
+        "latitude": 25.43,
+        "longitude": 53.5
+      },
+      "oil_volume_m3": 40.0
+    },
+    {
+      "target_id": "SPILL-PATCH-07",
+      "location": {
+        "latitude": 25.47,
+        "longitude": 53.46
+      },
+      "oil_volume_m3": 35.0
+    },
+    {
+      "target_id": "SPILL-PATCH-08",
+      "location": {
+        "latitude": 25.51,
+        "longitude": 53.53
+      },
+      "oil_volume_m3": 50.0
+    },
+    {
+      "target_id": "SPILL-PATCH-09",
+      "location": {
+        "latitude": 25.55,
+        "longitude": 53.48
+      },
+      "oil_volume_m3": 70.0
+    },
+    {
+      "target_id": "SPILL-PATCH-10",
+      "location": {
+        "latitude": 25.58,
+        "longitude": 53.55
+      },
+      "oil_volume_m3": 40.0
+    }
+  ],
+  "summary": {
+    "num_vessels": 3,
+    "total_fleet_capacity_m3": 610.0,
+    "num_targets": 10,
+    "total_oil_volume_m3": 450.0
+  }
+}

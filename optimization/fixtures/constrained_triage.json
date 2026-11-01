@@ -1,0 +1,65 @@
+{
+  "scenario_name": "constrained_triage",
+  "vessels": [
+    {
+      "vessel_id": "V-SCOUT-01",
+      "location": {
+        "latitude": 24.526,
+        "longitude": 54.375
+      },
+      "speed_m_per_s": 9.26,
+      "capacity_m3": 50.0,
+      "available_hours": 6.0
+    },
+    {
+      "vessel_id": "V-SKIMMER-01",
+      "location": {
+        "latitude": 24.526,
+        "longitude": 54.375
+      },
+      "speed_m_per_s": 6.17,
+      "capacity_m3": 100.0,
+      "available_hours": 8.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "TGT-PRIORITY-HIGH",
+      "location": {
+        "latitude": 24.7,
+        "longitude": 54.1
+      },
+      "oil_volume_m3": 60.0
+    },
+    {
+      "target_id": "TGT-PRIORITY-MED",
+      "location": {
+        "latitude": 24.75,
+        "longitude": 54.15
+      },
+      "oil_volume_m3": 50.0
+    },
+    {
+      "target_id": "TGT-LARGE-OFFSHORE-1",
+      "location": {
+        "latitude": 24.95,
+        "longitude": 53.8
+      },
+      "oil_volume_m3": 120.0
+    },
+    {
+      "target_id": "TGT-LARGE-OFFSHORE-2",
+      "location": {
+        "latitude": 25.1,
+        "longitude": 53.6
+      },
+      "oil_volume_m3": 150.0
+    }
+  ],
+  "summary": {
+    "num_vessels": 2,
+    "total_fleet_capacity_m3": 150.0,
+    "num_targets": 4,
+    "total_oil_volume_m3": 380.0
+  }
+}
