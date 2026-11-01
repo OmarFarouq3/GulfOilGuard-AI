@@ -1,8 +1,10 @@
 """The OR-Tools model for cleanup routing.
 
-PHASE 1 (now): vessel capacity + open routes + skipping with a penalty.
-NOT enforced yet: available_hours and cleanup time (Phase 3), navigable water
-(Phase 2), risk and deadlines (Phase 7), drift (Phase 8).
+PHASE 1: vessel capacity + open routes + skipping with a penalty.
+PHASE 2: distances follow navigable water when the land file is available
+(otherwise straight lines, and the plan's message says so).
+NOT enforced yet: available_hours and cleanup time (Phase 3), risk and
+deadlines (Phase 7), drift (Phase 8).
 
 How the model is laid out (the "school bus" picture):
   nodes 0 .. V-1        the start position of each vessel (one bus, one start)
@@ -24,7 +26,7 @@ from shared.schemas import (
     VesselRoute,
 )
 
-LIMITS_NOTE = "phase 1: available_hours and cleanup time are not enforced yet"
+LIMITS_NOTE = "available_hours and cleanup time are not enforced yet (phase 3)"
 
 
 def solve_routes(
@@ -33,9 +35,11 @@ def solve_routes(
     config: RoutingConfig = DEFAULT_CONFIG,
     distance_provider: DistanceProvider | None = None,
 ) -> OptimizationOutput:
-    """Plan routes. Never raises: problems come back in `status` and `message`."""
-    provider = distance_provider or StraightLineDistance()
+    """Plan routes. Never raises: problems come back in `status` and `message`.
 
+    If no distance_provider is given, navigable-water distances are used when the
+    land file exists, otherwise straight lines with a warning in the message.
+    """
     problems = validate_inputs(vessels, targets)
     if problems:
         return OptimizationOutput(
@@ -53,12 +57,23 @@ def solve_routes(
         )
 
     try:
+        provider = distance_provider or _default_provider(config)
         return _solve(vessels, targets, config, provider)
     except Exception as exc:  # keep the dashboard alive, but say what happened
         return OptimizationOutput(
-            routes=(),
-            status="error",
-            message=f"solver failed: {type(exc).__name__}: {exc}",
+            routes=(), status="error", message=f"solver failed: {type(exc).__name__}: {exc}"
+        )
+
+
+def _default_provider(config: RoutingConfig) -> DistanceProvider:
+    """Sea-grid distances if possible. Otherwise straight lines, clearly flagged."""
+    try:
+        from optimization.sea_grid import default_sea_provider
+
+        return default_sea_provider(config)
+    except (ImportError, FileNotFoundError) as exc:
+        return StraightLineDistance(
+            warnings=[f"sea distances unavailable ({exc}); used straight lines instead"]
         )
 
 
@@ -84,7 +99,8 @@ def _solve(
     end_node = n_real
     n_nodes = n_real + 1
 
-    km = provider.matrix_km(points)
+    labels = [v.vessel_id for v in vessels] + [t.target_id for t in targets]
+    km = provider.matrix_km(points, labels)
 
     # Whole-number distance table in metres. The fake end node is 0 away from all.
     dist_m = [[0] * n_nodes for _ in range(n_nodes)]
@@ -94,9 +110,7 @@ def _solve(
 
     demand = [0] * n_nodes
     for t_idx, target in enumerate(targets):
-        demand[n_vessels + t_idx] = volume_to_units(
-            target.oil_volume_m3, config.volume_scale
-        )
+        demand[n_vessels + t_idx] = volume_to_units(target.oil_volume_m3, config.volume_scale)
     capacities = [volume_to_units(v.capacity_m3, config.volume_scale) for v in vessels]
 
     manager = pywrapcp.RoutingIndexManager(
@@ -114,9 +128,7 @@ def _solve(
         return demand[manager.IndexToNode(from_index)]
 
     demand_index = routing.RegisterUnaryTransitCallback(demand_callback)
-    routing.AddDimensionWithVehicleCapacity(
-        demand_index, 0, capacities, True, "Capacity"
-    )
+    routing.AddDimensionWithVehicleCapacity(demand_index, 0, capacities, True, "Capacity")
 
     # Every target may be skipped, but skipping costs a lot.
     penalty = config.drop_penalty_km * 1000
@@ -124,9 +136,7 @@ def _solve(
         routing.AddDisjunction([manager.NodeToIndex(n_vessels + t_idx)], penalty)
 
     params = pywrapcp.DefaultRoutingSearchParameters()
-    params.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-    )
+    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
     params.local_search_metaheuristic = (
         routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
     )
@@ -143,9 +153,7 @@ def _solve(
         index = routing.Start(v_idx)
         while not routing.IsEnd(index):
             node = manager.IndexToNode(index)
-            if (
-                node >= n_vessels
-            ):  # starts are below V, the fake end is never visited here
+            if node >= n_vessels:  # starts are below V, the fake end is never visited here
                 stops.append(node - n_vessels)
             index = solution.Value(routing.NextVar(index))
 
@@ -163,8 +171,9 @@ def _solve(
         )
 
     unserved = [t.target_id for i, t in enumerate(targets) if i not in served]
+    notes = [provider.description, *provider.warnings]
     message = (
-        f"{provider.description}; "
+        "; ".join(notes) + "; "
         f"unserved: {', '.join(unserved) if unserved else 'none'}; "
         f"{LIMITS_NOTE}"
     )
@@ -176,14 +185,9 @@ def _no_solution(routing: "pywrapcp.RoutingModel") -> OptimizationOutput:
     code = routing.status()
     if code == getattr(routing, "ROUTING_FAIL_TIMEOUT", 3):
         return OptimizationOutput(
-            routes=(),
-            status="not_solved",
-            message="time limit reached before any plan was found",
+            routes=(), status="not_solved", message="time limit reached before any plan was found"
         )
-    if code in (
-        getattr(routing, "ROUTING_FAIL", 2),
-        getattr(routing, "ROUTING_INFEASIBLE", 5),
-    ):
+    if code in (getattr(routing, "ROUTING_FAIL", 2), getattr(routing, "ROUTING_INFEASIBLE", 5)):
         return OptimizationOutput(
             routes=(), status="infeasible", message="no plan satisfies the rules"
         )

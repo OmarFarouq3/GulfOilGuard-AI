@@ -12,13 +12,7 @@ from optimization.checks import check_plan, validate_inputs
 from optimization.scenario_io import load_plan, load_scenario, save_plan
 from optimization.sea_distance import StraightLineDistance, haversine_km
 from optimization.units import m_per_s_to_km_per_h, travel_hours
-from shared.schemas import (
-    GeoCoordinate,
-    OptimizationOutput,
-    ResponseTarget,
-    Vessel,
-    VesselRoute,
-)
+from shared.schemas import GeoCoordinate, OptimizationOutput, ResponseTarget, Vessel, VesselRoute
 
 
 def vessel(vessel_id="V1", lat=25.4, lon=55.0, speed=5.0, capacity=200.0, hours=12.0):
@@ -30,10 +24,11 @@ def target(target_id="T1", lat=25.8, lon=54.5, volume=100.0):
 
 
 def optimize(vessels, targets):
+    """Always use straight lines here, so these tests never depend on local data files."""
     pytest.importorskip("ortools")
-    from optimization.vessel_routing import optimize_routes
+    from optimization.routing_model import solve_routes
 
-    return optimize_routes(tuple(vessels), tuple(targets))
+    return solve_routes(tuple(vessels), tuple(targets), distance_provider=StraightLineDistance())
 
 
 # ---- parts that do not need OR-Tools ----------------------------------------
@@ -45,9 +40,7 @@ def test_units():
 
 
 def test_haversine():
-    assert haversine_km(GeoCoordinate(0, 0), GeoCoordinate(0, 1)) == pytest.approx(
-        111.19, abs=0.5
-    )
+    assert haversine_km(GeoCoordinate(0, 0), GeoCoordinate(0, 1)) == pytest.approx(111.19, abs=0.5)
     same = GeoCoordinate(25.0, 55.0)
     assert haversine_km(same, same) == 0.0
 
@@ -94,18 +87,14 @@ def test_check_plan_catches_over_capacity_and_double_service():
 
 
 def test_scenario_and_plan_round_trip(tmp_path):
-    scenario_id, vessels, targets = load_scenario(
-        "optimization/examples/scenario_demo_easy.json"
-    )
+    scenario_id, vessels, targets = load_scenario("optimization/examples/scenario_demo_easy.json")
     assert scenario_id == "demo_easy_01"
     assert len(vessels) == 2 and len(targets) == 3
     assert validate_inputs(vessels, targets) == []
 
     here = GeoCoordinate(25, 55)
     plan = OptimizationOutput(
-        routes=(
-            VesselRoute("V1", ("T1",), (here, GeoCoordinate(25.5, 54.5)), 12.5, 0.7),
-        ),
+        routes=(VesselRoute("V1", ("T1",), (here, GeoCoordinate(25.5, 54.5)), 12.5, 0.7),),
         status="feasible",
         message="hello",
     )
@@ -145,10 +134,7 @@ def test_every_vessel_gets_a_route_even_if_unused():
 
 def test_capacity_is_respected_and_extra_target_is_reported():
     vessels = [vessel(capacity=200.0)]
-    targets = [
-        target("T1", volume=150.0),
-        target("T2", lat=25.7, lon=54.6, volume=150.0),
-    ]
+    targets = [target("T1", volume=150.0), target("T2", lat=25.7, lon=54.6, volume=150.0)]
     plan = optimize(vessels, targets)
     assert plan.status == "feasible", plan.message
     served = [t for r in plan.routes for t in r.assigned_target_ids]
@@ -158,14 +144,8 @@ def test_capacity_is_respected_and_extra_target_is_reported():
 
 
 def test_two_vessels_split_two_big_targets():
-    vessels = [
-        vessel("V1", capacity=200.0),
-        vessel("V2", lat=25.9, lon=54.2, capacity=200.0),
-    ]
-    targets = [
-        target("T1", volume=150.0),
-        target("T2", lat=26.0, lon=54.0, volume=150.0),
-    ]
+    vessels = [vessel("V1", capacity=200.0), vessel("V2", lat=25.9, lon=54.2, capacity=200.0)]
+    targets = [target("T1", volume=150.0), target("T2", lat=26.0, lon=54.0, volume=150.0)]
     plan = optimize(vessels, targets)
     served = sorted(t for r in plan.routes for t in r.assigned_target_ids)
     assert served == ["T1", "T2"]
@@ -193,6 +173,4 @@ def test_demo_scenario_serves_everything_and_passes_rule_check():
     served = sorted(t for r in plan.routes for t in r.assigned_target_ids)
     assert served == ["T1", "T2", "T3"]
     assert check_plan(plan, vessels, targets) == []
-    assert (
-        "straight-line" in plan.message
-    )  # the plan must say its distances are not validated
+    assert "straight-line" in plan.message  # the plan must say its distances are not validated

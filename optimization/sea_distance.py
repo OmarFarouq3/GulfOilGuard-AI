@@ -1,11 +1,13 @@
-"""Distances between points.
+"""Distances between points: the shared pieces and the straight-line fallback.
 
-PHASE 1 (now): straight-line distance only. This is TEMPORARY. The optimization
-README says straight-line routes are not valid operational routes, so every plan
-made with this provider says so in its `message`.
+Straight-line distance is only a FALLBACK. The optimization README says
+straight-line routes are not valid operational routes, so every plan made with
+this provider says so in its `message`.
 
-PHASE 2 (next): add `SeaGridDistance` in this file. It must offer the same
-`matrix_km` method and a `description`, so the solver does not change at all.
+The navigable-water version (SeaGridDistance) lives in optimization/sea_grid.py.
+It is a separate file so that code that only needs straight lines does not need
+numpy and scipy installed. Both offer the same `matrix_km` method, `description`
+and `warnings`, so the solver does not care which one it gets.
 """
 
 from math import asin, cos, radians, sin, sqrt
@@ -29,12 +31,20 @@ class DistanceProvider(Protocol):
     """Anything that can fill a distance table in km."""
 
     description: str
+    warnings: list[str]
 
-    def matrix_km(self, points: Sequence[GeoCoordinate]) -> list[list[float]]: ...
+    def matrix_km(
+        self, points: Sequence[GeoCoordinate], labels: Sequence[str] | None = None
+    ) -> list[list[float]]: ...
 
 
 class StraightLineDistance:
     description = "straight-line distances, NOT validated for navigable water"
 
-    def matrix_km(self, points: Sequence[GeoCoordinate]) -> list[list[float]]:
+    def __init__(self, warnings: Sequence[str] = ()) -> None:
+        self.warnings: list[str] = list(warnings)
+
+    def matrix_km(
+        self, points: Sequence[GeoCoordinate], labels: Sequence[str] | None = None
+    ) -> list[list[float]]:
         return [[haversine_km(a, b) for b in points] for a in points]
