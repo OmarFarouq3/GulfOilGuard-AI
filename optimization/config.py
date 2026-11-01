@@ -48,12 +48,30 @@ class RoutingConfig:
     # How long OR-Tools may search before it returns the best plan it has.
     time_limit_seconds: int = 5
 
-    # Cost (in km) of leaving one target unserved. It is large on purpose, so the
-    # solver serves every target it can and only skips one when it must.
+    # --- what the solver aims for, most important first ---
+    # 1. Recover as much oil as possible. Leaving a target unserved costs drop_penalty_km
+    #    plus drop_penalty_km_per_m3 for every m3 of its oil. Both are large on purpose, so
+    #    the solver serves every target it can, and when it must skip one it skips the
+    #    smallest oil patch, not just the one that is farthest away.
     drop_penalty_km: int = 10_000
+    drop_penalty_km_per_m3: int = 1_000
+    # 2. Finish the whole response early. Every hour until the LAST vessel is done costs
+    #    this many km, so the solver uses all vessels instead of sending one far and leaving
+    #    a fast one idle. Oil keeps spreading while it waits, so time beats fuel.
+    #    ASSUMPTION: a judgement call, not a measured value. Keep it small next to
+    #    drop_penalty_km (hours x this must stay below it) so goal 1 always comes first.
+    response_hour_cost_km: int = 100
+    # 3. Sail as little as possible: the total distance is the rest of the cost.
 
     # OR-Tools works with whole numbers, so oil is counted in tenths of a m3.
     volume_scale: int = 10
+
+    # --- cleanup time (Phase 3) ---
+    # How fast one vessel removes oil. ASSUMPTION: a placeholder, not a fact about any real
+    # vessel. 30 m3 per hour is the skimmer pump rate used in the Khark Island case study
+    # (Ranjbar et al.), so it is a reasonable starting point to cite and then replace.
+    # The same rate applies to every vessel until the schema has a per-vessel rate.
+    recovery_rate_m3_per_hour: float = 30.0
 
     # --- navigable-water distances (Phase 2) ---
     # Folder (inside the ignored data/ folder) that holds the land polygons file.
@@ -66,6 +84,14 @@ class RoutingConfig:
     max_snap_km: float = 15.0
     # Where the built land grid is cached, so the next run starts fast.
     cache_dir: str = str(REPO_ROOT / "data" / "cache")
+
+    def __post_init__(self) -> None:
+        if self.recovery_rate_m3_per_hour <= 0:
+            raise ValueError("recovery_rate_m3_per_hour must be above 0")
+        if self.time_limit_seconds < 1:
+            raise ValueError("time_limit_seconds must be at least 1")
+        if min(self.drop_penalty_km, self.drop_penalty_km_per_m3, self.response_hour_cost_km) < 0:
+            raise ValueError("drop penalties and response_hour_cost_km must be 0 or more")
 
 
 DEFAULT_CONFIG = RoutingConfig()

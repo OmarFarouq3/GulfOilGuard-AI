@@ -13,6 +13,7 @@ and `warnings`, so the solver does not care which one it gets.
 from math import asin, cos, radians, sin, sqrt
 from typing import Protocol, Sequence
 
+from optimization.config import RoutingConfig
 from shared.schemas import GeoCoordinate
 
 EARTH_RADIUS_KM = 6371.0088
@@ -48,3 +49,18 @@ class StraightLineDistance:
         self, points: Sequence[GeoCoordinate], labels: Sequence[str] | None = None
     ) -> list[list[float]]:
         return [[haversine_km(a, b) for b in points] for a in points]
+
+
+def default_provider(config: RoutingConfig) -> DistanceProvider:
+    """Sea-grid distances if the land file is available. Otherwise straight lines, clearly flagged.
+
+    The plan and the baseline both use this, so they always measure distance the same way.
+    """
+    try:
+        from optimization.sea_grid import default_sea_provider
+
+        return default_sea_provider(config)
+    except (ImportError, FileNotFoundError) as exc:
+        return StraightLineDistance(
+            warnings=[f"sea distances unavailable ({exc}); used straight lines instead"]
+        )

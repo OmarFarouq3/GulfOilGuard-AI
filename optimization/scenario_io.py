@@ -3,6 +3,13 @@
 The JSON uses the SAME field names as shared/schemas.py, so a scenario file maps
 straight onto Vessel and ResponseTarget, and a saved plan is just an
 OptimizationOutput written as JSON.
+
+Both team scenario formats load:
+  - Nihal's (optimization/fixtures/): "location": {"latitude": .., "longitude": ..}
+    and "scenario_name"
+  - Maria's (tests/scenarios/): "latitude" and "longitude" directly on each vessel
+    and target, "scenario_id" and "synthetic"
+Extra fields (summary, drift, sensitive_sites, notes) are ignored here.
 """
 
 import json
@@ -27,6 +34,11 @@ def _coordinate(data: dict, where: str) -> GeoCoordinate:
         raise ValueError(f"{where}: needs numeric 'latitude' and 'longitude'") from exc
 
 
+def _location(item: dict, where: str) -> GeoCoordinate:
+    """A nested "location" object, or latitude/longitude directly on the item."""
+    return _coordinate(item.get("location", item), where)
+
+
 def load_scenario(
     path: str | Path,
 ) -> tuple[str, tuple[Vessel, ...], tuple[ResponseTarget, ...]]:
@@ -39,9 +51,7 @@ def load_scenario(
             vessels.append(
                 Vessel(
                     vessel_id=str(item["vessel_id"]),
-                    location=_coordinate(
-                        item["location"], f"vessel {item['vessel_id']}"
-                    ),
+                    location=_location(item, f"vessel {item['vessel_id']}"),
                     speed_m_per_s=float(item["speed_m_per_s"]),
                     capacity_m3=float(item["capacity_m3"]),
                     available_hours=float(item["available_hours"]),
@@ -51,15 +61,24 @@ def load_scenario(
             targets.append(
                 ResponseTarget(
                     target_id=str(item["target_id"]),
-                    location=_coordinate(
-                        item["location"], f"target {item['target_id']}"
-                    ),
+                    location=_location(item, f"target {item['target_id']}"),
                     oil_volume_m3=float(item["oil_volume_m3"]),
                 )
             )
     except KeyError as exc:
         raise ValueError(f"scenario file is missing the field {exc}") from exc
-    return str(data.get("scenario_id", Path(path).stem)), tuple(vessels), tuple(targets)
+    scenario_id = data.get("scenario_id") or data.get("scenario_name") or Path(path).stem
+    return str(scenario_id), tuple(vessels), tuple(targets)
+
+
+def scenario_is_synthetic(path: str | Path) -> bool:
+    """True unless the file says "synthetic": false.
+
+    Every scenario we have today is made up, so a file has to say otherwise on purpose.
+    The dashboard uses this to label the plan as a simulated scenario.
+    """
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return data.get("synthetic") is not False
 
 
 def save_plan(plan: OptimizationOutput, path: str | Path) -> None:

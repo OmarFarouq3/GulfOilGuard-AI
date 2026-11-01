@@ -7,14 +7,14 @@
       "location": {"latitude": 25.40, "longitude": 55.00},
       "speed_m_per_s": 5.0,
       "capacity_m3": 200,
-      "available_hours": 12
+      "available_hours": 20
     },
     {
       "vessel_id": "V2",
       "location": {"latitude": 25.95, "longitude": 54.30},
       "speed_m_per_s": 4.0,
       "capacity_m3": 150,
-      "available_hours": 12
+      "available_hours": 20
     }
   ],
   "targets": [
