@@ -21,7 +21,9 @@ from shared.schemas import (
     VesselRoute,
 )
 from contract_checks import (
+    GULF_REGION,
     check_coordinate,
+    check_in_region,
     check_detection,
     check_drift,
     check_environment,
@@ -48,9 +50,18 @@ class CoordinateTests(unittest.TestCase):
     def test_valid_gulf_point(self):
         self.assertEqual(check_coordinate(OFFSHORE_AD), [])
 
-    def test_swapped_lat_lon_is_flagged(self):
-        problems = check_coordinate(GeoCoordinate(54.20, 24.60))
+    def test_swapped_lat_lon_is_flagged_with_region(self):
+        problems = check_in_region(GeoCoordinate(54.20, 24.60), GULF_REGION)
         self.assertTrue(any("swapped" in p for p in problems))
+
+    def test_region_check_is_optional(self):
+        # A valid point outside the Gulf passes global validation.
+        outside = GeoCoordinate(54.20, 24.60)
+        self.assertEqual(check_coordinate(outside), [])
+        self.assertEqual(check_drift(make_drift()), [])
+
+    def test_point_inside_region(self):
+        self.assertEqual(check_in_region(OFFSHORE_AD, GULF_REGION), [])
 
     def test_out_of_range_latitude(self):
         self.assertTrue(check_coordinate(GeoCoordinate(120.0, 54.0)))
@@ -91,6 +102,14 @@ class EnvironmentTests(unittest.TestCase):
         env = EnvironmentalData(Path("w"), Path("c"), T0.astimezone(dubai), T0 + timedelta(hours=1))
         self.assertTrue(check_environment(env))
 
+    def test_none_timestamp_does_not_crash(self):
+        env = EnvironmentalData(Path("w"), Path("c"), None, T0)
+        self.assertTrue(any("datetime" in p for p in check_environment(env)))
+
+    def test_string_timestamp_does_not_crash(self):
+        env = EnvironmentalData(Path("w"), Path("c"), "2026-11-02T06:00:00Z", T0)
+        self.assertTrue(check_environment(env))
+
     def test_reversed_window(self):
         env = EnvironmentalData(Path("w"), Path("c"), T0 + timedelta(hours=1), T0)
         self.assertTrue(check_environment(env))
@@ -105,6 +124,12 @@ class DriftTests(unittest.TestCase):
 
     def test_duration_mismatch(self):
         self.assertTrue(check_drift(make_drift(duration=24.0)))
+
+    def test_none_timestamp_in_drift_does_not_crash(self):
+        d = make_drift()
+        bad = (TimedPosition(None, OFFSHORE_AD),) + d.positions[1:]
+        out = DriftOutput(d.simulation_id, d.initial_location, bad, d.duration_hours)
+        self.assertTrue(any("datetime" in p for p in check_drift(out)))
 
     def test_single_position(self):
         self.assertTrue(check_drift(make_drift(hours=(0,), duration=1.0)))
@@ -147,6 +172,36 @@ class OptimizationTests(unittest.TestCase):
     def test_exceeds_available_hours(self):
         out = OptimizationOutput((self.route("v2", ["t1"], hours=9.0),), "feasible")
         self.assertTrue(check_optimization(out, self.vessels, self.targets))
+
+    def test_nan_travel_hours(self):
+        out = OptimizationOutput((self.route("v1", ["t1"], hours=float("nan")),), "feasible")
+        self.assertTrue(any("finite" in p for p in check_optimization(out, self.vessels, self.targets)))
+
+    def test_infinite_travel_hours(self):
+        out = OptimizationOutput((self.route("v1", ["t1"], hours=float("inf")),), "feasible")
+        self.assertTrue(any("finite" in p for p in check_optimization(out, self.vessels, self.targets)))
+
+    def test_negative_travel_hours(self):
+        out = OptimizationOutput((self.route("v1", ["t1"], hours=-1.0),), "feasible")
+        self.assertTrue(check_optimization(out, self.vessels, self.targets))
+
+    def test_negative_distance(self):
+        r = self.route("v1", ["t1"])
+        bad = VesselRoute(r.vessel_id, r.assigned_target_ids, r.coordinates, -5.0, r.estimated_travel_hours)
+        self.assertTrue(check_optimization(OptimizationOutput((bad,), "feasible"), self.vessels, self.targets))
+
+    def test_partial_coverage_allowed_by_default(self):
+        out = OptimizationOutput((self.route("v1", ["t1"]),), "feasible")
+        self.assertEqual(check_optimization(out, self.vessels, self.targets), [])
+
+    def test_full_coverage_flags_missing_target(self):
+        out = OptimizationOutput((self.route("v1", ["t1"]),), "feasible")
+        problems = check_optimization(out, self.vessels, self.targets, require_full_coverage=True)
+        self.assertTrue(any("t2" in p for p in problems))
+
+    def test_full_coverage_passes_when_all_assigned(self):
+        out = OptimizationOutput((self.route("v1", ["t1"]), self.route("v2", ["t2"])), "optimal")
+        self.assertEqual(check_optimization(out, self.vessels, self.targets, require_full_coverage=True), [])
 
     def test_infeasible_needs_message_and_no_routes(self):
         self.assertTrue(check_optimization(OptimizationOutput((), "infeasible"), self.vessels, self.targets))
