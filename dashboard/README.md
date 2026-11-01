@@ -63,21 +63,35 @@ Open `http://localhost:8501/?demo=1` before you start (or switch on **Demo scena
 
 ## Data contract
 
-All files live under `outputs/` at the repo root. That folder is in `.gitignore`: outputs are generated locally and not committed. All coordinates are **WGS84, GeoJSON order `[longitude, latitude]`**. Times are ISO 8601 UTC (`2026-03-14T06:42:00Z`). Units follow `shared/schemas.py`: km, hours, m/s, m³.
+**`shared/schemas.py` is the single source of truth.** Wherever it defines a structure, the files below use its field names, types, units and allowed values, and the dashboard validates them into those dataclasses (`DetectionOutput`, `DriftOutput`, `TimedPosition`, `GeoCoordinate`, `VesselRoute`, `Vessel`, `ResponseTarget`, `OptimizationOutput`). Fields marked *extension* have no equivalent in the schema; they are dashboard-only and are listed as open points for the schema owners.
 
-Every file is optional on its own. The dashboard renders whatever is present and never crashes on malformed files: it shows a generic notice to viewers and lists the details under Diagnostics. GeoJSON features with invalid geometry or out-of-range coordinates are skipped; the rest still render. Any file may include `"synthetic": true` (top level or in feature properties) to have its page labelled as a simulated scenario.
+Conventions from the schema:
+- **Coordinates:** WGS84 degrees. GeoJSON geometries use `[longitude, latitude]` (GeoJSON standard); plain JSON objects use the schema's own field names `{"latitude": .., "longitude": ..}`. Latitude in [-90, 90], longitude in [-180, 180], finite.
+- **Time:** timezone-aware UTC, ISO 8601 (`2026-03-14T06:42:00Z`). Naive timestamps are rejected.
+- **Units** follow the schema's field-name suffixes: `_km` kilometres, `_hours` hours, `_m3` cubic metres, `_m_per_s` metres per second. Measurements are nonnegative, speeds positive.
+- **IDs** (`vessel_id`, `target_id`) are unique. `confidence` is in [0, 1].
+
+All files live under `outputs/` at the repo root (in `.gitignore`; generated locally, not committed). Every file is optional on its own. The dashboard never crashes on malformed or non-conforming data: viewers see "Part of this result couldn't be displayed", and the exact validation error appears under Diagnostics. Run `python dashboard/check_schema.py` to validate the demo scenario and sample files against the schema. Any file may include `"synthetic": true` (top level or in feature properties) to have its page labelled as a simulated scenario.
 
 ### Detection module → `outputs/detection/`
 
 | File | Required | Content |
 | --- | --- | --- |
-| `mask.png` | yes | Predicted binary mask; white (>127) = oil. |
-| `metrics.json` | yes | Held-out metrics (see below). |
+| `mask.png` | yes | Predicted binary mask (`DetectionOutput.mask_path`); white (>127) = oil. |
+| `metrics.json` | yes | Held-out scores in [0, 1] (*extension*, see below). |
 | `overlay.png` | optional | Mask drawn over the scene. If missing, the dashboard builds one from `image.png` + `mask.png`. |
 | `image.png` | optional | The SAR input scene shown next to the mask. |
-| `spill.geojson` | optional* | Detected oil as `Polygon`/`MultiPolygon` in lon/lat. *Needed for the map and for drift integration. |
+| `spill.geojson` | optional* | One `Polygon`/`MultiPolygon` feature per detected slick. *Needed for the map and for drift integration. |
 
-Multiple scenes: name files `<scene>_image.png`, `<scene>_mask.png`, `<scene>_overlay.png` (e.g. `S1A_20260314_mask.png`). The page shows a scene picker.
+Multiple scenes: name files `<image_id>_image.png`, `<image_id>_mask.png`, `<image_id>_overlay.png`; the page shows a scene picker.
+
+`spill.geojson` feature properties, validated as a `DetectionOutput` (the outline's vertices become `oil_coordinates`):
+
+| Property | Schema | Notes |
+| --- | --- | --- |
+| `image_id` | `DetectionOutput.image_id` | required, non-empty string |
+| `confidence` | `DetectionOutput.confidence` | optional, [0, 1] |
+| `area_km2` | *extension* | optional, nonnegative; otherwise the polygon area is computed |
 
 ```json
 {
@@ -87,47 +101,64 @@ Multiple scenes: name files `<scene>_image.png`, `<scene>_mask.png`, `<scene>_ov
 }
 ```
 
-Metric values are 0-1. `per_class` and any other keys are optional; extra scalar keys are shown as "Evaluation details". Suggested `spill.geojson` feature properties: `id`, `area_km2`, `confidence`, `scene_id`, `detected_at`. The Overview "Slick detected" tile uses `area_km2` when every feature has it, otherwise the polygon area.
+`metrics.json` is an *extension*: `shared/schemas.py` has no metrics type. Its four keys match `SegmentationMetrics` in `detection/evaluate.py`. `per_class` and the descriptive keys are optional.
 
 ### Drift module → `outputs/drift/`
 
 | File | Required | Content |
 | --- | --- | --- |
-| `drift.geojson` | yes | FeatureCollection; **every feature has a numeric `hours` property** (`0` = release, `6`, `12`, `24`; other values also work). Geometry: `Point`/`MultiPoint` for particles and/or `Polygon`/`MultiPolygon` for oil envelopes. |
-| `meta.json` | optional | Inputs and settings shown under "What drives the forecast". |
+| `drift.geojson` | yes | Oil state per forecast step: `Point`/`MultiPoint` particles and/or `Polygon`/`MultiPolygon` envelopes (*extension*). |
+| `meta.json` | optional | The `DriftOutput` trajectory plus model inputs. |
 
-Optional feature properties: `timestamp` (UTC valid time), `kind` (`"particles"` / `"envelope"`). The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with points only they show a dash.
+`drift.geojson` feature properties:
 
-```json
-{
-  "start_time": "2026-03-14T06:42:00Z", "model": "OpenDrift OpenOil",
-  "wind_source": "ERA5", "current_source": "Copernicus Marine GLOBAL_ANALYSISFORECAST_PHY",
-  "wind_speed_ms": 8.0, "wind_from_deg": 315, "current_speed_ms": 0.2, "current_to_deg": 110,
-  "n_particles": 1000, "oil_type": "..."
-}
-```
+| Property | Schema | Notes |
+| --- | --- | --- |
+| `hours` | *extension* | required: hours since release (`0`, `6`, `12`, `24`; other values work) |
+| `timestamp` | `TimedPosition.timestamp` | optional, UTC; must equal release time + `hours` when a release time is known |
+| `kind` | *extension* | optional: `"particles"` or `"envelope"` |
 
-The four `wind_*`/`current_*` numbers are shown as tiles; `model`, `start_time`, `wind_source`, `current_source`, `oil_type` and `n_particles` are listed below them.
+`meta.json`:
+
+| Field | Schema | Notes |
+| --- | --- | --- |
+| `simulation_id` | `DriftOutput.simulation_id` | required if any `DriftOutput` field is given |
+| `initial_location` | `DriftOutput.initial_location` | `{"latitude": .., "longitude": ..}` |
+| `positions` | `DriftOutput.positions` | `[{"timestamp": "..Z", "coordinate": {"latitude": .., "longitude": ..}}]`, ordered by time; drawn as the slick's centre path |
+| `duration_hours` | `DriftOutput.duration_hours` | nonnegative |
+| `start_time` | (same type as `EnvironmentalData.start_time`) | optional, UTC; release time when `positions` is absent |
+| `wind_speed_m_per_s`, `current_speed_m_per_s` | *extension* (schema unit suffix) | nonnegative |
+| `wind_from_deg`, `current_to_deg` | *extension* | 0-360 |
+| `model`, `wind_source`, `current_source`, `oil_type`, `n_particles` | *extension* | descriptive |
+
+The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with points only they show a dash.
 
 ### Routing module → `outputs/routing/`
 
 | File | Required | Content |
 | --- | --- | --- |
-| `routes.geojson` | yes | One `LineString` per vessel, starting at the vessel's base and visiting targets in order. |
-| `summary.json` | yes | Fleet totals and solver status. |
-| `targets.geojson` | optional | Target points/areas the solver used. |
+| `routes.geojson` | yes | One `LineString` per vessel (`VesselRoute.coordinates`), starting at the vessel's position and visiting targets in order. |
+| `summary.json` | yes | `OptimizationOutput` without its routes: `status` (required) and `message`. |
+| `targets.geojson` | optional | One `Point` per `ResponseTarget`. |
 
-`routes.geojson` feature properties: `vessel_id` (str), `order` (list of target IDs in visiting order, e.g. `["T1","T3"]`), `eta_hours` (time to finish the route from dispatch), optional `distance_km`, `oil_collected_m3`, `depot`.
+`routes.geojson` feature properties:
+
+| Property | Schema | Notes |
+| --- | --- | --- |
+| `vessel_id` | `VesselRoute.vessel_id` / `Vessel.vessel_id` | required, unique |
+| `assigned_target_ids` | `VesselRoute.assigned_target_ids` | required list of target IDs in visiting order |
+| `estimated_distance_km` | `VesselRoute.estimated_distance_km` | optional, nonnegative |
+| `estimated_travel_hours` | `VesselRoute.estimated_travel_hours` | optional, nonnegative; from dispatch to the last stop |
+| `speed_m_per_s`, `capacity_m3`, `available_hours` | `Vessel` | optional, but all three together; `Vessel.location` = first route coordinate |
+| `oil_collected_m3` | *extension* | optional, nonnegative; warned if above `capacity_m3` |
 
 ```json
-{
-  "status": "feasible", "solver": "OR-Tools RoutingModel",
-  "vessel_count": 3, "total_time_hours": 4.6, "total_distance_km": 148.0,
-  "oil_collected_m3": 214.0, "oil_total_m3": 252.0
-}
+{"status": "feasible", "message": "Solved in 2.1 s with OR-Tools RoutingModel"}
 ```
 
-`status` is one of `optimal`, `feasible`, `infeasible`, `not_solved`, `error` (as in `shared/schemas.py`). `targets.geojson` properties: `target_id`, `oil_volume_m3`, optional `source_hours` (the drift step the targets were derived from, used to pick the default oil layer under the routes).
+`status` must be one of `optimal`, `feasible`, `infeasible`, `not_solved`, `error` (read from `OptimizationOutput.status`). Fleet totals are derived, not read: vessels = number of routes, response time = max `estimated_travel_hours`, distance = sum of `estimated_distance_km`, oil to collect = sum of target `oil_volume_m3`.
+
+`targets.geojson` feature properties: `target_id` (`ResponseTarget.target_id`, required, unique), `oil_volume_m3` (`ResponseTarget.oil_volume_m3`, required, nonnegative), optional `source_hours` (*extension*: the drift step the targets came from, used to pick the oil layer under the routes). Every `assigned_target_ids` entry should exist in `targets.geojson`.
 
 ## Code layout
 
@@ -136,18 +167,21 @@ dashboard/
   app.py                  entry point: styles, hidden st.navigation, top bar, footer
   config.py               data paths (data contract), map centre, palette
   make_sample_outputs.py  writes the demo scenario as files
+  check_schema.py         validates demo + sample files against shared/schemas.py (exit 1 on mismatch)
   assets/styles.css       theme layer: glass cards, top bar, hero, chips, empty states
   views/                  overview, detection (Detect), drift (Predict), cleanup (Respond)
                           (not "pages/": that name triggers Streamlit's legacy auto-navigation)
   components/
     data.py               demo vs real data, per-stage status (live / simulated / empty)
+    labels.py             display units and status wording derived from the schema
     nav.py                top bar (response timeline) and the options panel + diagnostics
     ui.py                 headings, chips, stat tiles, empty states, legend, footer
     illustrations.py      inline SVG art (embedded as data-URI images)
     maps.py, charts.py    Folium (dark basemap) and Plotly helpers
   services/
+    schema.py             imports shared/schemas.py; validators that build its dataclasses
     files.py              tolerant JSON / GeoJSON / image readers, cached on mtime
-    models.py             dataclasses the pages render
+    models.py             containers the pages render (holding the shared dataclasses)
     detection_loader.py   -> DetectionData | None
     drift_loader.py       -> DriftData | None
     routing_loader.py     -> RoutingData | None
@@ -155,4 +189,6 @@ dashboard/
     geo.py, imaging.py    small helpers (no shapely/geopandas)
 ```
 
-Loaders return `None` when none of their files exist (empty state). If files exist but are broken, they return a data object with `warnings`, which only the Diagnostics panel shows. To add a field: read it in the loader, add it to the dataclass in `models.py`, render it in the view, and document it in this README. Keep viewer-facing copy free of file names and paths.
+Loaders return `None` when none of their files exist (empty state). If files exist but are broken or do not conform to the schema, they return a data object with `warnings`, which only the Diagnostics panel shows. The demo scenario is built by the same parse/validate functions, so it cannot contain anything a real file would fail on.
+
+To add a field: if `shared/schemas.py` defines it, validate it in `services/schema.py` and use the schema's name; if not, agree on it with the schema owners first (do not edit the schema from the dashboard). Then read it in the loader, render it in the view, document it here, and run `python dashboard/check_schema.py`. Keep viewer-facing copy free of file names and paths.
