@@ -7,6 +7,7 @@ import streamlit as st
 import config
 from components import charts, maps, ui
 from components.data import detection_stage
+from components.labels import KM2
 
 stage = detection_stage()
 data = stage.data
@@ -31,7 +32,7 @@ else:
     if data.scenes:
         scene = data.scenes[0]
         if len(data.scenes) > 1:
-            ids = [s.scene_id for s in data.scenes]
+            ids = [s.image_id for s in data.scenes]
             chosen = st.selectbox("Scene", ids, format_func=lambda s: "Main scene" if s == "default" else s)
             scene = data.scenes[ids.index(chosen)]
         panels = [(label, img) for label, img in (
@@ -80,7 +81,7 @@ else:
         m = maps.base_map()
         maps.add_features(m, data.spill["features"], config.OIL_OBSERVED, outline=config.OIL_OUTLINE,
                           fill_opacity=0.5,
-                          tooltip={"id": "Slick", "area_km2": "Area (km²)", "confidence": "Confidence"})
+                          tooltip={"image_id": "Scene", "area_km2": f"Area ({KM2})", "confidence": "Confidence"})
         maps.render(m, data.spill["features"], key="detection_map")
         ui.legend([(config.OIL_OBSERVED, "Detected oil", "fill")])
     else:

@@ -1,8 +1,10 @@
-"""Predict: forecast oil positions at 6/12/24 h, plus the wind and current behind them."""
+"""Predict: forecast oil positions at 6/12/24 h, plus the wind and current behind them.
+
+The centre path uses the shared DriftOutput trajectory (TimedPosition, UTC) when the drift
+module provides one, otherwise the centroid of each forecast step.
+"""
 
 from __future__ import annotations
-
-from datetime import datetime
 
 import folium
 import streamlit as st
@@ -10,6 +12,8 @@ import streamlit as st
 import config
 from components import maps, ui
 from components.data import drift_stage
+from components.labels import HOURS, KM, KM2, M_PER_S
+from services import schema
 from services.files import as_float, iter_positions
 from services.geo import centroid, haversine_km, polygon_area_km2
 
@@ -24,20 +28,28 @@ ui.page_heading(
 
 
 def step_label(hours: float) -> str:
-    return "Now" if hours == 0 else f"+{hours:g} h"
+    return "Now" if hours == 0 else f"+{hours:g} {HOURS}"
 
 
 def valid_at(timestamp: str) -> str:
-    """'2026-03-14T12:42:00Z' -> '14 Mar 12:42' (falls back to the raw text)."""
-    try:
-        return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime("%d %b %H:%M")
-    except ValueError:
-        return timestamp
+    """UTC ISO 8601 -> '14 Mar 12:42' (loaders already rejected invalid timestamps)."""
+    return schema.utc(timestamp).strftime("%d %b %H:%M")
 
 
 def degrees(value: object) -> str | None:
     number = as_float(value)
     return None if number is None else f"{number:.0f}°"
+
+
+def trajectory_point(hours: float) -> tuple[float, float] | None:
+    """(lat, lon) of the DriftOutput position `hours` after its first position, if provided."""
+    if not (data.trajectory and data.trajectory.positions):
+        return None
+    start = data.trajectory.positions[0].timestamp
+    for position in data.trajectory.positions:
+        if abs((position.timestamp - start).total_seconds() / 3600 - hours) < 0.05:
+            return position.coordinate.latitude, position.coordinate.longitude
+    return None
 
 
 def step_center(features: list[dict]) -> tuple[float, float] | None:
@@ -63,16 +75,16 @@ else:
                                     format_func=step_label, key="drift_step")
 
     features = data.steps[selected]
-    start = step_center(data.steps[hours[0]])
-    here = step_center(features)
+    start = trajectory_point(hours[0]) or step_center(data.steps[hours[0]])
+    here = trajectory_point(selected) or step_center(features)
     distance = haversine_km(start[1], start[0], here[1], here[0]) if start and here and selected != hours[0] else None
     area = polygon_area_km2(features) or None
     particles = sum(len(list(iter_positions(f["geometry"]["coordinates"])))
                     for f in features if f["geometry"]["type"] in ("Point", "MultiPoint"))
     timestamps = sorted({str(f["properties"]["timestamp"]) for f in features if f["properties"].get("timestamp")})
     ui.stat_tiles([
-        ("Drift distance", ui.fmt(distance), "km", f"Centre of the slick, {step_label(hours[0]).lower()} → {step_label(selected)}"),
-        ("Oil footprint", ui.fmt(area), "km²", "Area covered by the predicted oil"),
+        ("Drift distance", ui.fmt(distance), KM, f"Centre of the slick, {step_label(hours[0]).lower()} → {step_label(selected)}"),
+        ("Oil footprint", ui.fmt(area), KM2, "Area covered by the predicted oil"),
         ("Simulated particles", ui.fmt(float(particles), 0) if particles else None, "", "Oil parcels tracked by the model"),
         ("Valid at", valid_at(timestamps[0]) if timestamps else None, "UTC", "Time this forecast step applies to"),
     ])
@@ -83,7 +95,7 @@ else:
     for h in hours:
         if h > selected:
             break
-        center = step_center(data.steps[h])
+        center = trajectory_point(h) or step_center(data.steps[h])
         if center:
             centers.append(center)
         if h != selected and show_trail:
@@ -109,15 +121,19 @@ else:
     meta = data.meta or {}
     if meta:
         ui.stat_tiles([
-            ("Wind speed", ui.fmt(as_float(meta.get("wind_speed_ms"))), "m/s", "Near-surface wind"),
+            ("Wind speed", ui.fmt(as_float(meta.get("wind_speed_m_per_s"))), M_PER_S, "Near-surface wind"),
             ("Wind from", degrees(meta.get("wind_from_deg")), "", "Direction the wind blows from"),
-            ("Current speed", ui.fmt(as_float(meta.get("current_speed_ms")), 2), "m/s", "Surface ocean current"),
+            ("Current speed", ui.fmt(as_float(meta.get("current_speed_m_per_s")), 2), M_PER_S,
+             "Surface ocean current"),
             ("Current towards", degrees(meta.get("current_to_deg")), "", "Direction the water flows"),
         ])
         labels = {"model": "Drift model", "start_time": "Simulation start", "wind_source": "Wind data",
                   "current_source": "Current data", "oil_type": "Oil type", "n_particles": "Particles"}
         details = {labels[k]: valid_at(str(v)) + " UTC" if k == "start_time" else v
                    for k, v in meta.items() if k in labels}
+        if data.trajectory:
+            details["Simulation"] = data.trajectory.simulation_id
+            details["Forecast length"] = f"{data.trajectory.duration_hours:g} {HOURS}"
         if details:
             st.html('<div style="height:.8rem"></div>')
             ui.details_table(details)

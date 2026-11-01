@@ -6,6 +6,7 @@ import streamlit as st
 
 from components import illustrations, ui
 from components.data import all_stages, demo_mode
+from components.labels import HOURS, KM2
 from services.files import as_float
 from services.geo import polygon_area_km2
 
@@ -38,14 +39,13 @@ if predict and predict.steps:
     spread_24 = area or None
 
 vessels = float(len(respond.routes)) if respond and respond.routes else None
-summary = respond.summary if respond and respond.summary else {}
-response_time = as_float(summary.get("total_time_hours"))
+response_time = respond.response_time_hours if respond else None
 
 ui.stat_tiles([
-    ("Slick detected", ui.fmt(slick_area), "km²", "Area of oil found in the latest scene"),
-    ("Spread at 24 h", ui.fmt(spread_24), "km²", "Predicted oil footprint one day later"),
+    ("Slick detected", ui.fmt(slick_area), KM2, "Area of oil found in the latest scene"),
+    (f"Spread at 24 {HOURS}", ui.fmt(spread_24), KM2, "Predicted oil footprint one day later"),
     ("Vessels deployed", ui.fmt(vessels, 0), "", "Response vessels with an assigned route"),
-    ("Response time", ui.fmt(response_time), "h", "Until the last vessel completes its route"),
+    ("Response time", ui.fmt(response_time), HOURS, "Until the last vessel completes its route"),
 ])
 
 # --- Response flow ---------------------------------------------------------------
