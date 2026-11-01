@@ -28,18 +28,6 @@ def demo_mode() -> bool:
     return bool(st.session_state.get(DEMO_STATE_KEY, False))
 
 
-def _labelled_synthetic(*sources: Any) -> bool:
-    """True if any dict (or GeoJSON feature properties) declares ``"synthetic": true``."""
-    for source in sources:
-        if isinstance(source, dict):
-            if source.get("synthetic") is True:
-                return True
-            for feature in source.get("features", []) if source.get("type") == "FeatureCollection" else []:
-                if feature.get("properties", {}).get("synthetic") is True:
-                    return True
-    return False
-
-
 @dataclass
 class Stage:
     key: str
@@ -48,29 +36,26 @@ class Stage:
     has_issue: bool  # some files could not be read; details live in diagnostics only
 
 
-def _stage(key: str, data: Any, synthetic_sources: tuple) -> Stage:
+def _stage(key: str, data: Any) -> Stage:
     if data is None or not data.has_content:
         return Stage(key, None, "empty", bool(data and data.warnings))
-    simulated = data.is_mock or _labelled_synthetic(*synthetic_sources)
+    simulated = data.is_mock or data.synthetic  # loaders set `synthetic` from "synthetic": true flags
     return Stage(key, data, "simulated" if simulated else "live", bool(data.warnings))
 
 
 def detection_stage() -> Stage:
     data: DetectionData | None = mock_data.detection() if demo_mode() else load_detection()
-    sources = (data.metrics_info, data.spill) if data else ()
-    return _stage("detect", data, sources)
+    return _stage("detect", data)
 
 
 def drift_stage() -> Stage:
     data: DriftData | None = mock_data.drift() if demo_mode() else load_drift()
-    sources = (data.meta, *[f.get("properties") for fs in data.steps.values() for f in fs]) if data else ()
-    return _stage("predict", data, sources)
+    return _stage("predict", data)
 
 
 def routing_stage() -> Stage:
     data: RoutingData | None = mock_data.routing() if demo_mode() else load_routing()
-    sources = (data.summary, *[r.properties for r in data.routes]) if data else ()
-    return _stage("respond", data, sources)
+    return _stage("respond", data)
 
 
 def all_stages() -> dict[str, Stage]:

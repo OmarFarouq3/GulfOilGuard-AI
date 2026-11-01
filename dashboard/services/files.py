@@ -120,7 +120,14 @@ def _read_geojson_cached(path_str: str, stamp: float) -> tuple[dict | None, str 
     data, warning = _read_json_cached(path_str, stamp)
     if warning:
         return None, warning
-    name = display_path(path)
+    return validate_geojson(data, display_path(path))
+
+
+def validate_geojson(data: Any, name: str) -> tuple[dict | None, str | None]:
+    """Validate a parsed GeoJSON object (file contents or in-memory demo data).
+
+    Same contract as ``read_geojson``: invalid features are dropped with a warning.
+    """
     if isinstance(data, dict) and data.get("type") == "Feature":
         data = {"type": "FeatureCollection", "features": [data]}
     if not isinstance(data, dict) or data.get("type") != "FeatureCollection":
