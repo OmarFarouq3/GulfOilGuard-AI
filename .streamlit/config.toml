@@ -1,0 +1,43 @@
+# GulfOilGuard-AI dashboard theme: dark "ocean operations" look.
+# Launch from the repo root: streamlit run dashboard/app.py
+
+[theme]
+base = "dark"
+primaryColor = "#2dd4bf"            # teal: active controls
+backgroundColor = "#061521"         # deep ocean navy
+secondaryBackgroundColor = "#0c2232"
+textColor = "#e2eef3"
+borderColor = "#1b3a4d"
+linkColor = "#5eead4"
+codeBackgroundColor = "#0c2232"
+
+# Status / markdown colours (used by chips and timeline dots)
+greenColor = "#34d399"              # sea green: live data, sustainability
+violetColor = "#a78bfa"             # simulated scenario
+orangeColor = "#f59e0b"             # amber: oil, alerts (used sparingly)
+grayColor = "#6b8797"               # empty
+blueColor = "#38bdf8"
+redColor = "#f87171"
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Space Grotesk':https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+headingFontWeights = [700, 600, 600, 600, 600, 600]
+baseRadius = "0.75rem"
+buttonRadius = "0.6rem"
+showWidgetBorder = true
+linkUnderline = false
+paddingTop = "0.5rem"
+paddingBottom = "1rem"
+
+dataframeHeaderBackgroundColor = "#0f2a3d"
+dataframeBorderColor = "#1b3a4d"
+chartCategoricalColors = ["#22d3ee", "#f59e0b", "#34d399", "#a78bfa", "#60a5fa", "#f472b6", "#94a3b8"]
+
+[client]
+toolbarMode = "minimal"             # no Deploy button / developer menu
+showSidebarNavigation = false
+showErrorDetails = "none"
+
+[browser]
+gatherUsageStats = false
