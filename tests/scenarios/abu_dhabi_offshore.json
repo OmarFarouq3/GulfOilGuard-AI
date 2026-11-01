@@ -1,0 +1,31 @@
+{
+  "scenario_id": "S1-abu-dhabi-offshore",
+  "title": "Tanker leak offshore Abu Dhabi, shamal wind pushing oil south-east",
+  "synthetic": true,
+  "note": "Synthetic demo input. Not a real detection, drift or response result.",
+  "release_time_utc": "2026-11-02T04:00:00Z",
+  "release_location": {"latitude": 25.00, "longitude": 53.40},
+  "estimated_oil_volume_m3": 300,
+  "synthetic_drift": {
+    "duration_hours": 24,
+    "positions": [
+      {"hours_after_release": 0,  "latitude": 25.00, "longitude": 53.40},
+      {"hours_after_release": 6,  "latitude": 24.92, "longitude": 53.55},
+      {"hours_after_release": 12, "latitude": 24.85, "longitude": 53.70},
+      {"hours_after_release": 24, "latitude": 24.72, "longitude": 53.95}
+    ]
+  },
+  "targets": [
+    {"target_id": "S1-T1", "latitude": 24.92, "longitude": 53.55, "oil_volume_m3": 120},
+    {"target_id": "S1-T2", "latitude": 24.85, "longitude": 53.70, "oil_volume_m3": 100},
+    {"target_id": "S1-T3", "latitude": 24.80, "longitude": 53.82, "oil_volume_m3": 80}
+  ],
+  "vessels": [
+    {"vessel_id": "S1-V1", "latitude": 24.52, "longitude": 54.37, "speed_m_per_s": 5.0, "capacity_m3": 200, "available_hours": 12},
+    {"vessel_id": "S1-V2", "latitude": 24.20, "longitude": 52.73, "speed_m_per_s": 4.5, "capacity_m3": 150, "available_hours": 12}
+  ],
+  "sensitive_sites": [
+    {"name": "Desalination intake, Taweelah area (approximate)", "latitude": 24.77, "longitude": 54.70}
+  ],
+  "expected": "Routing should find a feasible plan: total fleet capacity 350 m3 covers 300 m3 of oil."
+}

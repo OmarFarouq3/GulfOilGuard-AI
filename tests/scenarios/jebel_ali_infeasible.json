@@ -1,0 +1,30 @@
+{
+  "scenario_id": "S3-jebel-ali-infeasible",
+  "title": "Large spill near Jebel Ali with too few vessels",
+  "synthetic": true,
+  "note": "Synthetic stress test. Checks that the system reports infeasibility honestly.",
+  "release_time_utc": "2026-11-02T12:00:00Z",
+  "release_location": {"latitude": 25.25, "longitude": 54.85},
+  "estimated_oil_volume_m3": 900,
+  "synthetic_drift": {
+    "duration_hours": 12,
+    "positions": [
+      {"hours_after_release": 0,  "latitude": 25.25, "longitude": 54.85},
+      {"hours_after_release": 6,  "latitude": 25.20, "longitude": 54.92},
+      {"hours_after_release": 12, "latitude": 25.15, "longitude": 54.97}
+    ]
+  },
+  "targets": [
+    {"target_id": "S3-T1", "latitude": 25.25, "longitude": 54.85, "oil_volume_m3": 400},
+    {"target_id": "S3-T2", "latitude": 25.20, "longitude": 54.92, "oil_volume_m3": 300},
+    {"target_id": "S3-T3", "latitude": 25.15, "longitude": 54.97, "oil_volume_m3": 200}
+  ],
+  "vessels": [
+    {"vessel_id": "S3-V1", "latitude": 25.01, "longitude": 55.06, "speed_m_per_s": 5.0, "capacity_m3": 150, "available_hours": 8},
+    {"vessel_id": "S3-V2", "latitude": 25.27, "longitude": 55.27, "speed_m_per_s": 5.0, "capacity_m3": 150, "available_hours": 8}
+  ],
+  "sensitive_sites": [
+    {"name": "Desalination intake, Jebel Ali area (approximate)", "latitude": 25.06, "longitude": 55.03}
+  ],
+  "expected": "Fleet capacity 300 m3 is below 900 m3 of oil. Routing should return 'infeasible' with a message, and the dashboard should show it."
+}
