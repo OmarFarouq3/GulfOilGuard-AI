@@ -1,7 +1,7 @@
 """Simulated scenarios, vessels, response targets, and marine metrics for cleanup optimization.
 
-Grounds scenarios in the Arabian Gulf (UAE, Qatar, Saudi Arabia) and adheres
-to shared.schemas (Vessel, ResponseTarget, GeoCoordinate).
+Grounds scenarios in the Ras Al Khaimah (RAK) and Northern Emirates coastal waters
+of the Arabian Gulf, adhering to shared.schemas (Vessel, ResponseTarget, GeoCoordinate).
 """
 
 from __future__ import annotations
@@ -19,13 +19,16 @@ KNOTS_TO_M_PER_S = 0.514444
 M_PER_S_TO_KNOTS = 1.0 / KNOTS_TO_M_PER_S
 EARTH_RADIUS_KM = 6371.0088
 
-# Representative Gulf Port & Marine Staging Bases (WGS84)
+# Representative Regional Ports & Marine Staging Depots (WGS84)
+# Ras Al Khaimah (RAK) and Northern Emirates operational bases
 GULF_DEPOTS = {
+    "port_saqr_rak": GeoCoordinate(latitude=25.9750, longitude=56.0550),      # Primary RAK deepwater port
+    "rak_maritime_city": GeoCoordinate(latitude=25.9050, longitude=55.9900),  # RAK maritime facility
+    "hamriyah_sharjah": GeoCoordinate(latitude=25.4650, longitude=55.4850),   # Regional backup base
     "mina_zayed_abu_dhabi": GeoCoordinate(latitude=24.5260, longitude=54.3750),
     "jebel_ali_dubai": GeoCoordinate(latitude=25.0110, longitude=55.0610),
     "ras_laffan_qatar": GeoCoordinate(latitude=25.9180, longitude=51.5510),
     "jubail_saudi": GeoCoordinate(latitude=27.0110, longitude=49.6580),
-    "ras_tanura_saudi": GeoCoordinate(latitude=26.6430, longitude=50.1590),
 }
 
 
@@ -87,26 +90,26 @@ def build_time_matrix(
     return matrix
 
 
-# --- Scenario Generators ---
+# --- Scenario Generators (Aligned with Ras Al Khaimah Demonstration Spill) ---
 
 
 def create_smoke_test_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseTarget, ...]]:
     """Minimal scenario (2 vessels, 4 targets) for fast solver debugging.
 
-    Located offshore Abu Dhabi / Western Region waters.
+    Staged at Port Saqr (Ras Al Khaimah) with targets located in coastal waters.
     """
     vessels = (
         Vessel(
-            vessel_id="V-FAST-01",
-            location=GULF_DEPOTS["mina_zayed_abu_dhabi"],
-            speed_m_per_s=round(20.0 * KNOTS_TO_M_PER_S, 2),  # ~10.29 m/s
+            vessel_id="RAK-FAST-01",
+            location=GULF_DEPOTS["port_saqr_rak"],
+            speed_m_per_s=round(20.0 * KNOTS_TO_M_PER_S, 2),  # ~10.29 m/s (~20 kn)
             capacity_m3=50.0,
             available_hours=8.0,
         ),
         Vessel(
-            vessel_id="V-OSRV-01",
-            location=GULF_DEPOTS["mina_zayed_abu_dhabi"],
-            speed_m_per_s=round(14.0 * KNOTS_TO_M_PER_S, 2),  # ~7.20 m/s
+            vessel_id="RAK-OSRV-01",
+            location=GULF_DEPOTS["port_saqr_rak"],
+            speed_m_per_s=round(14.0 * KNOTS_TO_M_PER_S, 2),  # ~7.20 m/s (~14 kn)
             capacity_m3=200.0,
             available_hours=12.0,
         ),
@@ -114,23 +117,23 @@ def create_smoke_test_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseTarg
 
     targets = (
         ResponseTarget(
-            target_id="TGT-01",
-            location=GeoCoordinate(latitude=24.6500, longitude=54.2100),
+            target_id="RAK-TGT-01",
+            location=GeoCoordinate(latitude=25.9200, longitude=55.9500),  # ~12 km offshore RAK
             oil_volume_m3=25.0,
         ),
         ResponseTarget(
-            target_id="TGT-02",
-            location=GeoCoordinate(latitude=24.7200, longitude=54.1500),
+            target_id="RAK-TGT-02",
+            location=GeoCoordinate(latitude=25.9600, longitude=55.9200),  # ~15 km offshore RAK
             oil_volume_m3=35.0,
         ),
         ResponseTarget(
-            target_id="TGT-03",
-            location=GeoCoordinate(latitude=24.6900, longitude=54.0200),
+            target_id="RAK-TGT-03",
+            location=GeoCoordinate(latitude=26.0100, longitude=55.9400),  # Northern offshore
             oil_volume_m3=40.0,
         ),
         ResponseTarget(
-            target_id="TGT-04",
-            location=GeoCoordinate(latitude=24.7800, longitude=54.0800),
+            target_id="RAK-TGT-04",
+            location=GeoCoordinate(latitude=26.0400, longitude=55.9900),  # Near Port Saqr approach
             oil_volume_m3=20.0,
         ),
     )
@@ -139,84 +142,88 @@ def create_smoke_test_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseTarg
 
 
 def create_gulf_standard_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseTarget, ...]]:
-    """Standard realistic operational scenario in Arabian Gulf central waters.
+    """Standard realistic operational scenario for a Ras Al Khaimah (RAK) oil spill.
 
-    Features 3 vessels staged across Abu Dhabi, Dubai, and Qatar, responding
-    to 10 clustered oil spill targets representing a drifting slick.
+    Features:
+    - 2 vessels stationed at Port Saqr (RAK)
+    - 1 regional backup vessel staged at Hamriyah (Sharjah)
+    - 10 clustered response targets representing an oil slick drifting in RAK waters
+      towards the northern coastline and shipping corridor.
     """
     vessels = (
         Vessel(
-            vessel_id="FRV-HAWK",
-            location=GULF_DEPOTS["mina_zayed_abu_dhabi"],
+            vessel_id="RAK-FRV-FALCON",
+            location=GULF_DEPOTS["port_saqr_rak"],
             speed_m_per_s=round(22.0 * KNOTS_TO_M_PER_S, 2),  # ~11.32 m/s
             capacity_m3=60.0,
             available_hours=10.0,
         ),
         Vessel(
-            vessel_id="OSRV-AL-DANA",
-            location=GULF_DEPOTS["jebel_ali_dubai"],
+            vessel_id="RAK-OSRV-SAQR",
+            location=GULF_DEPOTS["port_saqr_rak"],
             speed_m_per_s=round(15.0 * KNOTS_TO_M_PER_S, 2),  # ~7.72 m/s
             capacity_m3=250.0,
             available_hours=16.0,
         ),
         Vessel(
-            vessel_id="OSRV-QATAR-ONE",
-            location=GULF_DEPOTS["ras_laffan_qatar"],
-            speed_m_per_s=round(13.5 * KNOTS_TO_M_PER_S, 2),  # ~6.94 m/s
+            vessel_id="HAMRIYAH-OSRV-RESERVE",
+            location=GULF_DEPOTS["hamriyah_sharjah"],
+            speed_m_per_s=round(14.0 * KNOTS_TO_M_PER_S, 2),  # ~7.20 m/s
             capacity_m3=300.0,
             available_hours=20.0,
         ),
     )
 
+    # 10 targets drifting along RAK coastal/offshore waters (lat 25.82 - 26.08, lon 55.78 - 56.00)
     targets = (
         ResponseTarget(
-            target_id="SPILL-PATCH-01",
-            location=GeoCoordinate(latitude=25.2500, longitude=53.4000),
+            target_id="RAK-SPILL-01",
+            location=GeoCoordinate(latitude=25.8400, longitude=55.8200),
             oil_volume_m3=45.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-02",
-            location=GeoCoordinate(latitude=25.2800, longitude=53.4500),
+            target_id="RAK-SPILL-02",
+            location=GeoCoordinate(latitude=25.8700, longitude=55.8500),
             oil_volume_m3=30.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-03",
-            location=GeoCoordinate(latitude=25.3200, longitude=53.3800),
+            target_id="RAK-SPILL-03",
+            location=GeoCoordinate(latitude=25.9000, longitude=55.8300),
             oil_volume_m3=55.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-04",
-            location=GeoCoordinate(latitude=25.3600, longitude=53.4200),
+            target_id="RAK-SPILL-04",
+            location=GeoCoordinate(latitude=25.9300, longitude=55.8800),
             oil_volume_m3=25.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-05",
-            location=GeoCoordinate(latitude=25.4000, longitude=53.3500),
+            target_id="RAK-SPILL-05",
+            location=GeoCoordinate(latitude=25.9500, longitude=55.8400),
             oil_volume_m3=60.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-06",
-            location=GeoCoordinate(latitude=25.4300, longitude=53.5000),
+            target_id="RAK-SPILL-06",
+            location=GeoCoordinate(latitude=25.9800, longitude=55.9100),
             oil_volume_m3=40.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-07",
-            location=GeoCoordinate(latitude=25.4700, longitude=53.4600),
+            target_id="RAK-SPILL-07",
+            location=GeoCoordinate(latitude=26.0000, longitude=55.8700),
             oil_volume_m3=35.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-08",
-            location=GeoCoordinate(latitude=25.5100, longitude=53.5300),
+            target_id="RAK-SPILL-08",
+            location=GeoCoordinate(latitude=26.0300, longitude=55.9300),
             oil_volume_m3=50.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-09",
-            location=GeoCoordinate(latitude=25.5500, longitude=53.4800),
+            target_id="RAK-SPILL-09",
+            location=GeoCoordinate(latitude=26.0500, longitude=55.9000),
             oil_volume_m3=70.0,
         ),
         ResponseTarget(
-            target_id="SPILL-PATCH-10",
-            location=GeoCoordinate(latitude=25.5800, longitude=53.5500),
+            target_id="RAK-SPILL-10",
+            location=GeoCoordinate(latitude=26.0800, longitude=55.9600),
             oil_volume_m3=40.0,
         ),
     )
@@ -225,22 +232,22 @@ def create_gulf_standard_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseT
 
 
 def create_constrained_triage_scenario() -> tuple[tuple[Vessel, ...], tuple[ResponseTarget, ...]]:
-    """Resource-constrained scenario where total spill volume exceeds fleet capacity.
+    """Resource-constrained scenario in RAK where total spill volume exceeds fleet capacity.
 
     Fleet total capacity: 150 m3. Total spill demand: 380 m3.
     Used to test solver priority penalty, partial fulfillment, or infeasibility detection.
     """
     vessels = (
         Vessel(
-            vessel_id="V-SCOUT-01",
-            location=GULF_DEPOTS["mina_zayed_abu_dhabi"],
+            vessel_id="RAK-SCOUT-01",
+            location=GULF_DEPOTS["port_saqr_rak"],
             speed_m_per_s=round(18.0 * KNOTS_TO_M_PER_S, 2),
             capacity_m3=50.0,
             available_hours=6.0,
         ),
         Vessel(
-            vessel_id="V-SKIMMER-01",
-            location=GULF_DEPOTS["mina_zayed_abu_dhabi"],
+            vessel_id="RAK-SKIMMER-01",
+            location=GULF_DEPOTS["port_saqr_rak"],
             speed_m_per_s=round(12.0 * KNOTS_TO_M_PER_S, 2),
             capacity_m3=100.0,
             available_hours=8.0,
@@ -249,23 +256,23 @@ def create_constrained_triage_scenario() -> tuple[tuple[Vessel, ...], tuple[Resp
 
     targets = (
         ResponseTarget(
-            target_id="TGT-PRIORITY-HIGH",
-            location=GeoCoordinate(latitude=24.7000, longitude=54.1000),
+            target_id="RAK-PRIORITY-PORT-APPROACH",
+            location=GeoCoordinate(latitude=25.9900, longitude=56.0100),
             oil_volume_m3=60.0,
         ),
         ResponseTarget(
-            target_id="TGT-PRIORITY-MED",
-            location=GeoCoordinate(latitude=24.7500, longitude=54.1500),
+            target_id="RAK-PRIORITY-COASTAL",
+            location=GeoCoordinate(latitude=25.9200, longitude=55.9300),
             oil_volume_m3=50.0,
         ),
         ResponseTarget(
-            target_id="TGT-LARGE-OFFSHORE-1",
-            location=GeoCoordinate(latitude=24.9500, longitude=53.8000),
+            target_id="RAK-LARGE-OFFSHORE-1",
+            location=GeoCoordinate(latitude=26.0400, longitude=55.8500),
             oil_volume_m3=120.0,
         ),
         ResponseTarget(
-            target_id="TGT-LARGE-OFFSHORE-2",
-            location=GeoCoordinate(latitude=25.1000, longitude=53.6000),
+            target_id="RAK-LARGE-OFFSHORE-2",
+            location=GeoCoordinate(latitude=26.1200, longitude=55.8000),
             oil_volume_m3=150.0,
         ),
     )
@@ -380,7 +387,7 @@ if __name__ == "__main__":
         ("constrained_triage", create_constrained_triage_scenario),
     ]
 
-    print(f"Exporting scenario fixtures to {fixtures_dir}...")
+    print(f"Exporting scenario fixtures to {fixtures_dir} (Ras Al Khaimah focused)...")
     for scn_name, generator in scenarios:
         v_list, t_list = generator()
         target_file = fixtures_dir / f"{scn_name}.json"
