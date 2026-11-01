@@ -1,0 +1,135 @@
+"""Predict: forecast oil positions at 6/12/24 h, plus the wind and current behind them."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+import folium
+import streamlit as st
+
+import config
+from components import maps, ui
+from components.data import drift_stage
+from services.files import as_float, iter_positions
+from services.geo import centroid, haversine_km, polygon_area_km2
+
+stage = drift_stage()
+data = stage.data
+ui.page_heading(
+    "Step 02 · Predict",
+    "Forecast where the oil will go",
+    "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours.",
+    stage,
+)
+
+
+def step_label(hours: float) -> str:
+    return "Now" if hours == 0 else f"+{hours:g} h"
+
+
+def valid_at(timestamp: str) -> str:
+    """'2026-03-14T12:42:00Z' -> '14 Mar 12:42' (falls back to the raw text)."""
+    try:
+        return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).strftime("%d %b %H:%M")
+    except ValueError:
+        return timestamp
+
+
+def degrees(value: object) -> str | None:
+    number = as_float(value)
+    return None if number is None else f"{number:.0f}°"
+
+
+def step_center(features: list[dict]) -> tuple[float, float] | None:
+    """Mean centroid (lat, lon) of all features in one step."""
+    points = [c for f in features if (c := centroid(f))]
+    if not points:
+        return None
+    return sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)
+
+
+if data is None:
+    ui.empty_state(
+        "predict",
+        "No active scenario yet",
+        "Load a satellite scene to see the predicted spread of the slick over the next 6, 12 and 24 hours, "
+        "together with the wind and currents that drive it.",
+        ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
+    )
+else:
+    hours = data.hours
+    default = next((h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])
+    selected = st.segmented_control("Forecast time", hours, default=default, required=True,
+                                    format_func=step_label, key="drift_step")
+
+    features = data.steps[selected]
+    start = step_center(data.steps[hours[0]])
+    here = step_center(features)
+    distance = haversine_km(start[1], start[0], here[1], here[0]) if start and here and selected != hours[0] else None
+    area = polygon_area_km2(features) or None
+    particles = sum(len(list(iter_positions(f["geometry"]["coordinates"])))
+                    for f in features if f["geometry"]["type"] in ("Point", "MultiPoint"))
+    timestamps = sorted({str(f["properties"]["timestamp"]) for f in features if f["properties"].get("timestamp")})
+    ui.stat_tiles([
+        ("Drift distance", ui.fmt(distance), "km", f"Centre of the slick, {step_label(hours[0]).lower()} → {step_label(selected)}"),
+        ("Oil footprint", ui.fmt(area), "km²", "Area covered by the predicted oil"),
+        ("Simulated particles", ui.fmt(float(particles), 0) if particles else None, "", "Oil parcels tracked by the model"),
+        ("Valid at", valid_at(timestamps[0]) if timestamps else None, "UTC", "Time this forecast step applies to"),
+    ])
+
+    show_trail = st.toggle("Show earlier steps", value=True)
+    m = maps.base_map()
+    centers = []
+    for h in hours:
+        if h > selected:
+            break
+        center = step_center(data.steps[h])
+        if center:
+            centers.append(center)
+        if h != selected and show_trail:
+            group = folium.FeatureGroup(name=step_label(h))
+            maps.add_features(group, data.steps[h], config.oil_color_for_hour(h), fill_opacity=0.15,
+                              weight=1, point_radius=2)
+            group.add_to(m)
+    if len(centers) > 1:
+        folium.PolyLine(centers, color="#e2eef3", weight=2, opacity=0.7, dash_array="6 6",
+                        tooltip="Path of the slick's centre").add_to(m)
+    current = folium.FeatureGroup(name=step_label(selected))
+    maps.add_features(current, features, config.oil_color_for_hour(selected), fill_opacity=0.45,
+                      tooltip={"hours": "Hours after detection", "timestamp": "Valid at"})
+    current.add_to(m)
+    maps.render(m, [f for h in hours for f in data.steps[h]], key="drift_map", height=560)
+    ui.legend(
+        [(config.oil_color_for_hour(h), step_label(h), "fill") for h in hours if h <= selected]
+        + [("#e2eef3", "Path of the slick's centre", "dash")]
+    )
+
+    # --- Inputs ----------------------------------------------------------------
+    ui.section("What drives the forecast", "Weather and ocean conditions used by the simulation.")
+    meta = data.meta or {}
+    if meta:
+        ui.stat_tiles([
+            ("Wind speed", ui.fmt(as_float(meta.get("wind_speed_ms"))), "m/s", "Near-surface wind"),
+            ("Wind from", degrees(meta.get("wind_from_deg")), "", "Direction the wind blows from"),
+            ("Current speed", ui.fmt(as_float(meta.get("current_speed_ms")), 2), "m/s", "Surface ocean current"),
+            ("Current towards", degrees(meta.get("current_to_deg")), "", "Direction the water flows"),
+        ])
+        labels = {"model": "Drift model", "start_time": "Simulation start", "wind_source": "Wind data",
+                  "current_source": "Current data", "oil_type": "Oil type", "n_particles": "Particles"}
+        details = {labels[k]: valid_at(str(v)) + " UTC" if k == "start_time" else v
+                   for k, v in meta.items() if k in labels}
+        if details:
+            st.html('<div style="height:.8rem"></div>')
+            ui.details_table(details)
+    else:
+        ui.inline_empty("Wind and current conditions will appear here.")
+
+    with st.expander("How to read this", icon=":material/help:"):
+        st.markdown(
+            """
+- Each colour is one forecast time. Colours move from bright amber (now) to dark orange (24 h) as the forecast becomes less certain.
+- **Dots** are simulated oil parcels; **shaded areas** outline where the oil is expected. Neither is an observation.
+- Accuracy depends on the wind and current data and on the assumed oil type and release time.
+- The starting position comes from the detection step, so any detection or location error carries through.
+"""
+        )
