@@ -1,22 +1,37 @@
-"""Streamlit entry point showing the actual scaffold status."""
+"""GulfOilGuard-AI dashboard entry point.
 
+Run from the repository root:  streamlit run dashboard/app.py
+URL options: ?demo=1 starts the simulated scenario, ?dev=1 opens diagnostics.
 
-def main() -> None:
-    """Render project status without inventing model or simulation results."""
-    import streamlit as st
+The dashboard only reads result files (see config.py and README.md). It never imports
+torch, opendrift or ortools.
+"""
 
-    st.set_page_config(page_title="GulfOilGuard-AI", layout="wide")
-    st.title("GulfOilGuard-AI")
-    st.write("Oil spill detection, drift prediction, and cleanup planning.")
-    st.info("Project scaffold: detection, drift simulation, and routing await implementation.")
-    for title, description in (
-        ("Detection", "Satellite imagery and predicted masks will appear here."),
-        ("Drift prediction", "Georeferenced trajectories for 6, 12, and 24 hours will appear here."),
-        ("Cleanup optimization", "Vessel assignments and routes will appear here."),
-    ):
-        st.subheader(title)
-        st.write(description)
+from __future__ import annotations
 
+import streamlit as st
 
-if __name__ == "__main__":
-    main()
+from components import nav, ui
+from components.data import all_stages
+
+st.set_page_config(
+    page_title="GulfOilGuard-AI",
+    page_icon=":material/water_drop:",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+PAGES = {
+    "overview": st.Page("views/overview.py", title="Overview", icon=":material/radar:", default=True),
+    "detect": st.Page("views/detection.py", title="Detect", icon=":material/satellite_alt:", url_path="detect"),
+    "predict": st.Page("views/drift.py", title="Predict", icon=":material/waves:", url_path="predict"),
+    "respond": st.Page("views/cleanup.py", title="Respond", icon=":material/directions_boat:",
+                       url_path="respond"),
+}
+
+ui.load_styles()
+nav.init_state()
+current = st.navigation(list(PAGES.values()), position="hidden")
+nav.top_bar(PAGES, all_stages())
+current.run()
+ui.footer()
