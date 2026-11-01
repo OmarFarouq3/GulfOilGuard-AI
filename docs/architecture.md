@@ -1,6 +1,6 @@
 # Architecture
 
-GulfOilGuard-AI is a university research prototype for the Ericsson Sustainability Challenge 2026. The pipeline is planned; the scaffold does not implement segmentation, simulation, or routing.
+GulfOilGuard-AI is a university research prototype for the Ericsson Sustainability Challenge 2026. Detection now implements a basic U-Net, training, validation, and mask export. Drift simulation, routing, and the complete integrated pipeline remain planned.
 
 ```text
 SAR imagery + masks -> detection -> predicted mask
