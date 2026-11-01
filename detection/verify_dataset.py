@@ -5,7 +5,50 @@ import hashlib
 import numpy as np
 from PIL import Image
 
-BASE = Path("/Users/yarazaben/Downloads/GulfOilGuard-AI-main/detection")
+BASE = Path(__file__).resolve().parent
+
+
+def analyze_grayscale_pixels(mask_dir):
+    total_masks = 0
+    affected_masks = 0
+    total_pixels = 0
+    affected_pixels = 0
+
+    for mask_path in sorted(mask_dir.glob("*.png")):
+        if mask_path.name.startswith("._"):
+            continue
+
+        mask = np.array(Image.open(mask_path).convert("L"))
+        intermediate = (mask > 0) & (mask < 255)
+        count = np.count_nonzero(intermediate)
+
+        total_masks += 1
+        total_pixels += mask.size
+        affected_pixels += count
+
+        if count > 0:
+            affected_masks += 1
+
+    print("\n" + "=" * 50)
+    print("INTERMEDIATE GRAYSCALE PIXEL ANALYSIS")
+    print("=" * 50)
+    print("Total training masks:", total_masks)
+    print("Masks with intermediate values:", affected_masks)
+    print(
+        "Percentage of affected masks:",
+        round(100 * affected_masks / total_masks, 4)
+        if total_masks else 0,
+        "%"
+    )
+    print("Total pixels:", total_pixels)
+    print("Intermediate grayscale pixels:", affected_pixels)
+    print(
+        "Percentage of affected pixels:",
+        round(100 * affected_pixels / total_pixels, 4)
+        if total_pixels else 0,
+        "%"
+    )
+
 
 def file_hash(path):
     h = hashlib.sha256()
@@ -14,14 +57,22 @@ def file_hash(path):
             h.update(chunk)
     return h.hexdigest()
 
+
 def verify_split(split):
     image_dir = BASE / "images" / split
     mask_dir = BASE / "masks" / split
 
-    images = {p.name: p for p in image_dir.glob("*.png")
-              if not p.name.startswith("._")}
-    masks = {p.name: p for p in mask_dir.glob("*.png")
-             if not p.name.startswith("._")}
+    images = {
+        p.name: p
+        for p in image_dir.glob("*.png")
+        if not p.name.startswith("._")
+    }
+
+    masks = {
+        p.name: p
+        for p in mask_dir.glob("*.png")
+        if not p.name.startswith("._")
+    }
 
     missing_masks = sorted(set(images) - set(masks))
     extra_masks = sorted(set(masks) - set(images))
@@ -44,10 +95,12 @@ def verify_split(split):
             with Image.open(masks[name]) as m:
                 mask_sizes[m.size] += 1
                 mask_size = m.size
+
                 values, counts = np.unique(
                     np.asarray(m.convert("L")),
                     return_counts=True
                 )
+
                 label_counts.update({
                     int(v): int(c)
                     for v, c in zip(values, counts)
@@ -64,14 +117,20 @@ def verify_split(split):
 
     def duplicate_groups(hashes):
         groups = {}
+
         for name, digest in hashes.items():
             groups.setdefault(digest, []).append(name)
-        return [names for names in groups.values()
-                if len(names) > 1]
+
+        return [
+            names
+            for names in groups.values()
+            if len(names) > 1
+        ]
 
     print(f"\n{'=' * 50}")
     print(f"{split.upper()} DATASET VERIFICATION")
     print("=" * 50)
+
     print("Images:", len(images))
     print("Masks:", len(masks))
     print("Matched pairs:", len(matched))
@@ -86,6 +145,7 @@ def verify_split(split):
 
     image_dupes = duplicate_groups(image_hashes)
     mask_dupes = duplicate_groups(mask_hashes)
+
     print("Duplicate image groups:", len(image_dupes))
     print("Duplicate mask groups:", len(mask_dupes))
 
@@ -103,8 +163,10 @@ def verify_split(split):
     return image_hashes, mask_hashes
 
 
+
 train_images, train_masks = verify_split("train")
 val_images, val_masks = verify_split("val")
+
 
 print("\n" + "=" * 50)
 print("TRAIN / VALIDATION OVERLAP")
@@ -115,4 +177,8 @@ mask_overlap = set(train_masks.values()) & set(val_masks.values())
 
 print("Identical image files across splits:", len(image_overlap))
 print("Identical mask files across splits:", len(mask_overlap))
+
+
+analyze_grayscale_pixels(BASE / "masks" / "train")
+
 print("\nVerification finished!")
