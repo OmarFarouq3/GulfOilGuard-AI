@@ -1,83 +1,65 @@
+"""Paired PNG loading. Importing this module never reads data or creates loaders."""
 
 from pathlib import Path
+
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
+
 
 class OilSpillDataset(Dataset):
-    def __init__(self, image_dir, mask_dir):
+    """RGB images in [0, 1] and binary masks using grayscale >127 as oil."""
+
+    def __init__(self, image_dir, mask_dir, *, image_size=None, augment=False, exclude=()):
         self.image_dir = Path(image_dir)
         self.mask_dir = Path(mask_dir)
-
-        self.files = sorted(
-            f.name for f in self.image_dir.glob("*.png")
-            if not f.name.startswith("._")
-        )
-
-        missing = [
-            name for name in self.files
-            if not (self.mask_dir / name).exists()
-        ]
-
-        if missing:
-            raise ValueError(f"Missing masks: {missing[:5]}")
+        if not self.image_dir.is_dir() or not self.mask_dir.is_dir():
+            raise ValueError(f"Image and mask directories must exist: {image_dir}, {mask_dir}")
+        images = {p.name for p in self.image_dir.glob("*.png") if not p.name.startswith("._")}
+        masks = {p.name for p in self.mask_dir.glob("*.png") if not p.name.startswith("._")}
+        if images != masks:
+            raise ValueError(f"Unmatched pairs: missing masks={sorted(images - masks)[:5]}, "
+                             f"missing images={sorted(masks - images)[:5]}")
+        self.files = sorted(images - set(exclude))
+        if not self.files:
+            raise ValueError(f"No paired PNG files in {image_dir}")
+        if image_size is not None and image_size < 16:
+            raise ValueError("image_size must be at least 16.")
+        self.image_size = image_size
+        self.augment = augment
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, idx):
-        filename = self.files[idx]
-
-        image = Image.open(
-            self.image_dir / filename
-        ).convert("RGB")
-
-        mask = Image.open(
-            self.mask_dir / filename
-        ).convert("L")
-
-        image = torch.from_numpy(
-    np.array(image, dtype=np.float32)
-).permute(2, 0, 1) / 255.0
-
-        mask = np.array(mask)
-        mask = (mask > 127).astype(np.float32)
-        mask = torch.from_numpy(mask).unsqueeze(0)
-
+        name = self.files[idx]
+        with Image.open(self.image_dir / name) as source, Image.open(self.mask_dir / name) as label:
+            if source.size != label.size:
+                raise ValueError(f"Image/mask size mismatch: {name}")
+            image, mask = source.convert("RGB"), label.convert("L")
+            if self.image_size is not None:
+                size = (self.image_size, self.image_size)
+                image = image.resize(size, Image.Resampling.BILINEAR)
+                mask = mask.resize(size, Image.Resampling.NEAREST)
+            image = torch.from_numpy(np.array(image, dtype=np.float32)).permute(2, 0, 1) / 255.0
+            mask = torch.from_numpy((np.array(mask) > 127).astype(np.float32)).unsqueeze(0)
+        if self.augment:
+            for dimension in (-1, -2):
+                if torch.rand(()).item() < 0.5:
+                    image, mask = image.flip(dimension), mask.flip(dimension)
         return image, mask
 
 
-base = Path(__file__).resolve().parent
+def main():
+    from torch.utils.data import DataLoader
+    base = Path(__file__).resolve().parent
+    for split in ("train", "val"):
+        dataset = OilSpillDataset(base / "images" / split, base / "masks" / split)
+        images, masks = next(iter(DataLoader(dataset, batch_size=4)))
+        print(f"{split}: {len(dataset)} pairs; images={tuple(images.shape)}, "
+              f"masks={tuple(masks.shape)}, labels={torch.unique(masks).tolist()}")
 
-train_dataset = OilSpillDataset(
-    base / "images" / "train",
-    base / "masks" / "train"
-)
 
-val_dataset = OilSpillDataset(
-    base / "images" / "val",
-    base / "masks" / "val"
-)
-
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=4,
-    shuffle=True,
-    num_workers=0
-)
-
-val_loader = DataLoader(
-    val_dataset,
-    batch_size=4,
-    shuffle=False,
-    num_workers=0
-)
-
-images, masks = next(iter(train_loader))
-
-print("Training samples:", len(train_dataset))
-print("Validation samples:", len(val_dataset))
-print("Image batch shape:", images.shape)
-print("Mask batch shape:", masks.shape)
-print("Mask values:", torch.unique(masks))
+if __name__ == "__main__":
+    main()
