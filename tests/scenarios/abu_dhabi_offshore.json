@@ -7,6 +7,7 @@
   "release_location": {"latitude": 25.00, "longitude": 53.40},
   "estimated_oil_volume_m3": 300,
   "synthetic_drift": {
+    "note": "Straight-line placeholder for the slick centre, not OpenDrift output.",
     "duration_hours": 24,
     "positions": [
       {"hours_after_release": 0,  "latitude": 25.00, "longitude": 53.40},
@@ -15,10 +16,12 @@
       {"hours_after_release": 24, "latitude": 24.72, "longitude": 53.95}
     ]
   },
+  "targets_forecast_hours_after_release": 12,
+  "targets_note": "The three targets are separate oil patches at the same forecast time (T+12 h), around the forecast slick centre. They are not the same slick at different times.",
   "targets": [
-    {"target_id": "S1-T1", "latitude": 24.92, "longitude": 53.55, "oil_volume_m3": 120},
-    {"target_id": "S1-T2", "latitude": 24.85, "longitude": 53.70, "oil_volume_m3": 100},
-    {"target_id": "S1-T3", "latitude": 24.80, "longitude": 53.82, "oil_volume_m3": 80}
+    {"target_id": "S1-T1", "latitude": 24.89, "longitude": 53.66, "oil_volume_m3": 110},
+    {"target_id": "S1-T2", "latitude": 24.85, "longitude": 53.72, "oil_volume_m3": 110},
+    {"target_id": "S1-T3", "latitude": 24.81, "longitude": 53.68, "oil_volume_m3": 80}
   ],
   "vessels": [
     {"vessel_id": "S1-V1", "latitude": 24.52, "longitude": 54.37, "speed_m_per_s": 5.0, "capacity_m3": 200, "available_hours": 12},
@@ -27,5 +30,5 @@
   "sensitive_sites": [
     {"name": "Desalination intake, Taweelah area (approximate)", "latitude": 24.77, "longitude": 54.70}
   ],
-  "expected": "Routing should find a feasible plan: total fleet capacity 350 m3 covers 300 m3 of oil."
+  "expected": "Total fleet capacity (350 m3) exceeds the total oil volume (300 m3). This is necessary but does not guarantee a feasible plan: the optimizer must still check travel times against each vessel's available hours and assign each patch to a vessel. The status should be optimal or feasible only if those checks pass; otherwise infeasible with a message."
 }

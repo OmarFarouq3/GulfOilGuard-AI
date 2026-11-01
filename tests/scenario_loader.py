@@ -37,6 +37,8 @@ class Scenario:
     release_location: GeoCoordinate
     estimated_oil_volume_m3: float
     drift: DriftOutput
+    targets_forecast_time: datetime
+    targets_note: str
     targets: tuple[ResponseTarget, ...]
     vessels: tuple[Vessel, ...]
     sensitive_sites: tuple[SensitiveSite, ...]
@@ -71,6 +73,8 @@ def load_scenario(path: Path) -> Scenario:
         duration_hours=float(drift_raw["duration_hours"]),
     )
 
+    # All targets in a scenario are separate patches at one forecast time.
+    targets_forecast_time = release_time + timedelta(hours=raw["targets_forecast_hours_after_release"])
     targets = tuple(
         ResponseTarget(t["target_id"], _coord(t), float(t["oil_volume_m3"])) for t in raw["targets"]
     )
@@ -90,6 +94,8 @@ def load_scenario(path: Path) -> Scenario:
         release_location=release,
         estimated_oil_volume_m3=float(raw["estimated_oil_volume_m3"]),
         drift=drift,
+        targets_forecast_time=targets_forecast_time,
+        targets_note=raw["targets_note"],
         targets=targets,
         vessels=vessels,
         sensitive_sites=sites,

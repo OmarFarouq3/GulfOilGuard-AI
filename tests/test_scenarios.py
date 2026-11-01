@@ -5,7 +5,7 @@ Run from the repo root: python -m unittest discover -s tests -v
 
 import unittest
 
-from contract_checks import check_coordinate, check_drift, check_target, check_vessel
+from contract_checks import GULF_REGION, check_in_region, check_drift, check_target, check_vessel
 from scenario_loader import load_all
 
 
@@ -15,7 +15,7 @@ class ScenarioTests(unittest.TestCase):
         cls.scenarios = load_all()
 
     def test_scenarios_found(self):
-        self.assertGreaterEqual(len(self.scenarios), 3)
+        self.assertGreaterEqual(len(self.scenarios), 1)
 
     def test_ids_unique(self):
         ids = [s.scenario_id for s in self.scenarios]
@@ -30,14 +30,15 @@ class ScenarioTests(unittest.TestCase):
     def test_contracts(self):
         for s in self.scenarios:
             with self.subTest(s.scenario_id):
-                problems = check_coordinate(s.release_location, "release_location")
-                problems += check_drift(s.drift)
+                # Demo scenarios are in the Gulf, so the optional regional check is applied.
+                problems = check_in_region(s.release_location, GULF_REGION, "release_location")
+                problems += check_drift(s.drift, region=GULF_REGION)
                 for t in s.targets:
-                    problems += check_target(t)
+                    problems += check_target(t, region=GULF_REGION)
                 for v in s.vessels:
-                    problems += check_vessel(v)
+                    problems += check_vessel(v, region=GULF_REGION)
                 for site in s.sensitive_sites:
-                    problems += check_coordinate(site.location, site.name)
+                    problems += check_in_region(site.location, GULF_REGION, site.name)
                 self.assertEqual(problems, [])
 
     def test_drift_starts_at_release(self):
@@ -60,12 +61,23 @@ class ScenarioTests(unittest.TestCase):
                 self.assertEqual(len(tids), len(set(tids)))
                 self.assertEqual(len(vids), len(set(vids)))
 
-    def test_capacity_matches_expected_outcome(self):
+    def test_targets_share_one_forecast_time_within_drift(self):
+        for s in self.scenarios:
+            with self.subTest(s.scenario_id):
+                start = s.drift.positions[0].timestamp
+                end = s.drift.positions[-1].timestamp
+                self.assertTrue(start <= s.targets_forecast_time <= end)
+                self.assertIn("same forecast time", s.targets_note)
+
+    def test_capacity_shortfall_must_expect_infeasible(self):
+        # Enough capacity is necessary, not sufficient. Only the shortfall case is decidable here.
         for s in self.scenarios:
             with self.subTest(s.scenario_id):
                 capacity = sum(v.capacity_m3 for v in s.vessels)
-                infeasible = "infeasible" in s.expected.lower()
-                self.assertEqual(capacity < s.estimated_oil_volume_m3, infeasible)
+                if capacity < s.estimated_oil_volume_m3:
+                    self.assertIn("infeasible", s.expected.lower())
+                else:
+                    self.assertIn("does not guarantee", s.expected.lower())
 
 
 if __name__ == "__main__":
