@@ -16,6 +16,8 @@ from optimization.scenario import (
     create_gulf_wide_scenario,
     create_rak_standard_scenario,
     create_smoke_test_scenario,
+    create_synthetic_gulf_drift,
+    create_gulf_drift_scenario,
     export_scenario_to_json,
     haversine_distance_km,
     load_scenario_from_json,
@@ -123,6 +125,36 @@ class TestOptimizationScenarios(unittest.TestCase):
         self.assertEqual(len(targets_t6), 1)
         self.assertAlmostEqual(targets_t6[0].oil_volume_m3, 100.0)
         self.assertEqual(targets_t6[0].location.latitude, 25.1)
+
+    def test_synthetic_gulf_drift(self):
+        drift = create_synthetic_gulf_drift()
+        self.assertEqual(drift.initial_location.latitude, 25.85)
+        self.assertEqual(drift.initial_location.longitude, 55.65)
+        self.assertEqual(drift.duration_hours, 24.0)
+
+        # Check that we have positions across 0, 6, 12, 24 h
+        timestamps = sorted({p.timestamp for p in drift.positions})
+        self.assertEqual(len(timestamps), 4)
+
+        # Hour 0 should have 1 release point; later hours should have particle clouds
+        t0 = timestamps[0]
+        pts_t0 = [p for p in drift.positions if p.timestamp == t0]
+        self.assertEqual(len(pts_t0), 1)
+        self.assertEqual(pts_t0[0].coordinate.latitude, 25.85)
+        self.assertEqual(pts_t0[0].coordinate.longitude, 55.65)
+
+    def test_gulf_drift_scenario(self):
+        vessels, targets = create_gulf_drift_scenario(forecast_hour=12.0, max_targets=8)
+        self.assertEqual(len(vessels), 3)
+        self.assertEqual(len(targets), 8)
+
+        total_vol = sum(t.oil_volume_m3 for t in targets)
+        self.assertAlmostEqual(total_vol, 196.9, places=1)
+
+        # Verify all targets are in open coastal waters near RAK / Umm Al Quwain
+        for t in targets:
+            self.assertTrue(25.5 <= t.location.latitude <= 26.2)
+            self.assertTrue(55.5 <= t.location.longitude <= 56.0)
 
 
 if __name__ == "__main__":
