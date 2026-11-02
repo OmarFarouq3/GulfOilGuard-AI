@@ -17,8 +17,8 @@ import xarray as xr
 
 from shared.schemas import EnvironmentalData
 
-DEFAULT_RAW_WIND = Path("data/era5_wind_gulf_2026-10-19_26.nc")
-DEFAULT_RAW_CURRENT = Path("data/cmems_currents_gulf_2026-10-19_26.nc")
+DEFAULT_RAW_WIND = Path("data/raw/era5_wind_gulf_2026-10-19_26.nc")
+DEFAULT_RAW_CURRENT = Path("data/raw/cmems_currents_gulf_2026-10-19_26.nc")
 
 SPEED_UNITS = "m s-1"
 
