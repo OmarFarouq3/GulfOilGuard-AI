@@ -88,16 +88,67 @@ def test_reroll_without_selection_does_nothing(session, image_dir):
     assert selection.current() == selection.Selection()
 
 
-def test_sync_drops_results_of_another_selection(session, image_dir):
-    """Covers selections written to session_state directly (e.g. AppTest, future code)."""
+IDS = [s.spill_id for s in SITES]
+SOURCE = (False, "demo", "demo")
+
+
+def finish_predict() -> None:
     selection.select_spill("GOG-SIM-01")
+    selection.sync(IDS, SOURCE)
     selection.accept_simulated_detection()
     selection.complete_predict()
-    selection.sync()
-    assert selection.predict_done()  # same selection: kept
+
+
+def test_sync_drops_results_of_another_selection(session, image_dir):
+    """Covers selections written to session_state directly (e.g. AppTest, future code)."""
+    finish_predict()
+    selection.sync(IDS, SOURCE)
+    assert selection.predict_done()  # same selection and source: kept
     session[selection.SPILL_KEY] = "GOG-SIM-04"
-    selection.sync()
+    selection.sync(IDS, SOURCE)
     assert not [k for k in STEP_KEYS if k in session]
+
+
+def test_sync_clears_a_selection_that_is_no_longer_offered(session, image_dir):
+    """Fix 4: one place validates the stored id; active() then agrees with the pages."""
+    finish_predict()
+    selection.sync(["GOG-SIM-02", "GOG-SIM-03"], SOURCE)  # GOG-SIM-01 vanished from the list
+    assert not selection.active() and selection.current() == selection.Selection()
+    assert not [k for k in session if str(k).startswith(selection.DOWNSTREAM_PREFIX)]
+    assert selection.step_states() == {"detect": "locked", "predict": "locked", "respond": "locked"}
+
+
+@pytest.mark.parametrize("new_source", [(True, "demo", "demo"), (False, "outputs", "demo"), (False, "demo", "outputs")])
+def test_sync_resets_the_flow_when_the_data_source_changes(session, image_dir, new_source):
+    """Fix 5: demo toggle or a new drift / routing origin never keeps steps "done" over other data."""
+    finish_predict()
+    selection.sync(IDS, new_source)
+    assert selection.active()  # the spill itself is still fine
+    assert not selection.detection_done() and not selection.predict_done()
+
+
+def test_sync_undoes_a_model_detection_whose_files_are_gone(session, image_dir, tmp_path, monkeypatch):
+    """Fix 6: "done" is re-verified against disk on every run."""
+    monkeypatch.setattr(inference.config, "DETECTION_DIR", tmp_path / "det")
+    selection.select_spill("GOG-SIM-01")
+    selection.sync(IDS, SOURCE)
+    for path in inference.output_files("img-1").values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"png")
+    selection.record_detection(inference.DetectionRun("done", "ok", "img-1"))
+    selection.complete_predict()
+    selection.sync(IDS, SOURCE)
+    assert selection.detection_done() and selection.predict_done()
+    inference.output_files("img-1")["mask"].unlink()
+    selection.sync(IDS, SOURCE)
+    assert selection.detection_run() is None and not selection.predict_done()
+    assert selection.step_states()["detect"] == "ready"
+
+
+def test_sync_keeps_a_simulated_detection_without_files(session, image_dir):
+    finish_predict()
+    selection.sync(IDS, SOURCE)
+    assert selection.detection_done() and selection.predict_done()
 
 
 def test_steps_unlock_in_order(session, image_dir):

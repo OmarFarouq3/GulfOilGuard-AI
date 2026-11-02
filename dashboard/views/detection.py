@@ -10,7 +10,7 @@ import streamlit as st
 import config
 from components import charts, flow, maps, ui
 from components.data import detection_stage, selected_site
-from components.labels import KM2
+from components.labels import slick_tooltip
 
 stage = detection_stage()
 data = stage.data
@@ -94,7 +94,7 @@ else:
         m = maps.base_map()
         maps.add_features(m, data.spill["features"], config.OIL_OBSERVED, outline=config.OIL_OUTLINE,
                           fill_opacity=0.5,
-                          tooltip={"image_id": "Scene", "area_km2": f"Area ({KM2})", "confidence": "Confidence"})
+                          tooltip=slick_tooltip(data.outline_simulated))
         maps.render(m, data.spill["features"], key="detection_map")
         ui.legend([(config.OIL_OBSERVED, "Simulated slick outline" if data.outline_simulated else "Detected oil",
                     "fill")])

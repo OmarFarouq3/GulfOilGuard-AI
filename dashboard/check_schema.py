@@ -14,10 +14,12 @@ Exits non-zero on any mismatch. Checks:
 
 from __future__ import annotations
 
+import atexit
 import dataclasses
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +31,7 @@ FORBIDDEN = ("torch", "opendrift", "ortools")
 
 # Point the loaders at a temporary data folder before config is imported.
 SAMPLE_DIR = Path(tempfile.mkdtemp(prefix="gog_schema_check_"))
+atexit.register(shutil.rmtree, SAMPLE_DIR, True)  # removed again when the check ends
 os.environ["GULFOILGUARD_OUTPUTS"] = str(SAMPLE_DIR)
 sys.path.insert(0, str(DASHBOARD_DIR))
 logging.getLogger("streamlit").setLevel(logging.ERROR)  # quiet "no runtime" cache notices

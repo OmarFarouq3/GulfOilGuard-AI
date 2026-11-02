@@ -48,10 +48,33 @@ def _stage(key: str, data: Any) -> Stage:
     return Stage(key, data, "simulated" if simulated else "live", bool(data.warnings))
 
 
+def dev_mode() -> bool:
+    """?dev=1: show technical details (tracebacks, paths) next to errors."""
+    return st.query_params.get("dev") == "1"
+
+
+def data_source() -> tuple:
+    """What the selected-spill results are built from: demo flag + drift / routing origin."""
+    demo = demo_mode()
+    return (demo, "demo" if scenario.source_drift(demo).is_mock else "outputs",
+            "demo" if scenario.source_routing(demo).is_mock else "outputs")
+
+
+def reconcile_selection() -> None:
+    """Validate the selection against the current spill list and data source (app.py, once per run)."""
+    selection.sync([s.spill_id for s in spills_stage().data.sites], data_source())
+
+
 def selected_site() -> SpillSite | None:
-    """The spill selected on Overview, if it is still in the catalogue."""
+    """The spill selected on Overview (reconcile_selection has already dropped unknown ids)."""
     spill_id = selection.selected_spill_id()
     return spills_stage().data.get(spill_id) if spill_id else None
+
+
+def combined_status(stages: dict[str, Stage]) -> Status:
+    """One status for numbers built from several stages: simulated if any input is simulated."""
+    statuses = {s.status for s in stages.values()}
+    return "simulated" if "simulated" in statuses else "live" if "live" in statuses else "empty"
 
 
 def detection_stage() -> Stage:

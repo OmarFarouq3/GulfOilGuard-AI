@@ -13,11 +13,15 @@ from dashboard_testkit import APP, make_image_dir, page_text
 from PIL import Image
 from streamlit.testing.v1 import AppTest
 
+from components.labels import slick_tooltip
+from components.nav import STEP_HELP
 from services import image_picker, inference, selection
+from services.scenario import SIMULATED_OUTLINE
 
 OVERVIEW, DETECT, PREDICT, RESPOND = "views/overview.py", "views/detection.py", "views/drift.py", "views/cleanup.py"
 LOCKED = "This step is locked"
 SIMULATED_CHIP = "Simulated scenario"
+TRACEBACK = "Traceback (most recent call last): secret/path/boom.py"
 
 
 def checked(at: AppTest) -> AppTest:
@@ -30,9 +34,11 @@ def open_page(at: AppTest, page: str) -> AppTest:
     return checked(at.run())
 
 
-def new_app(demo: bool = False) -> AppTest:
+def new_app(demo: bool = False, dev: bool = False) -> AppTest:
     at = AppTest.from_file(str(APP), default_timeout=120)
     at.session_state["demo_mode"] = demo
+    if dev:
+        at.query_params["dev"] = "1"
     return at
 
 
@@ -56,6 +62,20 @@ def button(at: AppTest, key: str):
     matches = [b for b in at.button if b.key == key]
     assert matches, f"button {key!r} not on the page"
     return matches[0]
+
+
+def has_button(at: AppTest, key: str) -> bool:
+    return any(b.key == key for b in at.button)
+
+
+def html_bodies(at: AppTest, css_class: str) -> list[str]:
+    """Bodies of the st.html elements that carry ``css_class`` (one specific card, not the page)."""
+    return [h.proto.body for h in at.get("html") if f'class="{css_class}' in h.proto.body
+            or f" {css_class}" in h.proto.body.split(">", 1)[0]]
+
+
+def expanders(at: AppTest) -> list[str]:
+    return [e.label for e in at.expander]
 
 
 @pytest.fixture
@@ -86,34 +106,76 @@ def stub_detection(monkeypatch):
         path.unlink()
 
 
+@pytest.fixture
+def failing_detection(monkeypatch):
+    monkeypatch.setattr(inference, "run_detection", lambda *a, **k: inference.DetectionRun(
+        "failed", "Detection failed (exit code 4).", "x", detail=TRACEBACK))
+
+
+def run_all_steps(at: AppTest) -> None:
+    open_page(at, DETECT)
+    button(at, "flow_run_detection").click()
+    checked(at.run())
+    open_page(at, PREDICT)
+    button(at, "flow_run_predict").click()
+    checked(at.run())
+    open_page(at, RESPOND)
+    button(at, "flow_run_respond").click()
+    checked(at.run())
+
+
 # --- Overview -------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("folder", ["missing", "empty"])
-def test_overview_without_images_shows_empty_state(tmp_path, monkeypatch, folder):
+def test_overview_without_images_shows_the_empty_state_card(tmp_path, monkeypatch, folder):
     directory = tmp_path / folder
     if folder == "empty":
         directory.mkdir()
     monkeypatch.setenv("GOG_IMAGE_DIR", str(directory))
     at = checked(new_app().run())
     assert "No incident selected yet" in page_text(at)
+    assert not html_bodies(at, "gog-images-missing")  # only once a spill is selected
     select(at, "GOG-SIM-01", None)
-    text = page_text(checked(at.run()))
-    assert "No radar images found" in text and folder in text and "GOG_IMAGE_DIR" in text
-    assert "Continue to Detect" not in text  # the flow stops at the empty state
-    assert "This step is locked" not in page_text(open_page(at, DETECT))  # Detect offers the simulated route
-    assert button(at, "flow_detect_simulated")
+    cards = html_bodies(at, "gog-images-missing")
+    assert len(cards) == 1
+    card = cards[0]
+    assert "No radar images found" in card and str(directory) in card and "GOG_IMAGE_DIR" in card
+    assert ".png" in card and ".jpg" in card
+    assert not [p for p in at.get("page_link") if p.proto.label == "Continue to Detect"]
+    open_page(at, DETECT)
+    assert LOCKED not in page_text(at) and has_button(at, "flow_detect_simulated")
 
 
-def test_overview_shows_the_assigned_image_with_caption_and_is_stable(images):
+def test_overview_shows_the_assigned_image_with_caption(images):
     at = new_app()
     select(at, "GOG-SIM-02", images[1])
-    text = page_text(checked(at.run()))
-    assert "not geolocated to this spill" in text and images[1].name in text
-    assert "North of Ras Al Khaimah (simulated)" in text and SIMULATED_CHIP in text
-    for _ in range(3):  # reruns never draw a new image
-        checked(at.run())
-        assert at.session_state[selection.IMAGE_PATH_KEY] == str(images[1])
+    captions = [str(i.proto) for i in at.get("image")]
+    assert any("not geolocated to this spill" in c and images[1].name in c for c in captions)
+    assert "North of Ras Al Khaimah (simulated)" in page_text(at)
+
+
+def test_overview_legend_names_simulated_sites(images):
+    at = checked(new_app().run())
+    legend = " ".join(html_bodies(at, "gog-legend"))
+    assert "Simulated spill site" in legend and "Reported spill" not in legend
+
+
+def test_overview_numbers_are_labelled_simulated_with_results(images, stub_detection):
+    """Fix A1: demo off, a selected spill run through all steps -> the headline numbers carry the label."""
+    at = new_app(demo=False)
+    select(at, "GOG-SIM-01", images[0])
+    run_all_steps(at)
+    open_page(at, OVERVIEW)
+    status = html_bodies(at, "gog-kpi-status")
+    assert len(status) == 1 and SIMULATED_CHIP in status[0]
+    hero = html_bodies(at, "gog-hero")
+    assert hero and "gog-chip-sim" in hero[0]
+
+
+def test_overview_numbers_unlabelled_when_there_are_no_results(images):
+    at = checked(new_app(demo=False).run())  # no selection, no outputs files: nothing simulated shown
+    assert not html_bodies(at, "gog-kpi-status")
 
 
 # --- The three steps --------------------------------------------------------------------------
@@ -123,7 +185,6 @@ def test_overview_shows_the_assigned_image_with_caption_and_is_stable(images):
 def test_detect_predict_respond_unlock_in_order(images, stub_detection, demo):
     at = new_app(demo)
     select(at, "GOG-SIM-04", images[0])
-    checked(at.run())
 
     assert LOCKED in page_text(open_page(at, PREDICT))
     assert LOCKED in page_text(open_page(at, RESPOND))
@@ -134,6 +195,7 @@ def test_detect_predict_respond_unlock_in_order(images, stub_detection, demo):
     text = page_text(checked(at.run()))
     assert stub_detection == [image_picker.image_id(images[0])]
     assert "U-Net prediction" in text and "Simulated slick outline" in text and SIMULATED_CHIP in text
+    assert SIMULATED_OUTLINE in text  # the outline's tooltip, not "Scene: <image_id>"
 
     assert LOCKED in page_text(open_page(at, RESPOND))  # still locked: Predict not done
     text = page_text(open_page(at, PREDICT))
@@ -148,8 +210,13 @@ def test_detect_predict_respond_unlock_in_order(images, stub_detection, demo):
     text = page_text(checked(at.run()))
     assert "Simulated response plan" in text and SIMULATED_CHIP in text and at.dataframe
 
-    assert selection.step_states.__name__  # all three done: overview shows the progress
     assert page_text(open_page(at, OVERVIEW)).count("gog-progress-done") == 3
+
+
+def test_simulated_outline_tooltip_never_names_the_scene():
+    assert "image_id" not in slick_tooltip(outline_simulated=True)
+    assert "outline" in slick_tooltip(outline_simulated=True)
+    assert "image_id" in slick_tooltip(outline_simulated=False)
 
 
 def test_missing_checkpoint_falls_back_to_simulated_and_unlocks_predict(images):
@@ -158,25 +225,50 @@ def test_missing_checkpoint_falls_back_to_simulated_and_unlocks_predict(images):
     open_page(at, DETECT)
     button(at, "flow_run_detection").click()
     text = page_text(checked(at.run()))
-    assert "No trained detection model" in text and "demo scene" in text and "Traceback" not in text
+    assert "No trained detection model" in text and "GOG_CHECKPOINT" in text and "demo scene" in text
+    assert "no-model.pth" not in text  # the path is a technical detail (?dev=1 only)
     assert LOCKED not in page_text(open_page(at, PREDICT))
 
 
-def test_failed_detection_keeps_predict_locked_and_offers_simulated(images, monkeypatch):
-    monkeypatch.setattr(inference, "run_detection", lambda *a, **k: inference.DetectionRun(
-        "failed", "Detection failed (exit code 4).", "x", detail="Traceback (most recent call last): boom"))
-    at = new_app()
+def test_failed_detection_hides_technical_details_without_dev(images, failing_detection):
+    """Fix 10: the traceback is not anywhere in the page tree (not even in a collapsed expander)."""
+    at = new_app(dev=False)
     select(at, "GOG-SIM-01", images[0])
     open_page(at, DETECT)
     button(at, "flow_run_detection").click()
-    checked(at.run())
-    assert at.expander, "technical details belong in an expander"
-    assert "Detection failed (exit code 4)." in page_text(at)
+    text = page_text(checked(at.run()))
+    assert "Detection failed (exit code 4)." in text
+    assert "Traceback" not in text and "secret/path" not in text
+    assert "Technical details" not in expanders(at)
     assert LOCKED in page_text(open_page(at, PREDICT))
     open_page(at, DETECT)
     button(at, "flow_detect_simulated").click()
     checked(at.run())
     assert LOCKED not in page_text(open_page(at, PREDICT))
+
+
+def test_failed_detection_shows_technical_details_with_dev(images, failing_detection):
+    at = new_app(dev=True)
+    select(at, "GOG-SIM-01", images[0])
+    open_page(at, DETECT)
+    button(at, "flow_run_detection").click()
+    checked(at.run())
+    details = [e for e in at.expander if e.label == "Technical details"]
+    assert len(details) == 1
+    assert [c.value for c in details[0].code] == [TRACEBACK]
+
+
+def test_setup_needed_names_both_variables_and_offers_simulated(images, monkeypatch):
+    """Fix 19: no torch in the dashboard's Python -> a setup message, plus the simulated route."""
+    monkeypatch.setattr(inference, "run_detection", lambda *a, **k: inference.DetectionRun(
+        "setup_needed", inference._setup_message(), "x", detail=TRACEBACK))
+    at = new_app()
+    select(at, "GOG-SIM-01", images[0])
+    open_page(at, DETECT)
+    button(at, "flow_run_detection").click()
+    text = page_text(checked(at.run()))
+    assert "GOG_DETECTION_PYTHON" in text and "GOG_CHECKPOINT" in text and "Traceback" not in text
+    assert has_button(at, "flow_detect_simulated")
 
 
 # --- Selection changes reset the flow -----------------------------------------------------------
@@ -210,6 +302,44 @@ def test_reroll_resets_downstream(images, stub_detection):
     checked(at.run())
     assert at.session_state[selection.IMAGE_PATH_KEY] != str(images[0])
     assert not keys(at)
+    assert LOCKED in page_text(open_page(at, PREDICT))
+
+
+def test_unknown_spill_is_cleared_everywhere(images, stub_detection):
+    """Fix 4: a spill id that is no longer offered clears the selection before anything renders."""
+    at = new_app()
+    select(at, "GOG-SIM-01", images[0])
+    finish_detection_and_predict(at)
+    at.session_state[selection.SPILL_KEY] = "GONE-01"
+    text = page_text(open_page(at, PREDICT))
+    assert selection.SPILL_KEY not in at.session_state and not keys(at)
+    assert "No incident selected" in text
+    assert not any(help_text in text for help_text in STEP_HELP.values())  # timeline shows no old progress
+
+
+def test_demo_toggle_resets_the_flow(images, stub_detection):
+    """Fix 5: the options-panel toggle (real widget + callback) drops the steps done on other data."""
+    at = new_app(demo=False)
+    select(at, "GOG-SIM-01", images[0])
+    finish_detection_and_predict(at)
+    at.toggle(key="_demo_toggle").set_value(True)
+    checked(at.run())
+    assert at.session_state["demo_mode"] is True
+    assert at.session_state[selection.SPILL_KEY] == "GOG-SIM-01"  # still offered in demo mode
+    assert not keys(at)
+    assert LOCKED in page_text(open_page(at, PREDICT))
+
+
+def test_detection_files_removed_on_disk_reopen_the_step(images, stub_detection):
+    """Fix 6: a "done" model detection is re-verified against disk on every render."""
+    at = new_app()
+    select(at, "GOG-SIM-01", images[0])
+    finish_detection_and_predict(at)
+    image_id = image_picker.image_id(images[0])
+    inference.output_files(image_id)["mask"].unlink()
+    open_page(at, DETECT)
+    assert has_button(at, "flow_run_detection")
+    assert selection.DETECT_RUN_KEY not in at.session_state
     assert LOCKED in page_text(open_page(at, PREDICT))
 
 

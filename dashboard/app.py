@@ -12,8 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from components import nav, ui
-from components.data import all_stages
-from services import selection
+from components.data import all_stages, reconcile_selection
 
 st.set_page_config(
     page_title="GulfOilGuard-AI",
@@ -32,7 +31,7 @@ PAGES = {
 
 ui.load_styles()
 nav.init_state()
-selection.sync()  # results of a previous spill or image never leak into this one
+reconcile_selection()  # one place decides whether the selection and its results are still valid
 current = st.navigation(list(PAGES.values()), position="hidden")
 nav.top_bar(PAGES, all_stages())
 current.run()

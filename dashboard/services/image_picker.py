@@ -80,10 +80,12 @@ def pick_random_image(directory: str | Path | None = None, exclude: str | Path |
 def image_id(path: str | Path, root: str | Path | None = None) -> str:
     """Stable id ``<stem>-<hash>`` limited to [A-Za-z0-9_-] (key for outputs/detection/<id>_*).
 
-    The readable part is the sanitised file stem; the 8-hex hash is of the path relative to the
-    image folder (``root``, default ``image_dir()``), so ``a/x.png``, ``b/x.png`` and ``x.jpg``
-    never share an id and overwrite each other's results. Case is folded where the file system
-    ignores it (Windows), so one file always gets one id.
+    The readable part is the sanitised, lowercased file stem; the 8-hex hash is of the exact
+    relative path (``root``, default ``image_dir()``, as a POSIX string), so ``a/x.png``,
+    ``b/x.png``, ``x.jpg`` and, on case-sensitive systems, ``X.png`` never share an id and
+    overwrite each other's results. Nothing depends on the OS: the same dataset gets the same
+    ids on Windows, macOS and Linux (paths come from ``list_images``, which returns the names
+    as stored on disk).
     """
     path = Path(path)
     base = Path(root) if root is not None else image_dir()
@@ -91,6 +93,6 @@ def image_id(path: str | Path, root: str | Path | None = None) -> str:
         key = path.resolve().relative_to(base.resolve()).as_posix()
     except ValueError:  # outside the image folder: fall back to the absolute path
         key = path.resolve().as_posix()
-    digest = hashlib.sha1(os.path.normcase(key).encode("utf-8")).hexdigest()[:8]
-    stem = re.sub(r"[^A-Za-z0-9_-]+", "_", path.stem).strip("_")[:60] or "image"
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:8]
+    stem = re.sub(r"[^a-z0-9_-]+", "_", path.stem.lower()).strip("_")[:60] or "image"
     return f"{stem}-{digest}"

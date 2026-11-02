@@ -25,7 +25,7 @@ APP = DASHBOARD_DIR / "app.py"
 REAL_ENV = {k: os.environ.get(k) for k in ("GOG_IMAGE_DIR", "GOG_CHECKPOINT", "GOG_DETECTION_PYTHON")}
 for _key in REAL_ENV:
     os.environ.pop(_key, None)
-TEST_OUTPUTS = Path(tempfile.mkdtemp(prefix="gog_test_outputs_"))
+TEST_OUTPUTS = Path(tempfile.mkdtemp(prefix="gog_test_outputs_"))  # removed by conftest at session end
 os.environ["GULFOILGUARD_OUTPUTS"] = str(TEST_OUTPUTS)
 
 for _path in (DASHBOARD_DIR, REPO_ROOT):

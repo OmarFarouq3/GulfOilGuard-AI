@@ -6,13 +6,16 @@ Usage (from the repository root):
 
 Writes ``<image-id>_image.png`` (the RGB input the model saw), ``<image-id>_mask.png``
 (white = predicted oil) and ``<image-id>_overlay.png`` into ``--out``, using
-``evaluate.predict``. On success the last stdout line is ``GOG_RESULT {json}``. Exit codes:
-2 bad arguments, 3 PyTorch missing, 4 prediction failed. The dashboard calls this in a
-subprocess so that Streamlit never imports torch.
+``evaluate.predict``. Each file is written to a temporary file in the same folder and then
+moved into place, so a reader never sees a half-written PNG. On success the last stdout
+line is ``RESULT_PREFIX {json}``; exit codes are in shared/detection_cli.py. The dashboard
+calls this in a subprocess so that Streamlit never imports torch; torch is imported only
+inside ``main``, so the parser can be built (and tested) without it.
 """
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -20,10 +23,34 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-RESULT_PREFIX = "GOG_RESULT "
+from shared.detection_cli import EXIT_FAILED, EXIT_NO_TORCH, KINDS, RESULT_PREFIX, atomic_replace
+
 # Same amber tint as dashboard/services/imaging.py (oil is amber everywhere in the dashboard).
 OVERLAY_RGB = (245, 158, 11)
 OVERLAY_ALPHA = 0.45
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="python -m detection.predict_cli", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--image", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--image-id", required=True)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="cpu")
+    return parser
+
+
+def save_png_atomic(pixels: np.ndarray, target: Path) -> None:
+    """Write a PNG next to ``target`` under a temporary name, then move it into place."""
+    fd, temporary = tempfile.mkstemp(dir=target.parent, prefix=f".{target.stem}.", suffix=".tmp")
+    os.close(fd)
+    try:
+        Image.fromarray(pixels).save(temporary, format="PNG")
+        atomic_replace(temporary, target)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
 
 
 def write_outputs(image_path: Path, mask_png: Path, out: Path, image_id: str) -> dict:
@@ -35,21 +62,15 @@ def write_outputs(image_path: Path, mask_png: Path, out: Path, image_id: str) ->
     oil = mask > 127
     overlay = rgb.copy()
     overlay[oil] = (1 - OVERLAY_ALPHA) * overlay[oil] + OVERLAY_ALPHA * np.array(OVERLAY_RGB, dtype=np.float32)
-    files = {kind: out / f"{image_id}_{kind}.png" for kind in ("image", "mask", "overlay")}
-    Image.fromarray(rgb.astype(np.uint8)).save(files["image"])
-    Image.fromarray(mask).save(files["mask"])
-    Image.fromarray(overlay.clip(0, 255).astype(np.uint8)).save(files["overlay"])
+    files = {kind: out / f"{image_id}_{kind}.png" for kind in KINDS}
+    save_png_atomic(rgb.astype(np.uint8), files["image"])
+    save_png_atomic(mask, files["mask"])
+    save_png_atomic(overlay.clip(0, 255).astype(np.uint8), files["overlay"])
     return {"files": {k: str(v) for k, v in files.items()}, "oil_fraction": float(oil.mean())}
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--image", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--image-id", required=True)
-    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="cpu")
-    args = parser.parse_args()
+    args = build_parser().parse_args()
 
     try:
         import torch
@@ -57,7 +78,7 @@ def main() -> int:
         from detection.evaluate import predict
     except ImportError as exc:
         print(f"PyTorch is not available in this interpreter ({sys.executable}): {exc}", file=sys.stderr)
-        return 3
+        return EXIT_NO_TORCH
 
     try:
         torch.set_num_threads(4)
@@ -73,7 +94,7 @@ def main() -> int:
 
         traceback.print_exc()
         print(f"Prediction failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return 4
+        return EXIT_FAILED
     print(RESULT_PREFIX + json.dumps(result))
     return 0
 

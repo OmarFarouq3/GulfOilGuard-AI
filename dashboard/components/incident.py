@@ -24,9 +24,7 @@ def picker(stage: Stage) -> None:
     if not sites:
         ui.inline_empty("Reported spills will appear here.")
         return
-    chosen = stage.data.get(selection.selected_spill_id())
-    if chosen is None and selection.selected_spill_id():
-        selection.clear_selection()  # the site no longer exists (e.g. spills.geojson changed)
+    chosen = stage.data.get(selection.selected_spill_id())  # unknown ids were cleared in app.py
 
     left, right = st.columns([3, 2], gap="large")
     with left:
@@ -36,7 +34,8 @@ def picker(stage: Stage) -> None:
                   for s in sites]
         clicked = maps.render(m, points, key="overview_map", height=480,
                               returned_objects=selection.MAP_CLICK_OBJECTS)
-        ui.legend([(config.OIL_OBSERVED, "Reported spill", "dot"), (config.TEAL, "Selected spill", "dot")])
+        site_label = "Simulated spill site" if stage.status == "simulated" else "Reported spill"
+        ui.legend([(config.OIL_OBSERVED, site_label, "dot"), (config.TEAL, "Selected spill", "dot")])
         if selection.handle_map_click(clicked, sites):
             st.rerun()  # redraw the highlighted marker and the panel
     with right:
@@ -91,7 +90,7 @@ def _clear_button() -> None:
 def _images_missing() -> None:
     """What to put where. The exact folder is shown because nothing works without it."""
     st.html(
-        f"""<div class="gog-inline-empty"><b>No radar images found.</b> Add <code>.png</code> or
+        f"""<div class="gog-inline-empty gog-images-missing"><b>No radar images found.</b> Add <code>.png</code> or
               <code>.jpg</code> radar images (subfolders are fine) to
               <code class="gog-path">{ui.esc(image_picker.image_dir())}</code>
               or point the <code>{image_picker.IMAGE_DIR_ENV}</code> environment variable at another folder,

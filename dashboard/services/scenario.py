@@ -28,6 +28,7 @@ from services.routing_loader import load_routing
 from services.schema import GeoCoordinate
 
 Offset = tuple[float, float]  # (dlat, dlon)
+SIMULATED_OUTLINE = "Simulated outline, not derived from the image"  # tooltip text of the placeholder
 
 
 def site_point(site: SpillSite) -> tuple[float, float]:
@@ -49,7 +50,7 @@ def _simulated_outline(site: SpillSite, image_id: str) -> dict:
     moved = translate_features(features, *offset_deg(origin, site_point(site)))
     for feature in moved:
         feature["properties"] = {"image_id": image_id, "area_km2": feature["properties"].get("area_km2"),
-                                 "synthetic": True}
+                                 "outline": SIMULATED_OUTLINE, "synthetic": True}
     return {"type": "FeatureCollection", "features": moved}
 
 

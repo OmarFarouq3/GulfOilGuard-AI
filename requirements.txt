@@ -6,5 +6,6 @@ matplotlib
 opencv-python
 opendrift
 ortools
+scipy
 streamlit
 plotly

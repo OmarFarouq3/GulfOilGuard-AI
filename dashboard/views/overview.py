@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from components import illustrations, incident, ui
-from components.data import all_stages, demo_mode, spills_stage
+from components.data import all_stages, combined_status, demo_mode, spills_stage
 from components.labels import HOURS, KM2
 from services.files import as_float
 from services.geo import polygon_area_km2
@@ -13,7 +13,9 @@ from services.geo import polygon_area_km2
 stages = all_stages()
 detect, predict, respond = stages["detect"].data, stages["predict"].data, stages["respond"].data
 
-hero_chip = ui.chip("simulated") if demo_mode() else ""
+# The headline numbers mix all three stages: simulated if any input behind them is.
+results_status = combined_status(stages)
+hero_chip = ui.chip("simulated") if demo_mode() or results_status == "simulated" else ""
 st.html(
     f"""<section class="gog-hero">
           <div class="gog-hero-eyebrow">AI for Impact · Arabian Gulf</div>
@@ -41,6 +43,9 @@ if predict and predict.steps:
 vessels = float(len(respond.routes)) if respond and respond.routes else None
 response_time = respond.response_time_hours if respond else None
 
+if results_status == "simulated":
+    st.html(f'<div class="gog-kpi-status">{ui.chip("simulated")}'
+            "<span>These numbers come from a simulated scenario, not from observations.</span></div>")
 ui.stat_tiles([
     ("Slick detected", ui.fmt(slick_area), KM2, "Area of oil found in the latest scene"),
     (f"Spread at 24 {HOURS}", ui.fmt(spread_24), KM2, "Predicted oil footprint one day later"),

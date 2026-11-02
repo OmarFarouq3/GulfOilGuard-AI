@@ -16,6 +16,15 @@ M_PER_S = unit(Vessel, "speed_m_per_s")
 KM2 = "km²"  # area: the schema has no area field or unit (polygon areas are a dashboard extension)
 assert suffix_unit("wind_speed_m_per_s") == M_PER_S
 
+def slick_tooltip(outline_simulated: bool) -> dict[str, str]:
+    """Map tooltip fields for detected slicks. A simulated outline shows its ``outline`` property
+    (services.scenario.SIMULATED_OUTLINE) and never names a scene, so it can't read as if it
+    was traced from that image."""
+    if outline_simulated:
+        return {"outline": "Outline", "area_km2": f"Simulated area ({KM2})"}
+    return {"image_id": "Scene", "area_km2": f"Area ({KM2})", "confidence": "Confidence"}
+
+
 # OptimizationOutput.status -> (chip style, viewer wording)
 STATUS_LABELS: dict[str, tuple[str, str]] = {
     "optimal": ("gog-chip-live", "Optimal plan"),

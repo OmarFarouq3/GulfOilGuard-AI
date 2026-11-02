@@ -72,7 +72,8 @@ def test_pick_single_and_none(tmp_path):
 
 
 @pytest.mark.parametrize("name, stem", [
-    ("S1A IW (copy).v2.png", "S1A_IW_copy_v2"),
+    ("S1A IW (copy).v2.png", "s1a_iw_copy_v2"),
+    ("Scene_01.PNG", "scene_01"),
     ("ünïcode scène.png", "n_code_sc_ne"),
     ("---.png", "---"),
     ("!!!.png", "image"),
@@ -81,7 +82,7 @@ def test_pick_single_and_none(tmp_path):
 def test_image_id_is_sanitised_and_stable(tmp_path, name, stem):
     path = tmp_path / name
     image_id = ip.image_id(path, root=tmp_path)
-    assert re.fullmatch(r"[A-Za-z0-9_-]+", image_id)
+    assert re.fullmatch(r"[a-z0-9_-]+", image_id)
     assert image_id.rsplit("-", 1)[0] == stem
     assert ip.image_id(path, root=tmp_path) == image_id  # stable across calls
 
@@ -92,6 +93,23 @@ def test_image_ids_do_not_collide_for_same_stem(tmp_path):
     ids = [ip.image_id(p, root=tmp_path) for p in paths]
     assert len(set(ids)) == len(ids)
     assert all(i.startswith("x-") for i in ids)
+
+
+def test_image_id_does_not_depend_on_the_os(tmp_path, monkeypatch):
+    """Same dataset, same ids everywhere: no os.path.normcase (which folds case on Windows only)."""
+    path = tmp_path / "Sub" / "Scene.png"
+    expected = ip.image_id(path, root=tmp_path)
+    monkeypatch.setattr(ip.os.path, "normcase", lambda p: p.upper())  # would change a normcase-based id
+    assert ip.image_id(path, root=tmp_path) == expected
+    digest = ip.hashlib.sha1(b"Sub/Scene.png").hexdigest()[:8]  # exact POSIX relative path
+    assert expected == f"scene-{digest}"
+
+
+def test_case_only_difference_still_gets_distinct_ids(tmp_path):
+    """On case-sensitive file systems X.png and x.png are two files: the readable part is shared,
+    the hash keeps them apart (the decided no-silent-collision behaviour)."""
+    upper, lower = ip.image_id(tmp_path / "X.png", root=tmp_path), ip.image_id(tmp_path / "x.png", root=tmp_path)
+    assert upper != lower and upper.startswith("x-") and lower.startswith("x-")
 
 
 def test_image_id_is_relative_to_the_image_folder(tmp_path):

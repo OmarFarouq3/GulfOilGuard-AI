@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import logging
+import shutil
 
 import dashboard_testkit  # noqa: F401  (sets sys.path and the outputs folder first)
 import pytest
 import streamlit
 
 logging.getLogger("streamlit").setLevel(logging.ERROR)  # quiet "no runtime" notices in bare mode
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _remove_test_outputs():
+    """The outputs folder config points at for the whole session; deleted afterwards."""
+    yield
+    shutil.rmtree(dashboard_testkit.TEST_OUTPUTS, ignore_errors=True)
 
 
 @pytest.fixture

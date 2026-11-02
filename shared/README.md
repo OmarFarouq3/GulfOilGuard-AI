@@ -12,3 +12,5 @@
 Dataclasses do not perform runtime validation. Integration adapters must validate timestamps, ranges, IDs, coverage, route estimates, confidence, and statuses before use. Paths stay local and are not portable dataset bundles. For future JSON adapters encode paths as strings and UTC timestamps as ISO 8601, and define a schema version.
 
 Pixel coordinates are not geographic coordinates. Use original scene CRS, raster transform, crop offsets, and acquisition metadata to georeference masks, then transform to WGS84. If metadata is missing, leave geographic output absent and block automatic drift integration.
+
+`detection_cli.py` is the contract between the dashboard's detection adapter and `detection/predict_cli.py` (module name, result line, exit codes, atomic file replacement). Standard library only, so the dashboard can import it without torch.

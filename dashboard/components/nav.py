@@ -10,7 +10,7 @@ import streamlit as st
 
 import config
 from components import illustrations
-from components.data import DEMO_STATE_KEY, Stage, demo_mode
+from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode
 from services import image_picker, selection
 from services.detection_loader import load_detection
 from services.drift_loader import load_drift
@@ -77,7 +77,7 @@ def options_panel() -> None:
         )
         st.button("Refresh data", icon=":material/refresh:", width="stretch",
                   help="Re-read results. Changed files are picked up automatically on every refresh.")
-        with st.expander("Diagnostics", icon=":material/terminal:", expanded=st.query_params.get("dev") == "1"):
+        with st.expander("Diagnostics", icon=":material/terminal:", expanded=dev_mode()):
             diagnostics()
 
 

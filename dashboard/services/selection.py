@@ -22,7 +22,7 @@ from typing import Any, Literal
 
 import streamlit as st
 
-from services import image_picker
+from services import image_picker, inference
 from services.files import as_float, mtime
 from services.geo import haversine_km
 from services.inference import DetectionRun
@@ -37,7 +37,8 @@ DETECT_RUN_KEY = DOWNSTREAM_PREFIX + "detect_run"  # DetectionRun of the last at
 DETECT_SIMULATED_KEY = DOWNSTREAM_PREFIX + "detect_simulated"  # simulated detection accepted
 PREDICT_DONE_KEY = DOWNSTREAM_PREFIX + "predict_done"
 RESPOND_DONE_KEY = DOWNSTREAM_PREFIX + "respond_done"
-OWNER_KEY = DOWNSTREAM_PREFIX + "owner"  # (spill_id, image_path) the stored results belong to
+OWNER_KEY = DOWNSTREAM_PREFIX + "owner"  # (spill_id, image_path, source) the results belong to
+SOURCE_KEY = "sel_source"  # current data source, set by sync() on every run
 STEPS = ("detect", "predict", "respond")
 StepState = Literal["done", "ready", "locked"]
 
@@ -119,25 +120,42 @@ def _clear_after_detection() -> None:
         st.session_state.pop(key, None)
 
 
-def _owner() -> tuple[str | None, str | None]:
+def _owner() -> tuple:
+    """What the stored results depend on: spill, image and data source (see ``sync``)."""
     selection = current()
-    return selection.spill_id, str(selection.image_path) if selection.image_path else None
+    return (selection.spill_id, str(selection.image_path) if selection.image_path else None,
+            st.session_state.get(SOURCE_KEY))
 
 
 def _claim() -> None:
-    """Mark the stored results as belonging to the current spill and image."""
+    """Mark the stored results as belonging to the current spill, image and data source."""
     st.session_state[OWNER_KEY] = _owner()
 
 
-def sync() -> None:
-    """Drop results that belong to another spill or image, however the selection was changed.
+def sync(valid_spill_ids: Iterable[str], source: Any) -> None:
+    """Bring the selection and its results in line with the world, once per run (app.py).
 
-    select_spill / reroll_image already clear them; this also covers any other code path
-    that writes the ``sel_`` keys directly. app.py calls it once per run, before any page.
+    The single place that decides whether the selection is still valid, so ``active()``
+    and every page agree:
+    - a spill id that is no longer offered (spill list changed, demo toggled) clears the
+      whole selection;
+    - results computed for another spill, image or data ``source`` (demo flag + where the
+      drift / routing come from) are dropped, so steps never stay "done" over swapped data;
+    - a model detection whose ``<image_id>_*`` files have disappeared is no longer done.
     """
+    st.session_state[SOURCE_KEY] = source
+    spill_id = selected_spill_id()
+    if spill_id is not None and spill_id not in set(valid_spill_ids):
+        clear_selection()
+        return
     owner = st.session_state.get(OWNER_KEY)
     if owner is not None and tuple(owner) != _owner():
         clear_downstream()
+        return
+    run = detection_run()
+    if run and run.ok and not inference.outputs_exist(run.image_id):
+        st.session_state.pop(DETECT_RUN_KEY, None)
+        _clear_after_detection()
 
 
 # --- Steps ------------------------------------------------------------------------------

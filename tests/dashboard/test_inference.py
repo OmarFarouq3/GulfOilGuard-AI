@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import time
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -128,7 +129,6 @@ def test_cache_needs_all_output_files(files, monkeypatch):
 
 @pytest.mark.parametrize("fake, message", [
     (FakeRun(returncode=4, stderr="Traceback ...\nValueError: bad"), "exit code 4"),
-    (FakeRun(returncode=3, stderr="No module named 'torch'"), "PyTorch"),
     (FakeRun(stdout="no result line\n"), "no result"),
     (FakeRun(write=False), "missing"),
     (FakeRun(raises=OSError("not executable")), "could not be started"),
@@ -183,3 +183,125 @@ def test_predict_cli_writes_mask_overlay_and_input(tmp_path):
     assert {k: im.size for k, im in written.items()} == {"image": (24, 18), "mask": (24, 18), "overlay": (24, 18)}
     assert set(np.unique(np.asarray(written["mask"]))) <= {0, 200, 255}
     assert result["oil_fraction"] == pytest.approx(50 / (24 * 18))
+
+
+# --- Fix 19: no torch -> a setup message naming both variables ---------------------------------
+
+
+def test_no_torch_without_override_explains_the_setup(files, monkeypatch):
+    monkeypatch.delenv("GOG_DETECTION_PYTHON", raising=False)
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(returncode=3, stderr="No module named 'torch'"))
+    result = run(files)
+    assert result.state == "setup_needed" and not result.ok
+    assert "GOG_DETECTION_PYTHON" in result.message and "GOG_CHECKPOINT" in result.message
+    assert "simulated detection" in result.message and "\n" not in result.message
+
+
+def test_no_torch_with_override_names_the_override(files, monkeypatch):
+    monkeypatch.setenv("GOG_DETECTION_PYTHON", "C:/somewhere/python.exe")
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(returncode=3))
+    result = run(files)
+    assert result.state == "setup_needed" and "Python set in GOG_DETECTION_PYTHON has no PyTorch" in result.message
+
+
+# --- Fix 8: run_detection never raises -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("exc", [ValueError("odd"), RuntimeError("boom"), KeyError("k")])
+def test_unexpected_errors_become_a_status(files, monkeypatch, exc):
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(raises=exc))
+    result = run(files)
+    assert result.state == "failed" and result.message == "Detection could not be completed."
+    assert type(exc).__name__ in result.detail  # traceback kept for ?dev=1
+
+
+def test_fingerprint_failure_after_a_successful_run_is_a_status(files, monkeypatch):
+    """The image vanishes while the model runs: the post-run fingerprint can't stat it."""
+    fake = FakeRun()
+    monkeypatch.setattr(inference.subprocess, "run", fake)
+
+    def gone(image_path, checkpoint):
+        raise FileNotFoundError("image deleted during the run")
+
+    monkeypatch.setattr(inference, "_fingerprint", gone)
+    result = run(files)
+    assert len(fake.calls) == 1  # the model did run
+    assert result.state == "failed" and "could not be saved" in result.message
+
+
+def test_manifest_write_failure_is_a_status(files, monkeypatch):
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun())
+    inference.manifest_path("scene-abc", files[2]).mkdir(parents=True)  # a folder where the file must go
+    result = run(files)
+    assert result.state == "failed" and "could not be saved" in result.message
+    assert not [p for p in files[2].iterdir() if p.suffix == ".tmp"]  # temp file cleaned up
+
+
+@pytest.mark.parametrize("content", ["[1, 2]", '"text"', "42", "null", '{"fingerprint": 5}', "{not json", ""])
+def test_cached_run_treats_unexpected_manifests_as_a_miss(files, content):
+    image, checkpoint, out = files
+    out.mkdir(parents=True)
+    for path in inference.output_files("scene-abc", out).values():
+        path.write_bytes(b"png")
+    inference.manifest_path("scene-abc", out).write_text(content, encoding="utf-8")
+    assert inference.cached_run(image, "scene-abc", checkpoint, out) is None
+
+
+def test_bad_manifest_leads_to_a_fresh_run(files, monkeypatch):
+    fake = FakeRun()
+    monkeypatch.setattr(inference.subprocess, "run", fake)
+    run(files)
+    inference.manifest_path("scene-abc", files[2]).write_text("[1, 2]", encoding="utf-8")
+    assert run(files).state == "done" and len(fake.calls) == 2
+
+
+@pytest.mark.parametrize("stdout", ['GOG_RESULT [1, 2]\n', 'GOG_RESULT "x"\n'])
+def test_result_line_that_is_not_an_object_is_a_status(files, monkeypatch, stdout):
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(stdout=stdout))
+    assert run(files).state == "failed"
+
+
+# --- Fix 7: the manifest is written atomically ---------------------------------------------------
+
+
+def test_manifest_is_replaced_atomically(files, monkeypatch):
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun())
+    moves = []
+    real = inference.atomic_replace
+
+    def spy(source, target, **kwargs):
+        moves.append((Path(source), Path(target)))
+        assert Path(source).parent == Path(target).parent  # same folder: os.replace stays atomic
+        real(source, target, **kwargs)
+
+    monkeypatch.setattr(inference, "atomic_replace", spy)
+    run(files)
+    assert [t.name for _s, t in moves] == ["scene-abc_run.json"]
+    assert json.loads((files[2] / "scene-abc_run.json").read_text(encoding="utf-8"))["info"]["checkpoint"] == "best.pth"
+
+
+# --- Fix 9: subprocess output is decoded as UTF-8, never crashes on odd bytes ---------------------
+
+
+def test_subprocess_is_decoded_as_utf8_with_replacement(files, monkeypatch):
+    fake = FakeRun()
+    monkeypatch.setattr(inference.subprocess, "run", fake)
+    run(files)
+    _command, kwargs = fake.calls[0]
+    assert kwargs["encoding"] == "utf-8" and kwargs["errors"] == "replace"
+    assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"
+
+
+def test_real_subprocess_with_undecodable_bytes_does_not_crash(files, monkeypatch, tmp_path):
+    """A real child process writes bytes that are invalid UTF-8 (and undefined in cp1252)."""
+    script = tmp_path / "bad_bytes.py"
+    script.write_text(
+        "import sys\n"
+        "sys.stderr.buffer.write(b'bad \\x81\\x8d\\xff bytes\\n')\n"
+        "sys.exit(4)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(inference, "_command", lambda python, *a: [python, str(script)])
+    result = run(files)
+    assert result.state == "failed" and "exit code 4" in result.message
+    assert "bad" in result.detail and "�" in result.detail

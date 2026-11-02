@@ -319,3 +319,4 @@ iframe[title="streamlit_folium.st_folium"] { border-radius: var(--gog-radius); b
 .gog-prov-real h5 { color: var(--gog-green); }
 .gog-prov-sim h5 { color: var(--gog-violet); }
 @media (max-width: 640px) { .gog-prov { grid-template-columns: 1fr; } }
+.gog-kpi-status { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0.2rem; color: var(--gog-muted); font-size: 0.85rem; }

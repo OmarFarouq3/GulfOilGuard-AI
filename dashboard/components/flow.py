@@ -9,6 +9,7 @@ from __future__ import annotations
 import streamlit as st
 
 from components import ui
+from components.data import dev_mode
 from components.labels import KM
 from services import inference, scenario, selection
 from services.files import read_image
@@ -141,9 +142,9 @@ def detect_controls(site: SpillSite) -> None:
 
 
 def _failure(run: inference.DetectionRun, follow_up: str = "") -> None:
-    """Short, viewer-safe message; the technical output stays in a collapsed expander."""
+    """Short, viewer-safe message. Tracebacks and paths only with ?dev=1, collapsed."""
     st.html(f'<div class="gog-notice">{ui.esc(run.message)} {ui.esc(follow_up)}</div>')
-    if run.detail:
+    if run.detail and dev_mode():
         with st.expander("Technical details", icon=":material/terminal:"):
             st.code(run.detail, language=None, wrap_lines=True)
 
