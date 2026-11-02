@@ -13,6 +13,7 @@ import streamlit as st
 
 from components import nav, ui
 from components.data import all_stages
+from services import selection
 
 st.set_page_config(
     page_title="GulfOilGuard-AI",
@@ -31,6 +32,7 @@ PAGES = {
 
 ui.load_styles()
 nav.init_state()
+selection.sync()  # results of a previous spill or image never leak into this one
 current = st.navigation(list(PAGES.values()), position="hidden")
 nav.top_bar(PAGES, all_stages())
 current.run()

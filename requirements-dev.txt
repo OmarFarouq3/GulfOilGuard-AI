@@ -1,0 +1,4 @@
+# Development / test tools. Install on top of dashboard/requirements.txt (or requirements.txt):
+#   pip install -r dashboard/requirements.txt -r requirements-dev.txt
+# Run the tests from the repository root:  python -m pytest tests
+pytest>=8.0

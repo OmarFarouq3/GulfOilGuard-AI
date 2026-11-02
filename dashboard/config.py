@@ -66,12 +66,21 @@ ROUTING_FILES = {
     "targets": ROUTING_DIR / "targets.geojson",  # optional
 }
 
+# Spill sites offered on the Overview map (optional; otherwise the simulated catalogue)
+SPILLS_FILE = OUTPUTS_DIR / "spills.geojson"
+
+# Detection runs (services/inference.py): the U-Net runs in a subprocess, never in Streamlit.
+# GOG_CHECKPOINT overrides the checkpoint; GOG_DETECTION_PYTHON names an interpreter with torch
+# (default: the dashboard's own interpreter).
+DETECTION_CHECKPOINT = REPO_ROOT / "runs" / "unet_refined_sar" / "best.pth"
+DETECTION_TIMEOUT_S = 300  # first torch import + model load on CPU can be slow
+
 DRIFT_HORIZONS_HOURS = (6, 12, 24)
 DETECTION_METRICS = ("dice", "iou", "precision", "recall")
 
 # --- Map defaults --------------------------------------------------------------
 # Demo centre offshore Abu Dhabi, Arabian Gulf.
-MAP_CENTER = (24.5, 54.0)
+MAP_CENTER = (25.85, 55.65)
 MAP_ZOOM = 9
 
 # --- Colours (dark "ocean operations" palette; keep in sync with .streamlit/config.toml) ---

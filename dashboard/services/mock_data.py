@@ -11,6 +11,10 @@ content as files, which doubles as a reference example of the format.
 
 Scenario: a slick about 45 km NW of Abu Dhabi drifts SE under a NW (shamal) wind;
 three simulated vessels from three simulated bases are routed to the 12 h oil patches.
+
+Spill catalogue: four simulated incident sites offshore Ras Al Khaimah / Umm Al Quwain, around
+config.MAP_CENTER, offered on the Overview map. They are separate from the scenario above,
+which still sits off Abu Dhabi until the pages are wired to the selected spill.
 """
 
 from __future__ import annotations
@@ -29,8 +33,9 @@ from services.geo import path_length_km
 from services.imaging import compose_overlay, to_png
 from services.detection_loader import build_detection
 from services.drift_loader import build_drift
-from services.models import DetectionData, DetectionScene, DriftData, RoutingData
+from services.models import DetectionData, DetectionScene, DriftData, RoutingData, SpillData
 from services.routing_loader import build_routing
+from services.spill_loader import build_spills
 
 SEED = 2026
 MOCK_START = datetime(2026, 3, 14, 6, 42, tzinfo=timezone.utc)
@@ -56,6 +61,14 @@ IMAGE_ID = "S1A_SIM_20260314T0642"  # simulated Sentinel-1 scene identifier
 SIMULATION_ID = "SIM-GULF-20260314"
 SKIM_HOURS_PER_TARGET = 0.75
 RECOVERY_RATE = 0.85
+
+# Incident sites for the Overview map, all at sea and 20+ km apart (so clicks are unambiguous).
+MOCK_SPILL_SITES = (  # spill_id, name, lat, lon
+    ("GOG-SIM-01", "Offshore Ras Al Khaimah (simulated)", 25.85, 55.65),
+    ("GOG-SIM-02", "North of Ras Al Khaimah (simulated)", 26.02, 55.58),
+    ("GOG-SIM-03", "Off Umm Al Quwain (simulated)", 25.66, 55.42),
+    ("GOG-SIM-04", "Western shipping lane (simulated)", 25.92, 55.36),
+)
 
 
 def _offset(lat: float, lon: float, east_km: float, north_km: float) -> tuple[float, float]:
@@ -241,6 +254,16 @@ def mock_files() -> dict[str, Any]:
         "message": "Simulated plan for demonstration; no optimiser was run.",
         "synthetic": True,
     }
+
+    # Spill catalogue (Overview map)
+    files["spills.geojson"] = {
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "properties": {"spill_id": spill_id, "name": name, "synthetic": True},
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+        } for spill_id, name, lat, lon in MOCK_SPILL_SITES],
+    }
     return files
 
 
@@ -287,5 +310,16 @@ def routing() -> RoutingData:
     files = _files()
     data = build_routing(files["routing/routes.geojson"], files["routing/summary.json"],
                          files["routing/targets.geojson"])
+    data.is_mock = True
+    return data
+
+
+def spill_outline() -> dict:
+    """The demo slick as a GeoJSON FeatureCollection (raw, before validation)."""
+    return _files()["detection/spill.geojson"]
+
+
+def spills() -> SpillData:
+    data = build_spills(_files()["spills.geojson"])
     data.is_mock = True
     return data

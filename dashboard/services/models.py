@@ -8,9 +8,42 @@ Wherever shared/schemas.py defines a structure, the containers hold those datacl
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
-from services.schema import DetectionOutput, DriftOutput, OptimizationOutput, ResponseTarget, Vessel, VesselRoute
+from services.schema import (
+    DetectionOutput,
+    DriftOutput,
+    GeoCoordinate,
+    OptimizationOutput,
+    ResponseTarget,
+    Vessel,
+    VesselRoute,
+)
+
+
+@dataclass(frozen=True)
+class SpillSite:
+    """One incident the user can pick on the Overview map (not in schema)."""
+
+    spill_id: str
+    name: str
+    location: GeoCoordinate
+    synthetic: bool = False
+
+
+@dataclass
+class SpillData:
+    sites: list[SpillSite] = field(default_factory=list)
+    synthetic: bool = False
+    warnings: list[str] = field(default_factory=list)
+    is_mock: bool = False
+
+    @property
+    def has_content(self) -> bool:
+        return bool(self.sites)
+
+    def get(self, spill_id: str | None) -> SpillSite | None:
+        return next((s for s in self.sites if s.spill_id == spill_id), None)
 
 
 @dataclass
@@ -34,6 +67,10 @@ class DetectionData:
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
+    # Selected-spill flow (not in schema): where the mask came from, and whether the outline on
+    # the map is a simulated placeholder (a real mask from a non-geolocated image has no position).
+    mask_source: Literal["model", "simulated"] | None = None
+    outline_simulated: bool = False
 
     @property
     def has_content(self) -> bool:
@@ -48,6 +85,7 @@ class DriftData:
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
+    anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
 
     @property
     def has_content(self) -> bool:
@@ -75,6 +113,7 @@ class RoutingData:
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
+    anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
 
     @property
     def has_content(self) -> bool:

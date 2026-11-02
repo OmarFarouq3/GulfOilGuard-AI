@@ -10,6 +10,8 @@ from PIL import Image
 
 OVERLAY_RGB = (245, 158, 11)  # amber tint for predicted oil pixels (oil is amber everywhere)
 OVERLAY_ALPHA = 0.45
+PREVIEW_MAX_SIDE = 1024
+HIGH_BIT_MODES = ("I", "I;16", "I;16B", "I;16L", "F")  # 16-bit / float radar exports
 
 
 def to_png(array: np.ndarray) -> bytes:
@@ -17,6 +19,24 @@ def to_png(array: np.ndarray) -> bytes:
     buffer = io.BytesIO()
     Image.fromarray(array).save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+@st.cache_data(show_spinner=False)
+def preview_png(raw: bytes, max_side: int = PREVIEW_MAX_SIDE) -> bytes | None:
+    """Display copy of a dataset image: 8-bit, at most ``max_side`` px. None if unreadable."""
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            img.load()
+            if img.mode in HIGH_BIT_MODES:  # stretch 1st-99th percentile to 0-255
+                values = np.asarray(img, dtype=np.float32)
+                low, high = np.percentile(values, (1, 99))
+                img = Image.fromarray((np.clip((values - low) / max(high - low, 1e-6), 0, 1) * 255).astype(np.uint8))
+            else:
+                img = img.convert("RGB")
+            img.thumbnail((max_side, max_side))
+            return to_png(np.asarray(img))
+    except Exception:  # PIL raises many exception types for bad images
+        return None
 
 
 @st.cache_data(show_spinner=False)

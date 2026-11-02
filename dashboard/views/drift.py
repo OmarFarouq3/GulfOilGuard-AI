@@ -10,8 +10,8 @@ import folium
 import streamlit as st
 
 import config
-from components import maps, ui
-from components.data import drift_stage
+from components import flow, maps, ui
+from components.data import demo_mode, drift_stage, selected_site
 from components.labels import HOURS, KM, KM2, M_PER_S
 from services import schema
 from services.files import as_float, iter_positions
@@ -25,6 +25,11 @@ ui.page_heading(
     "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours.",
     stage,
 )
+site = selected_site()
+if site:
+    flow.predict_controls(site, demo_mode())
+else:
+    flow.no_selection_prompt()
 
 
 def step_label(hours: float) -> str:
@@ -61,13 +66,14 @@ def step_center(features: list[dict]) -> tuple[float, float] | None:
 
 
 if data is None:
-    ui.empty_state(
-        "predict",
-        "No active scenario yet",
-        "Once a drift simulation is available, this view will show how the oil slick is expected to move and spread over time, "
-        "based on wind and ocean-current data.",    #Edit 3: Entire text swapped
-        ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
-    )
+    if site is None:
+        ui.empty_state(
+            "predict",
+            "No active scenario yet",
+            "Once a drift simulation is available, this view will show how the oil slick is expected to move and spread over time, "
+            "based on wind and ocean-current data.",    #Edit 3: Entire text swapped
+            ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
+        )
 else:
     hours = data.hours
     default = next((h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])

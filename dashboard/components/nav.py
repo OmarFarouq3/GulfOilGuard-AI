@@ -11,10 +11,13 @@ import streamlit as st
 import config
 from components import illustrations
 from components.data import DEMO_STATE_KEY, Stage, demo_mode
+from services import image_picker, selection
 from services.detection_loader import load_detection
 from services.drift_loader import load_drift
 from services.files import format_mtime
 from services.routing_loader import load_routing
+from services.selection import available_images
+from services.spill_loader import load_spills
 
 STATUS_HELP = {
     "live": "Live data available",
@@ -22,6 +25,12 @@ STATUS_HELP = {
     "empty": "No data yet",
 }
 STEPS = (("detect", "01", "Detect"), ("predict", "02", "Predict"), ("respond", "03", "Respond"))
+# With a spill selected, the timeline doubles as its progress indicator.
+STEP_HELP = {
+    "done": "Done for the selected spill",
+    "ready": "Ready: open this step to run it",
+    "locked": "Locked: finish the previous step first",
+}
 
 
 def init_state() -> None:
@@ -43,12 +52,14 @@ def top_bar(pages: dict[str, st.Page], stages: dict[str, Stage]) -> None:
         with st.container(horizontal=True, key="gog-timeline", vertical_alignment="center", gap=None,
                           width="content"):
             st.page_link(pages["overview"], label="Overview", icon=":material/radar:")
+            progress = selection.step_states() if selection.active() else None
             for key, number, verb in STEPS:
                 st.html('<div class="gog-connector" aria-hidden="true"></div>', width="content")
                 status = stages[key].status
                 # Status dot is drawn by CSS from the container key (…-live / -simulated / -empty).
                 with st.container(key=f"gog-step-{key}-{status}", width="content"):
-                    st.page_link(pages[key], label=f"{number} {verb}", help=STATUS_HELP[status])
+                    st.page_link(pages[key], label=f"{number} {verb}",
+                                 help=STEP_HELP[progress[key]] if progress else STATUS_HELP[status])
         options_panel()
 
 
@@ -79,10 +90,15 @@ def diagnostics() -> None:
                           ("routing", config.ROUTING_FILES)):
         for path in files.values():
             rows.append({"Module": module, "File": path.name, "Modified": format_mtime(path) or "missing"})
+    rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
+                 "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
     st.dataframe(rows, hide_index=True, width="stretch")
 
+    st.caption(f"Radar image folder ({len(available_images())} readable images)")
+    st.code(str(image_picker.image_dir()), language=None, wrap_lines=True)
+
     warnings = []
-    for loader in (load_detection, load_drift, load_routing):
+    for loader in (load_detection, load_drift, load_routing, load_spills):
         data = loader()
         if data is not None:
             warnings.extend(data.warnings)

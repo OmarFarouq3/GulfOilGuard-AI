@@ -1,12 +1,15 @@
-"""Detect: SAR imagery, predicted oil mask, model quality and the slick on the map."""
+"""Detect: SAR imagery, predicted oil mask, model quality and the slick on the map.
+
+With a spill selected on Overview, components.flow runs the U-Net on its radar image first.
+"""
 
 from __future__ import annotations
 
 import streamlit as st
 
 import config
-from components import charts, maps, ui
-from components.data import detection_stage
+from components import charts, flow, maps, ui
+from components.data import detection_stage, selected_site
 from components.labels import KM2
 
 stage = detection_stage()
@@ -17,15 +20,21 @@ ui.page_heading(
     "A U-Net model reads SAR imagery imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
     stage,
 )
+site = selected_site()
+if site:
+    flow.detect_controls(site)
+else:
+    flow.no_selection_prompt()
 
 if data is None:
-    ui.empty_state(
-        "detect",
-        "No satellite scene analysed yet",
-        "Once a radar scene of the Gulf is analysed, this view shows the image, the oil the model "
-        "found in it, how accurate the model is, and where the slick sits on the map.",
-        ["Radar scene", "Detected oil outline", "Model performance", "Slick on the map"],   #Edit 2: Model accuracy  --> Model performance
-    )
+    if site is None:
+        ui.empty_state(
+            "detect",
+            "No satellite scene analysed yet",
+            "Once a radar scene of the Gulf is analysed, this view shows the image, the oil the model "
+            "found in it, how accurate the model is, and where the slick sits on the map.",
+            ["Radar scene", "Detected oil outline", "Model performance", "Slick on the map"],   #Edit 2: Model accuracy  --> Model performance
+        )
 else:
     # --- Imagery ---------------------------------------------------------------
     ui.section("Radar scene and detected oil", "Oil calms the sea surface, so it appears dark in radar images.")
@@ -76,14 +85,19 @@ else:
         ui.inline_empty("Accuracy scores will appear here once the model has been evaluated.")
 
     # --- Map -------------------------------------------------------------------
-    ui.section("Where is the slick?", "The detected outline placed on the map.")
+    if data.outline_simulated:
+        ui.section("Where is the slick?", "Simulated outline at the selected spill. The radar image is not "
+                   "geolocated, so the detected mask itself has no position on the map.")
+    else:
+        ui.section("Where is the slick?", "The detected outline placed on the map.")
     if data.spill:
         m = maps.base_map()
         maps.add_features(m, data.spill["features"], config.OIL_OBSERVED, outline=config.OIL_OUTLINE,
                           fill_opacity=0.5,
                           tooltip={"image_id": "Scene", "area_km2": f"Area ({KM2})", "confidence": "Confidence"})
         maps.render(m, data.spill["features"], key="detection_map")
-        ui.legend([(config.OIL_OBSERVED, "Detected oil", "fill")])
+        ui.legend([(config.OIL_OBSERVED, "Simulated slick outline" if data.outline_simulated else "Detected oil",
+                    "fill")])
     else:
         ui.inline_empty("The slick will appear on the map once the scene has been located geographically.")
 

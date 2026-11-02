@@ -4,6 +4,10 @@ Status per stage:
 - ``live``: real outputs were found
 - ``simulated``: demo scenario is on, or the outputs label themselves ``"synthetic": true``
 - ``empty``: nothing to show yet
+
+With a spill selected on Overview (services.selection), each stage follows that spill
+instead: its data is built by services.scenario and appears only once the step is done
+(Detect -> Predict -> Respond). That data is always synthetic, so the status is "simulated".
 """
 
 from __future__ import annotations
@@ -13,11 +17,12 @@ from typing import Any, Literal
 
 import streamlit as st
 
-from services import mock_data
+from services import mock_data, scenario, selection
 from services.detection_loader import load_detection
 from services.drift_loader import load_drift
-from services.models import DetectionData, DriftData, RoutingData
+from services.models import DetectionData, DriftData, RoutingData, SpillData, SpillSite
 from services.routing_loader import load_routing
+from services.spill_loader import load_spills
 
 DEMO_STATE_KEY = "demo_mode"
 Status = Literal["live", "simulated", "empty"]
@@ -43,19 +48,46 @@ def _stage(key: str, data: Any) -> Stage:
     return Stage(key, data, "simulated" if simulated else "live", bool(data.warnings))
 
 
+def selected_site() -> SpillSite | None:
+    """The spill selected on Overview, if it is still in the catalogue."""
+    spill_id = selection.selected_spill_id()
+    return spills_stage().data.get(spill_id) if spill_id else None
+
+
 def detection_stage() -> Stage:
+    site = selected_site()
+    if site:
+        data = scenario.selected_detection(site, selection.detection_run(), selection.simulated_detection_accepted())
+        return _stage("detect", data)
     data: DetectionData | None = mock_data.detection() if demo_mode() else load_detection()
     return _stage("detect", data)
 
 
 def drift_stage() -> Stage:
+    site = selected_site()
+    if site:
+        return _stage("predict", scenario.selected_drift(site, demo_mode()) if selection.predict_done() else None)
     data: DriftData | None = mock_data.drift() if demo_mode() else load_drift()
     return _stage("predict", data)
 
 
 def routing_stage() -> Stage:
+    site = selected_site()
+    if site:
+        return _stage("respond", scenario.selected_routing(site, demo_mode()) if selection.respond_done() else None)
     data: RoutingData | None = mock_data.routing() if demo_mode() else load_routing()
     return _stage("respond", data)
+
+
+def spills_stage() -> Stage:
+    """Spill sites for the Overview map: outputs/spills.geojson, else the simulated catalogue.
+
+    Unlike the three stages there is always something to pick, so an unusable file falls back
+    to the catalogue (its warnings still show under Diagnostics).
+    """
+    loaded = None if demo_mode() else load_spills()
+    data: SpillData = loaded if loaded and loaded.has_content else mock_data.spills()
+    return _stage("spills", data)
 
 
 def all_stages() -> dict[str, Stage]:

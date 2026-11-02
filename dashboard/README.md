@@ -160,6 +160,18 @@ The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with poin
 
 `targets.geojson` feature properties: `target_id` (`ResponseTarget.target_id`, required, unique), `oil_volume_m3` (`ResponseTarget.oil_volume_m3`, required, nonnegative), optional `source_hours` (*extension*: the drift step the targets came from, used to pick the oil layer under the routes). Every `assigned_target_ids` entry should exist in `targets.geojson`.
 
+### Spill sites → `outputs/spills.geojson` (optional)
+
+The incidents offered on the Overview map. One `Point` feature per incident with `spill_id` (required, unique, letters/digits/`_`/`-`), `name` (optional) and `synthetic`. Not in `shared/schemas.py`; the position is validated as a `GeoCoordinate`. Without this file (or in demo mode) the dashboard offers four simulated sites around `MAP_CENTER` (`mock_data.MOCK_SPILL_SITES`).
+
+### Radar images → `assets/images/`
+
+Clicking a spill assigns a **random** `.png`/`.jpg` from `assets/images/` (recursive; override with the `GOG_IMAGE_DIR` environment variable). The image is a sample from the local dataset and is not geolocated to the spill. The folder is git-ignored, so copy images in locally. The selection (`sel_spill_id`, `sel_image_path`, `sel_image_id`) lives in `st.session_state` and is shared by all pages; see `services/selection.py`.
+
+### Selected-spill flow (Detect → Predict → Respond)
+
+With a spill selected, each page follows it and unlocks in order. **Detect** runs the U-Net on the assigned image in a subprocess (`python -m detection.predict_cli`, so Streamlit never imports torch) and writes `outputs/detection/<image_id>_{image,mask,overlay}.png` plus a `<image_id>_run.json` cache manifest. Settings: `GOG_CHECKPOINT` (default `runs/unet_refined_sar/best.pth`), `GOG_DETECTION_PYTHON` (an interpreter with torch; default the dashboard's own), timeout `DETECTION_TIMEOUT_S` in `config.py`. Without a checkpoint the page falls back to the simulated detection. **Predict** and **Respond** reuse the existing drift and routing results (or the demo scenario), moved so the drift's release point sits on the selected spill (`services/scenario.py`), and are always labelled simulated.
+
 ## Code layout
 
 ```
@@ -175,6 +187,7 @@ dashboard/
     data.py               demo vs real data, per-stage status (live / simulated / empty)
     labels.py             display units and status wording derived from the schema
     nav.py                top bar (response timeline) and the options panel + diagnostics
+    incident.py           Overview incident picker (spill map, selected spill, assigned image)
     ui.py                 headings, chips, stat tiles, empty states, legend, footer
     illustrations.py      inline SVG art (embedded as data-URI images)
     maps.py, charts.py    Folium (dark basemap) and Plotly helpers
@@ -185,6 +198,9 @@ dashboard/
     detection_loader.py   -> DetectionData | None
     drift_loader.py       -> DriftData | None
     routing_loader.py     -> RoutingData | None
+    spill_loader.py       -> SpillData | None (Overview map incidents)
+    image_picker.py       lists / randomly picks radar images (no Streamlit; unit-testable)
+    selection.py          selected spill + image in session_state, map-click parsing
     mock_data.py          demo scenario (synthetic)
     geo.py, imaging.py    small helpers (no shapely/geopandas)
 ```

@@ -297,3 +297,6 @@ lightning_logs/
 .aws/
 secrets/
 *.pem
+
+# Local radar image dataset (repo root only; dashboard/assets/ stays tracked)
+/assets/

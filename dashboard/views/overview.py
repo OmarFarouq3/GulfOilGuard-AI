@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components import illustrations, ui
-from components.data import all_stages, demo_mode
+from components import illustrations, incident, ui
+from components.data import all_stages, demo_mode, spills_stage
 from components.labels import HOURS, KM2
 from services.files import as_float
 from services.geo import polygon_area_km2
@@ -47,6 +47,10 @@ ui.stat_tiles([
     ("Vessels deployed", ui.fmt(vessels, 0), "", "Response vessels with an assigned route"),
     ("Response time", ui.fmt(response_time), HOURS, "Until the last vessel completes its route"),
 ])
+
+# --- Choose an incident ----------------------------------------------------------
+ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages.")
+incident.picker(spills_stage())
 
 # --- Response flow ---------------------------------------------------------------
 ui.section("Incident response flow", "Follow one incident through the three stages of the response.")

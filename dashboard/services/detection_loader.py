@@ -116,27 +116,51 @@ def build_detection(scenes: list[DetectionScene], metrics: Any, spill: Any) -> D
     return data
 
 
+def _read_scene(image_id: str, files: dict[str, Path], data: DetectionData) -> DetectionScene | None:
+    scene = DetectionScene(image_id=image_id)
+    for kind, path in files.items():
+        content, warning = read_image(path)
+        if warning:
+            data.warnings.append(warning)
+        setattr(scene, kind, content)
+    if scene.overlay is None and scene.image and scene.mask:
+        scene.overlay = compose_overlay(scene.image, scene.mask)
+    return scene if scene.image or scene.mask or scene.overlay else None
+
+
+def _read_metrics(data: DetectionData) -> None:
+    raw_metrics, warning = read_json_object(config.DETECTION_FILES["metrics"])
+    if warning:
+        data.warnings.append(warning)
+    parse_metrics(raw_metrics, data)
+
+
+def load_scene(image_id: str) -> DetectionData | None:
+    """Only the ``<image_id>_*`` scene plus ``metrics.json`` (the model's evaluation scores).
+
+    ``spill.geojson`` is left out: its outlines belong to other scenes.
+    """
+    data = DetectionData()
+    files = _scene_files(config.DETECTION_DIR).get(image_id)
+    scene = _read_scene(image_id, files, data) if files else None
+    if scene is None:
+        return None
+    data.scenes.append(scene)
+    _read_metrics(data)
+    return data
+
+
 def load_detection() -> DetectionData | None:
     """Return detection outputs, or None if no detection files exist at all."""
     data = DetectionData()
 
     for image_id, files in _scene_files(config.DETECTION_DIR).items():
-        scene = DetectionScene(image_id=image_id)
-        for kind, path in files.items():
-            content, warning = read_image(path)
-            if warning:
-                data.warnings.append(warning)
-            setattr(scene, kind, content)
-        if scene.overlay is None and scene.image and scene.mask:
-            scene.overlay = compose_overlay(scene.image, scene.mask)
-        if scene.image or scene.mask or scene.overlay:
+        scene = _read_scene(image_id, files, data)
+        if scene:
             data.scenes.append(scene)
     data.scenes.sort(key=lambda s: (s.image_id != DEFAULT_SCENE, s.image_id))
 
-    raw_metrics, warning = read_json_object(config.DETECTION_FILES["metrics"])
-    if warning:
-        data.warnings.append(warning)
-    parse_metrics(raw_metrics, data)
+    _read_metrics(data)
 
     collection, warning = read_geojson(config.DETECTION_FILES["spill"])
     if warning:

@@ -135,6 +135,12 @@ def footer() -> None:
     st.html('<footer class="gog-footer"><span>GulfOilGuard-AI</span><span>Hack for Earth 2026</span></footer>')
 
 
+def coordinates(latitude: float, longitude: float) -> str:
+    """'25.850° N, 55.650° E'."""
+    return (f"{abs(latitude):.3f}° {'N' if latitude >= 0 else 'S'}, "
+            f"{abs(longitude):.3f}° {'E' if longitude >= 0 else 'W'}")
+
+
 def fmt(value: float | None, digits: int = 1) -> str | None:
     """Format a number for a tile, or None when unknown (tile shows a dash)."""
     return None if value is None else f"{value:,.{digits}f}"

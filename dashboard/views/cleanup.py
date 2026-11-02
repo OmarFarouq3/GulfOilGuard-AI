@@ -11,8 +11,8 @@ import pandas as pd
 import streamlit as st
 
 import config
-from components import maps, ui
-from components.data import drift_stage, routing_stage
+from components import flow, maps, ui
+from components.data import drift_stage, routing_stage, selected_site
 from components.labels import HOURS, KM, M3, M_PER_S, STATUS_LABELS
 
 stage = routing_stage()
@@ -24,6 +24,11 @@ ui.page_heading(
     "An optimiser assigns cleanup vessels to the predicted oil patches and plans their routes.",
     stage,
 )
+site = selected_site()
+if site:
+    flow.respond_controls(site)
+else:
+    flow.no_selection_prompt()
 
 
 def step_label(hours: float) -> str:
@@ -31,13 +36,14 @@ def step_label(hours: float) -> str:
 
 
 if data is None:
-    ui.empty_state(
-        "respond",
-        "No response plan yet",
-        "When a drift forecast is ready, vessels are matched to the predicted oil patches. This view then "
-        "shows each vessel's route, the order of its stops, and how long the whole response takes.",
-        ["Vessel routes", "Visiting order", "Fleet totals", "Estimated oil recovery"],
-    )
+    if site is None:
+        ui.empty_state(
+            "respond",
+            "No response plan yet",
+            "When a drift forecast is ready, vessels are matched to the predicted oil patches. This view then "
+            "shows each vessel's route, the order of its stops, and how long the whole response takes.",
+            ["Vessel routes", "Visiting order", "Fleet totals", "Estimated oil recovery"],
+        )
 else:
     if data.status:
         css, label = STATUS_LABELS[data.status]
