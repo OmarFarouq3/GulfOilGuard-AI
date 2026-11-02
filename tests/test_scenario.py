@@ -90,19 +90,17 @@ class TestOptimizationScenarios(unittest.TestCase):
 
     def test_trajectory_to_targets(self):
         initial = GeoCoordinate(latitude=25.0, longitude=54.0)
+        t0 = datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc)
+        t6 = datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc)
+        t12 = datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc)
+
+        # Simulation with moving particles: 1 patch at t0, 1 at t6, and 3 spread patches at t12
         positions = (
-            TimedPosition(
-                timestamp=datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc),
-                coordinate=GeoCoordinate(latitude=25.0, longitude=54.0),
-            ),
-            TimedPosition(
-                timestamp=datetime(2026, 11, 1, 6, 0, tzinfo=timezone.utc),
-                coordinate=GeoCoordinate(latitude=25.1, longitude=54.1),
-            ),
-            TimedPosition(
-                timestamp=datetime(2026, 11, 1, 12, 0, tzinfo=timezone.utc),
-                coordinate=GeoCoordinate(latitude=25.2, longitude=54.2),
-            ),
+            TimedPosition(timestamp=t0, coordinate=GeoCoordinate(latitude=25.0, longitude=54.0)),
+            TimedPosition(timestamp=t6, coordinate=GeoCoordinate(latitude=25.1, longitude=54.1)),
+            TimedPosition(timestamp=t12, coordinate=GeoCoordinate(latitude=25.20, longitude=54.20)),
+            TimedPosition(timestamp=t12, coordinate=GeoCoordinate(latitude=25.22, longitude=54.23)),
+            TimedPosition(timestamp=t12, coordinate=GeoCoordinate(latitude=25.24, longitude=54.21)),
         )
         drift = DriftOutput(
             simulation_id="SIM-101",
@@ -111,10 +109,20 @@ class TestOptimizationScenarios(unittest.TestCase):
             duration_hours=12.0,
         )
 
+        # Default: takes patches at the latest forecast timestamp (t12)
         targets = trajectory_to_targets(drift, total_volume_m3=150.0, max_targets=3)
         self.assertEqual(len(targets), 3)
         total_vol = sum(t.oil_volume_m3 for t in targets)
         self.assertAlmostEqual(total_vol, 150.0, delta=1.0)
+        # All targets must be at the t12 coordinates, not t0 or t6
+        for t in targets:
+            self.assertGreaterEqual(t.location.latitude, 25.19)
+
+        # Explicit forecast_time selection at t6
+        targets_t6 = trajectory_to_targets(drift, total_volume_m3=100.0, forecast_time=t6)
+        self.assertEqual(len(targets_t6), 1)
+        self.assertAlmostEqual(targets_t6[0].oil_volume_m3, 100.0)
+        self.assertEqual(targets_t6[0].location.latitude, 25.1)
 
 
 if __name__ == "__main__":

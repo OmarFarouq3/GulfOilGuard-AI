@@ -22,7 +22,7 @@ Scenarios & Fixtures (scenario.py) ──► Routing Model (OR-Tools) ──► 
   * **Arabian Gulf Infrastructure**: Regional port depots (`GULF_DEPOTS`) covering Port Saqr (RAK), RAK Maritime City, Hamriyah (Sharjah), Jebel Ali (Dubai), Mina Zayed (Abu Dhabi), Ras Laffan (Qatar), and Jubail / Ras Tanura (Saudi Arabia).
   * **Demonstration Scenarios**: Staged in **Ras Al Khaimah (RAK)** coastal waters to directly match Joud & Maqqavi's OpenDrift spill simulation.
   * **Marine Navigation Math**: Haversine distance (`haversine_distance_km`), speed/travel time calculator (`compute_travel_time_hours`), and distance/time matrix builders (`build_distance_matrix`, `build_time_matrix`).
-  * **Drift Translation Bridge**: `trajectory_to_targets()` aggregates continuous drift plumes from Team B into discrete, cleanable targets with estimated volumes ($m^3$).
+  * **Drift Translation Bridge**: `trajectory_to_targets()` aggregates oil patches at a specific forecast timestamp (defaulting to the latest forecast horizon) into discrete, cleanable targets with estimated volumes ($m^3$), ensuring the same moving slick is not double-counted across different time steps.
   * **JSON Serialization**: `export_scenario_to_json()` and `load_scenario_from_json()`.
 
 * **`fixtures/` (Ras Al Khaimah Demonstration Files)**:
@@ -32,7 +32,7 @@ Scenarios & Fixtures (scenario.py) ──► Routing Model (OR-Tools) ──► 
 
 * **`routing_model.py` & `vessel_routing.py` (Haris)**:
   * Google OR-Tools Vehicle Routing Problem (VRP) solver.
-  * Enforces vessel capacity ($m^3$), maximum shift duration (`available_hours`), service/skimming time, and depot returns.
+  * Enforces vessel capacity ($m^3$), maximum shift duration (`available_hours`), service/skimming time, and **open routes** (vessels finish at their last assigned target without returning to depot, matching the current problem formulation).
 
 * **`sea_grid.py` & `sea_distance.py`**:
   * A* shortest-path router on a water/land raster grid, guaranteeing vessels navigate around landmasses, islands, and peninsulas.

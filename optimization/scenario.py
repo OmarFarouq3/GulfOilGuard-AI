@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Sequence
 
@@ -346,23 +347,36 @@ def trajectory_to_targets(
     drift: DriftOutput,
     total_volume_m3: float = 200.0,
     max_targets: int = 8,
+    forecast_time: datetime | None = None,
 ) -> tuple[ResponseTarget, ...]:
-    """Convert a Team B DriftOutput trajectory into discrete cleanup ResponseTargets.
+    """Convert a Team B DriftOutput simulation into discrete cleanup ResponseTargets.
 
-    Subsamples trajectory positions to create spatially representative cleanup targets
-    with distributed estimated oil volumes.
+    Selects oil patch positions at a single forecast time (defaulting to the latest /
+    forecast horizon timestamp) so that the same moving slick is not counted multiple
+    times across different time steps.
     """
     if not drift.positions:
         return ()
 
-    n_pos = len(drift.positions)
-    step = max(1, n_pos // max_targets)
-    sampled_positions = drift.positions[::step][:max_targets]
+    # Default to the latest forecast timestamp in the simulation
+    if forecast_time is None:
+        target_time = max(tp.timestamp for tp in drift.positions)
+    else:
+        target_time = forecast_time
 
-    vol_per_target = round(total_volume_m3 / len(sampled_positions), 2)
+    # Filter positions to only patches present at the chosen forecast time
+    positions_at_time = [tp for tp in drift.positions if tp.timestamp == target_time]
+    if not positions_at_time:
+        return ()
+
+    n_pos = len(positions_at_time)
+    step = max(1, n_pos // max_targets)
+    sampled = positions_at_time[::step][:max_targets]
+
+    vol_per_target = round(total_volume_m3 / len(sampled), 2)
     targets: list[ResponseTarget] = []
 
-    for i, tp in enumerate(sampled_positions, start=1):
+    for i, tp in enumerate(sampled, start=1):
         target_id = f"TGT-DRIFT-{drift.simulation_id[:6]}-{i:02d}"
         targets.append(
             ResponseTarget(
