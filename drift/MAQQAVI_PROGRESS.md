@@ -1,6 +1,6 @@
 # Team B – Maqqavi: progress so far
 
-Last updated: 2 Nov 2026 (day 2). Day 1 task from Omar: install OpenDrift and run one official example. Day 2 task: the first 24-hour Gulf oil-drift simulation with Joud's data, in the format routing and the dashboard read.
+Last updated: 3 Nov 2026 (day 2 work, pull request merged). Day 1 task from Omar: install OpenDrift and run one official example. Day 2 task: the first 24-hour Gulf oil-drift simulation with Joud's data, in the format routing and the dashboard read.
 
 ## Status
 
@@ -12,8 +12,9 @@ Last updated: 2 Nov 2026 (day 2). Day 1 task from Omar: install OpenDrift and ru
 | Review Joud's data approach (wind and currents) | Done |
 | Check OpenDrift can read Joud's cleaned files, and that they reproduce from the raw ones | Done (Joud confirmed the four files are final) |
 | First 24-hour Gulf simulation | Done (see "Day 2" below) |
-| `simulate_drift()`, output files for routing and the dashboard, tests, README | Done, on branch `feature/drift-simulation` (pull request to follow) |
-| Integration checks with Harris, Obeid and Maria's checker | Done on my side (see "Day 2"); waiting for their confirmation |
+| `simulate_drift()`, output files for routing and the dashboard, tests, README | Done, merged into `main` (pull request #19, approved by Omar) |
+| Output files and a particle-distribution picture shared with the team | Done, in the team SharePoint folder (see "Day 2") |
+| Integration checks with Harris, Obeid and Maria's checker | Done on my side (see "Day 2"); waiting for their feedback |
 
 ## What was done
 
@@ -75,17 +76,18 @@ All 1,000 particles stay afloat (the nearest coast is about 28 km away); the oil
 
 **Output files** (`outputs/drift/drift.geojson`, `meta.json`; not in Git): one particle feature per hour with stable `particle_ids`, `status` and `oil_volume_m3`, plus an outline polygon per hour for the dashboard, in the formats of `optimization/README.md` section 3.1 and `dashboard/README.md`.
 
+**Shared with the team** (not in Git) in the SharePoint folder `Team B - Drift / Gulf drift 24h - 2026-10-23`: `drift.geojson`, `meta.json` and `drift_snapshots_0_6_12_24h.png`, a picture of the particle positions at 0, 6, 12 and 24 h (one dot per particle, the outline of the oil afloat, and the path of the cloud centre).
+
 **Checks done on my side:**
 - 17 tests in `tests/test_drift_simulation.py` pass (oil moves with the current, wave drift is added once, a raw file with `utotal` is refused, output format, shared-contract check).
 - Harris's loader (from his branch) reads the files, follows the particles by id and makes 6 patches at his 6 h dispatch (two large: 147 and 44 m³).
 - The dashboard's own drift loader reads them with no warnings.
-- Maria's `tests/check_outputs.py --gulf` reports the drift files as OK.
+- Maria's `tests/check_outputs.py outputs --gulf` reports the drift files as OK on the merged `main` (1,000 particles at each of the 25 hourly steps, labelled synthetic).
 
 ## Next steps
 
-1. Pull request for `feature/drift-simulation` (merge `main` into the branch first).
-2. Share `outputs/drift/` through the team SharePoint folder, and tell Harris, Obeid and Nihal that the real files exist, so routing and the dashboard can switch from the stand-in to them.
-3. Plots of the particle distribution at 0, 6, 12 and 24 h for the results.
+1. Wait for feedback from Harris, Obeid and Nihal on the real files (they have been told they exist). The full routing run on them, `python -m optimization.run_drift_plan`, needs OR-Tools, which is not installed in my environment, so Harris runs it on his side; I only tested his loader on our files.
+2. `create_gulf_drift_scenario` (Nihal, pull request #20) uses numbers copied from the results table above (12 points per cloud), not these files. That is fine for the T+12 h demo scenario, but the real files are the more accurate input.
 
 ## Open questions
 
