@@ -14,7 +14,7 @@ data = stage.data
 ui.page_heading(
     "Step 01 · Detect",
     "Spot the slick from orbit",
-    "A U-Net model reads Sentinel-1 radar imagery and outlines oil on the sea surface.",
+    "A U-Net model reads SAR imagery imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
     stage,
 )
 
@@ -24,7 +24,7 @@ if data is None:
         "No satellite scene analysed yet",
         "Once a radar scene of the Gulf is analysed, this view shows the image, the oil the model "
         "found in it, how accurate the model is, and where the slick sits on the map.",
-        ["Radar scene", "Detected oil outline", "Model accuracy", "Slick on the map"],
+        ["Radar scene", "Detected oil outline", "Model performance", "Slick on the map"],   #Edit 2: Model accuracy  --> Model performance
     )
 else:
     # --- Imagery ---------------------------------------------------------------

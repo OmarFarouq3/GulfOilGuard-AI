@@ -64,8 +64,8 @@ if data is None:
     ui.empty_state(
         "predict",
         "No active scenario yet",
-        "Load a satellite scene to see the predicted spread of the slick over the next 6, 12 and 24 hours, "
-        "together with the wind and currents that drive it.",
+        "Once a drift simulation is available, this view will show how the oil slick is expected to move and spread over time, "
+        "based on wind and ocean-current data.",    #Edit 3: Entire text swapped
         ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
     )
 else:

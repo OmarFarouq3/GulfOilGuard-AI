@@ -36,7 +36,7 @@ if data is None:
         "No response plan yet",
         "When a drift forecast is ready, vessels are matched to the predicted oil patches. This view then "
         "shows each vessel's route, the order of its stops, and how long the whole response takes.",
-        ["Vessel routes", "Visiting order", "Fleet totals", "Oil recovered"],
+        ["Vessel routes", "Visiting order", "Fleet totals", "Estimated oil recovery"],
     )
 else:
     if data.status:
@@ -49,7 +49,7 @@ else:
          "Vessels with an assigned route"),
         ("Response time", ui.fmt(data.response_time_hours), HOURS, "Until the last vessel completes its route"),
         ("Distance sailed", ui.fmt(data.total_distance_km), KM, "All vessels combined"),
-        ("Oil recovered", ui.fmt(data.oil_collected_m3, 0), M3,
+        ("Estimated oil recovery", ui.fmt(data.oil_collected_m3, 0), M3,
          f"Of about {target_oil:,.0f} {M3} in the oil patches" if target_oil else "Estimated volume collected"),
     ])
 
@@ -112,7 +112,7 @@ else:
             "time": f"Time to finish ({HOURS})",
             "speed": f"Speed ({M_PER_S})",
             "capacity": f"Capacity ({M3})",
-            "oil": f"Oil recovered ({M3})",
+            "oil": f"Estimated oil recovery ({M3})",
         }
         table = pd.DataFrame([{
             "Vessel": e.route.vessel_id,
@@ -139,7 +139,7 @@ else:
             """
 - Lines join each vessel's base to its oil patches in visiting order. They are **straight lines**, not checked navigation routes (shallow water, islands and traffic are not considered).
 - Oil patches come from the drift forecast, so routes inherit its uncertainty, and the oil keeps moving while vessels travel.
-- *Oil recovered* depends on assumed recovery rates and patch volumes, and never exceeds a vessel's capacity.
+- *Estimated oil recovery* depends on assumed recovery rates and patch volumes, and never exceeds a vessel's capacity.
 - A *feasible* plan is valid but not necessarily the best possible; *optimal* means the optimiser proved it is the best.
 """
         )
