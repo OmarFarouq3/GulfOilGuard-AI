@@ -30,12 +30,13 @@ must provide or can read.
   * **Arabian Gulf Infrastructure**: Regional port depots (`GULF_DEPOTS`) covering Port Saqr (RAK), RAK Maritime City, Hamriyah (Sharjah), Jebel Ali (Dubai), Mina Zayed (Abu Dhabi), Ras Laffan (Qatar), and Jubail / Ras Tanura (Saudi Arabia).
   * **Demonstration Scenarios**: Staged in **Ras Al Khaimah (RAK)** coastal waters to directly match Joud & Maqqavi's OpenDrift spill simulation.
   * **Marine Navigation Math**: Haversine distance (`haversine_distance_km`), speed/travel time calculator (`compute_travel_time_hours`), and distance/time matrix builders (`build_distance_matrix`, `build_time_matrix`).
-  * **Drift Translation Bridge**: `trajectory_to_targets()` aggregates oil patches at a specific forecast timestamp (defaulting to the latest forecast horizon) into discrete, cleanable targets with estimated volumes ($m^3$), ensuring the same moving slick is not double-counted across different time steps.
+  * **Drift Translation Bridge**: `create_synthetic_gulf_drift()` generates a 24-hour simulation at agreed coordinates (25.85° N, 55.65° E) across 0, 6, 12, and 24 h. `trajectory_to_targets()` aggregates oil patches at a specific forecast timestamp into discrete cleanup targets with estimated volumes ($m^3$), ensuring the same moving slick is not double-counted across different time steps. `create_gulf_drift_scenario()` pairs the T+12h targets with the RAK fleet.
   * **JSON Serialization**: `export_scenario_to_json()` and `load_scenario_from_json()`.
 
 * **`fixtures/` (Ras Al Khaimah Demonstration Files)**:
   * `smoke_test.json`: 2 vessels at Port Saqr (RAK), 4 targets offshore RAK (fast debug).
   * `gulf_standard.json`: 3 vessels (Port Saqr & Hamriyah reserve), 10 targets along the RAK drift path (main demo fixture).
+  * `gulf_drift_t12.json`: 3 vessels, 8 targets derived from the 24-hour Gulf drift simulation at T+12h (25.85° N, 55.65° E release).
   * `constrained_triage.json`: 2 vessels vs 4 high-volume targets, testing solver drop penalties and coastal prioritization.
 
 * **`routing_model.py` & `vessel_routing.py` (Haris)**:
@@ -88,11 +89,14 @@ dist_matrix_km = build_distance_matrix(all_coords)
 from optimization.scenario import (
     create_smoke_test_scenario,      # 2 vessels, 4 targets in RAK
     create_rak_standard_scenario,    # 3 vessels, 10 targets in RAK (aliased as create_gulf_standard_scenario)
+    create_gulf_drift_scenario,       # 3 vessels, 8 targets derived at T+12h from 24h drift simulation
     create_gulf_wide_scenario,        # Regional UAE / Qatar / Saudi scenario
     create_constrained_triage_scenario # Overcapacity triage test
 )
 
 vessels, targets = create_rak_standard_scenario()
+# Or for the T+12h drift-derived scenario:
+# vessels, targets = create_gulf_drift_scenario()
 ```
 
 ### C. Run the End-to-End Demo CLI
@@ -100,6 +104,9 @@ vessels, targets = create_rak_standard_scenario()
 ```bash
 # Run solver on our RAK standard scenario
 python -m optimization.run_demo --scenario optimization/fixtures/gulf_standard.json
+
+# Run solver on the T+12h drift-derived scenario
+python -m optimization.run_demo --scenario optimization/fixtures/gulf_drift_t12.json
 
 # Run sea water check
 python -m optimization.sea_check --scenario optimization/fixtures/smoke_test.json
