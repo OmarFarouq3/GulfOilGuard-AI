@@ -8,6 +8,7 @@ Last updated: 2 Nov 2026. Task from Omar: install OpenDrift and run one official
 |---|---|
 | Install OpenDrift | Done |
 | Run one official OpenDrift example | Done |
+| Share example results with the team (plots and animation) | Done, in the team SharePoint folder |
 | Review Joud's data approach (wind and currents) | Done |
 | Check OpenDrift can read Joud's cleaned files | Waiting for her raw data files |
 | First Gulf simulation | Not started |
@@ -28,6 +29,19 @@ Last updated: 2 Nov 2026. Task from Omar: install OpenDrift and run one official
 | Run time | about 34 seconds (the animation takes about 3 more minutes to render) |
 
 The drift map, oil budget, vertical mixing plots and an animation were produced and sent to Omar, with a screen recording.
+
+**Result files (kept out of Git).** They are in the team SharePoint folder (the link is in the group chat), in the subfolder `Team B - Drift / OpenDrift official example`:
+
+| File | What it shows |
+|---|---|
+| `drift_openoil_example_01_drift_map.jpg` | Particle drift over 40 h: 2,000 released, 136 active, 1,864 stranded |
+| `drift_openoil_example_02_oil_budget.jpg` | Oil mass split over time (dispersed, submerged, surface, stranded, evaporated), with emulsion viscosity, water content, wind and current speed |
+| `drift_openoil_example_03_vertical_distribution.jpg` | Number of particles by depth at hour 40 |
+| `drift_openoil_example_04_water_fraction.jpg` | Water fraction of the oil over time (levels off at about 0.7) |
+| `drift_openoil_example_05_particle_depth_over_time.jpg` | Depth of every particle over time (mixing down to about 50 m) |
+| `drift_openoil_example_06_animation.mp4` | 14-second animation of the drift (screen recording) |
+
+These are results from OpenDrift's bundled Norway test data, not Gulf results.
 
 **3. What this showed that matters for our Gulf work.**
 - OpenDrift has a built-in coastline (GSHHG). It stops particles on land and counts them as "stranded", so we can report which stretch of coast would be oiled.
