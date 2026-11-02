@@ -1,6 +1,6 @@
 # Team B – Maqqavi: progress so far
 
-Last updated: 2 Nov 2026. Task from Omar: install OpenDrift and run one official example simulation.
+Last updated: 2 Nov 2026 (day 2). Day 1 task from Omar: install OpenDrift and run one official example. Day 2 task: the first 24-hour Gulf oil-drift simulation with Joud's data, in the format routing and the dashboard read.
 
 ## Status
 
@@ -10,9 +10,10 @@ Last updated: 2 Nov 2026. Task from Omar: install OpenDrift and run one official
 | Run one official OpenDrift example | Done |
 | Share example results with the team (plots and animation) | Done, in the team SharePoint folder |
 | Review Joud's data approach (wind and currents) | Done |
-| Check OpenDrift can read Joud's cleaned files | Waiting for her raw data files |
-| First Gulf simulation | Not started |
-| `simulate_drift()` and dashboard output files | Not started |
+| Check OpenDrift can read Joud's cleaned files, and that they reproduce from the raw ones | Done (Joud confirmed the four files are final) |
+| First 24-hour Gulf simulation | Done (see "Day 2" below) |
+| `simulate_drift()`, output files for routing and the dashboard, tests, README | Done, on branch `feature/drift-simulation` (pull request to follow) |
+| Integration checks with Harris, Obeid and Maria's checker | Done on my side (see "Day 2"); waiting for their confirmation |
 
 ## What was done
 
@@ -46,20 +47,48 @@ These are results from OpenDrift's bundled Norway test data, not Gulf results.
 **3. What this showed that matters for our Gulf work.**
 - OpenDrift has a built-in coastline (GSHHG). It stops particles on land and counts them as "stranded", so we can report which stretch of coast would be oiled.
 - When a forcing variable has no data, OpenDrift uses a fallback value. In this example it set wave (Stokes) drift to 0, among others. Joud's current file contains wave drift, so this will matter for our runs.
-- The oil database includes generic oils such as `GENERIC MEDIUM CRUDE`. The oil type for the Gulf demo is still to be agreed.
+- The oil database includes generic oils such as `GENERIC MEDIUM CRUDE`, the oil type agreed for the Gulf demo.
 - The example uses Norwegian data, so nothing in it is a Gulf result.
 
 **4. Joud's data approach reviewed** (`DATA_SOURCES.md` and `environmental_data.py`, merged into `main` in PR #6). Current = `uo + utide`, wave drift from `vsdx`/`vsdy` (OpenDrift's Stokes drift stays on), wind = ERA5 `u10`/`v10`. `utotal`/`vtotal` are not used, to avoid counting tides and wave drift twice. I agree with this approach. One wording point: the last note in `DATA_SOURCES.md` says "don't add wave drift again", but the code keeps wave drift on separately and drops only `utotal`. The code is the intended choice, so the note could be reworded.
 
+## Day 2: first Gulf simulation (synthetic scenario)
+
+Run with `python -m drift.run_gulf_demo` (details, assumptions and limits in `drift/README.md`).
+
+| Setting | Value |
+|---|---|
+| Release | 25.85°N, 55.65°E (Joud's agreed test point), 300 m³ Generic Medium Crude, 1,000 particles, instantaneous |
+| Time | 24 h from 2026-10-23 12:00 UTC (our choice inside Joud's data window; nobody specified a release time), output every hour |
+| Forcing | Joud's cleaned ERA5 wind and Copernicus Marine currents (current = `uo + utide`, wave drift separate, OpenDrift's Stokes drift on, `utotal` not used) |
+
+| Hour | Oil afloat (m³) | Centre east / north of release (km) | Cloud width, 1 sd (km) |
+|---:|---:|---|---|
+| 0 | 300.0 | 0.0 / 0.0 | 0.5 |
+| 6 | 204.1 | 7.7 / 0.5 | 0.8 |
+| 12 | 196.9 | 10.3 / 0.9 | 1.1 |
+| 24 | 183.6 | 12.0 / 0.6 | 1.7 |
+
+All 1,000 particles stay afloat (the nearest coast is about 28 km away); the oil budget adds up to 100 %. The centre moves out and back because tidal currents dominate.
+
+**Assumptions I had to make** (no data for them, all written into `meta.json`): water temperature 28 °C and salinity 40 (OpenDrift's defaults of 10 °C and 34 are wrong for the Gulf), horizontal diffusivity 10 m²/s (with 0 the cloud stays under 1 km wide), vertical mixing off, fixed random seed. 300 m³ is routing's placeholder volume and 1,000 particles is our own choice.
+
+**Output files** (`outputs/drift/drift.geojson`, `meta.json`; not in Git): one particle feature per hour with stable `particle_ids`, `status` and `oil_volume_m3`, plus an outline polygon per hour for the dashboard, in the formats of `optimization/README.md` section 3.1 and `dashboard/README.md`.
+
+**Checks done on my side:**
+- 17 tests in `tests/test_drift_simulation.py` pass (oil moves with the current, wave drift is added once, a raw file with `utotal` is refused, output format, shared-contract check).
+- Harris's loader (from his branch) reads the files, follows the particles by id and makes 6 patches at his 6 h dispatch (two large: 147 and 44 m³).
+- The dashboard's own drift loader reads them with no warnings.
+- Maria's `tests/check_outputs.py --gulf` reports the drift files as OK.
+
 ## Next steps
 
-1. Get Joud's two raw files (`era5_wind_gulf_2026-10-19_26.nc`, `cmems_currents_gulf_2026-10-19_26.nc`, kept out of Git), run her cleaning script (`python -m drift.environmental_data`), and check that OpenDrift reads the cleaned files. Reply to Joud with the result.
-2. First Gulf run from the synthetic test point (25.85°N, 55.65°E, not a detection result) inside 19–26 Oct 2026.
-3. Implement `simulate_drift()` and export `DriftOutput` plus the files the dashboard reads (`outputs/drift/drift.geojson` and `meta.json`).
+1. Pull request for `feature/drift-simulation` (merge `main` into the branch first).
+2. Share `outputs/drift/` through the team SharePoint folder, and tell Harris, Obeid and Nihal that the real files exist, so routing and the dashboard can switch from the stand-in to them.
+3. Plots of the particle distribution at 0, 6, 12 and 24 h for the results.
 
 ## Open questions
 
-- **Oil type** for the Gulf demo (`GENERIC MEDIUM CRUDE` or another)?
-- **Windage:** the usual "3% of wind speed" rule partly includes wave effects, so check it is not partly counted twice now that wave drift is added separately.
-- **Hand-off to routing (Nihal):** targets should be separate oil patches at the same forecast hour (for example +12 h), not the slick centre at different times. Agree how particles become targets.
-- **Georeferencing:** drift needs a verified release point and time. Detection output has no coordinates yet.
+- **Windage:** the usual "3 % of wind speed" rule partly includes wave effects, so check it is not partly counted twice now that wave drift is added separately (OpenDrift's default is kept for now).
+- **Oil volume for vessel capacity:** the files give pure oil volume; recovered emulsion is larger by 1 / (1 - water fraction), about 3 times at 24 h. Routing may want to account for this.
+- **Georeferencing:** drift needs a verified release point and time. Detection output has no coordinates yet, so the release is a synthetic point.
