@@ -1,11 +1,12 @@
 """Per-image metrics, threshold sweep and ranked galleries for a checkpoint.
 
 Run from repo root:
-  python -m detection.report --checkpoint models/oil_unet/best.pth
+  python -m detection.report --checkpoint runs/unet_refined_sar/best.pth
 """
 import argparse
 import csv
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -25,14 +26,19 @@ def counts(prob, mask, t):
 
 
 @torch.inference_mode()
-def collect(checkpoint, image_dir, mask_dir, device, batch_size=8):
+def collect(checkpoint, image_dir, mask_dir, device, batch_size=8, limit=None):
     model, ckpt = load_model(checkpoint, device)
     cfg = ckpt["config"]
     ds = OilSpillDataset(image_dir, mask_dir, image_size=cfg["image_size"])
+    if limit:
+        ds.files = ds.files[:limit]  # quick test on the first N pairs only
     probs, masks = [], []
-    for x, y in DataLoader(ds, batch_size=batch_size, shuffle=False):
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=False)
+    for n, (x, y) in enumerate(loader, 1):
         probs.append(model(x.to(device)).sigmoid().cpu()[:, 0])
         masks.append(y[:, 0] >= 0.5)
+        if n % 10 == 0 or n == len(loader):
+            print(f"Processed {min(n * batch_size, len(ds))}/{len(ds)} images", flush=True)
     return ds, torch.cat(probs), torch.cat(masks), cfg["threshold"]
 
 
@@ -72,10 +78,13 @@ def main():
     ap.add_argument("--mask-dir", type=Path, default=Path("detection/masks/val"))
     ap.add_argument("--output-dir", type=Path, default=Path("outputs/report"))
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="Only use the first N pairs (for a quick test).")
     a = ap.parse_args()
+    torch.set_num_threads(max(1, (os.cpu_count() or 4) - 1))
     a.output_dir.mkdir(parents=True, exist_ok=True)
 
-    ds, probs, masks, thr = collect(a.checkpoint, a.image_dir, a.mask_dir, a.device)
+    ds, probs, masks, thr = collect(a.checkpoint, a.image_dir, a.mask_dir, a.device, limit=a.limit)
 
     # 1) Per-image CSV
     rows = []

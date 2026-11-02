@@ -83,7 +83,7 @@ unit tests passed, and the synthetic smoke test reduced BCE loss from 0.7084 to
 
 Per-image metrics, threshold sweep and ranked galleries:
 
-    python -m detection.report --checkpoint models/oil_unet/best.pth
+        python -m detection.report --checkpoint runs/unet_refined_sar/best.pth
 
 Optional: `--image-dir`, `--mask-dir`, `--output-dir`, and `--limit N` for a quick test.
 Outputs in `outputs/report/`: `summary.json`, `per_image_metrics.csv`,
