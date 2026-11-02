@@ -13,6 +13,8 @@ from optimization.scenario import (
     compute_travel_time_hours,
     create_constrained_triage_scenario,
     create_gulf_standard_scenario,
+    create_gulf_wide_scenario,
+    create_rak_standard_scenario,
     create_smoke_test_scenario,
     export_scenario_to_json,
     haversine_distance_km,
@@ -34,11 +36,16 @@ class TestOptimizationScenarios(unittest.TestCase):
         self.assertAlmostEqual(travel_time, 2.0, delta=1e-3)
 
     def test_scenario_generation_types(self):
-        vessels, targets = create_gulf_standard_scenario()
+        vessels, targets = create_rak_standard_scenario()
         self.assertIsInstance(vessels, tuple)
         self.assertIsInstance(targets, tuple)
         self.assertEqual(len(vessels), 3)
         self.assertEqual(len(targets), 10)
+
+        # Alias compatibility
+        v_alias, t_alias = create_gulf_standard_scenario()
+        self.assertEqual(vessels, v_alias)
+        self.assertEqual(targets, t_alias)
 
         for v in vessels:
             self.assertIsInstance(v, Vessel)
@@ -49,6 +56,11 @@ class TestOptimizationScenarios(unittest.TestCase):
         for t in targets:
             self.assertIsInstance(t, ResponseTarget)
             self.assertGreater(t.oil_volume_m3, 0)
+
+    def test_gulf_wide_scenario(self):
+        vessels, targets = create_gulf_wide_scenario()
+        self.assertEqual(len(vessels), 3)
+        self.assertEqual(len(targets), 4)
 
     def test_json_roundtrip(self):
         vessels, targets = create_smoke_test_scenario()
@@ -63,9 +75,9 @@ class TestOptimizationScenarios(unittest.TestCase):
 
     def test_matrices_generation(self):
         coords = [
-            GULF_DEPOTS["mina_zayed_abu_dhabi"],
+            GULF_DEPOTS["port_saqr_rak"],
+            GULF_DEPOTS["hamriyah_sharjah"],
             GULF_DEPOTS["jebel_ali_dubai"],
-            GULF_DEPOTS["ras_laffan_qatar"],
         ]
         dist_mat = build_distance_matrix(coords)
         self.assertEqual(len(dist_mat), 3)
