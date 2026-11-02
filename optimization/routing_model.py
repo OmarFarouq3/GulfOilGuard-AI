@@ -13,7 +13,8 @@ What the model aims for, most important first (weights in config.py):
   2. finish the whole response early (the time the LAST vessel is done)
   3. sail the fewest km
 
-NOT done yet: risk and deadlines (Phase 7), drift (Phase 8).
+NOT done here: risk and deadlines (Phase 7). Moving oil (drift) is handled AROUND this
+model, by re-planning in moving_targets.py: this model always sees fixed points.
 
 How the model is laid out (the "school bus" picture):
   nodes 0 .. V-1        the start position of each vessel (one bus, one start)

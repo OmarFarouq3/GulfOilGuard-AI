@@ -30,7 +30,7 @@ import os
 from functools import lru_cache
 from math import ceil, cos, pi, radians
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -364,6 +364,27 @@ class SeaGridDistance:
                 f"treated as {UNREACHABLE_KM:.0f} km, so the solver will avoid them"
             )
         return out
+
+    def distances_from(self, origin: GeoCoordinate) -> Callable[[GeoCoordinate], float]:
+        """km from `origin` to any point, after ONE shortest-path search (for moving targets).
+
+        Same rules as matrix_km (snap to water, same-cell shortcut, UNREACHABLE_KM), but it
+        does not touch `warnings`, so the plan's own warnings stay as the solver left them.
+        """
+        width = self.mask.land.shape[1]
+        row, col, extra, _ = self._place(origin, "origin")
+        start = row * width + col
+        paths = self._shortest([start])[0]
+
+        def to(point: GeoCoordinate) -> float:
+            r, c, moved, _ = self._place(point, "point")
+            node = r * width + c
+            if node == start:
+                return haversine_km(origin, point) if extra == 0.0 and moved == 0.0 else extra + moved
+            base = float(paths[node])
+            return base + extra + moved if np.isfinite(base) else UNREACHABLE_KM
+
+        return to
 
     def path(self, a: GeoCoordinate, b: GeoCoordinate) -> list[GeoCoordinate]:
         """The sea path from a to b as a list of points (for drawing a route on a map)."""

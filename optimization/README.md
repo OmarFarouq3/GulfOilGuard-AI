@@ -7,14 +7,22 @@ Optimizes vessel routes and resource allocation to respond to marine oil spills.
 ## 1. Modules & Architecture
 
 ```text
-Team B (OpenDrift) ───► trajectory_to_targets() ──┐
-                                                  ▼
-Scenarios & Fixtures (scenario.py) ──► Routing Model (OR-Tools) ──► Plan & Evaluator
-(Nihal: RAK Demo & Gulf Depots)        (Haris: Capacity, Shift)    (evaluate_routes.py)
-                                                  │                          │
-                                    Sea Grid Navigation (A*)                 ▼
-                                    (sea_grid.py: Water routing)    Dashboard Export (Streamlit)
+Team B (OpenDrift, Maqqavi)                 Scenarios & Fixtures (scenario.py, Nihal)
+outputs/drift/  ──► drift_targets.py              │  vessels (fleet)
+                    patches followed in time      │
+                           │                      ▼
+                           └──────► moving_targets.py ──► Routing Model (OR-Tools, Haris)
+                                    re-plan loop for      routing_model.py
+                                    MOVING oil + moving   capacity, shift, cleanup time
+                                    baseline                     │
+                                           │      Sea Grid Navigation (Dijkstra, sea_grid.py)
+                                           ▼
+                         evaluate_routes.py ──► dashboard_export.py ──► outputs/routing/ (Obeid)
 ```
+
+Two entry points: `run_demo.py` (a scenario file with fixed targets) and `run_drift_plan.py`
+(a drift forecast: the targets move with the oil). Section 3 lists exactly what each team
+must provide or can read.
 
 ### Module Breakdown:
 
@@ -34,8 +42,13 @@ Scenarios & Fixtures (scenario.py) ──► Routing Model (OR-Tools) ──► 
   * Google OR-Tools Vehicle Routing Problem (VRP) solver.
   * Enforces vessel capacity ($m^3$), maximum shift duration (`available_hours`), service/skimming time, and **open routes** (vessels finish at their last assigned target without returning to depot, matching the current problem formulation).
 
+* **`drift_targets.py`, `moving_targets.py`, `run_drift_plan.py` (Haris)**: planning for oil that drifts:
+  * `drift_targets.py` reads Maqqavi's `outputs/drift/` files, cuts the oil into patches when the vessels leave (the dispatch hour) and follows each patch through every later forecast step (`PatchTrack`).
+  * `moving_targets.py` sails each leg to where the patch **will be** when the vessel arrives (interception), wraps OR-Tools in a re-planning loop, and runs the baseline against the same moving oil.
+  * `run_drift_plan.py` is the one command for all of it; `drift_standin.py` writes a clearly synthetic stand-in forecast for testing.
+
 * **`sea_grid.py` & `sea_distance.py`**:
-  * A* shortest-path router on a water/land raster grid, guaranteeing vessels navigate around landmasses, islands, and peninsulas.
+  * Dijkstra shortest-path router on a water/land raster grid, guaranteeing vessels navigate around landmasses, islands, and peninsulas.
   * Defaults to straight-line Haversine distance when sea raster data is unavailable.
 
 * **`sea_check.py`**:
@@ -92,8 +105,153 @@ python -m optimization.run_demo --scenario optimization/fixtures/gulf_standard.j
 python -m optimization.sea_check --scenario optimization/fixtures/smoke_test.json
 ```
 
-### D. Run Unit Tests
+### D. Plan from a Drift Forecast: Moving Oil (Phase 6)
+
+```bash
+# Real OpenDrift output (once Maqqavi has written outputs/drift/, see section 3.1)
+python -m optimization.run_drift_plan --dispatch-hours 6
+
+# Until then: a SYNTHETIC stand-in at the agreed start point 25.85 N, 55.65 E (not a simulation result)
+python -m optimization.drift_standin
+python -m optimization.run_drift_plan --drift-dir optimization/examples/drift_standin
+```
+
+What happens, in order:
+1. **Patches at dispatch.** At `--dispatch-hours` (when the vessels leave port; default 6 h after the release, an ASSUMPTION in `config.py`), the oil is cut into patches: the drift module's `patch_id`, or ~3 km cells. The 15 largest become targets. Oil in the rest is reported as `untargeted_oil_m3`, never dropped silently.
+2. **Patches move.** Each patch is followed through every later forecast step (same `patch_id`, or the same particle ids): its place is the oil-weighted centre and its oil is the sum of its particles. Between steps it moves in a straight line.
+3. **Interception.** A vessel sails to where the patch **will be when it arrives**, not to where it is now. While it cleans, it drifts with the patch.
+4. **Re-planning.** OR-Tools only knows fixed points, so it plans to where each patch is at the guessed meeting time. The plan is then sailed against the moving oil, the guesses are updated, and it plans again until the solver aims within 2 km (about one sea-grid cell) of every real meeting place. At most 4 rounds; the best sailed round is kept. The kept plan always follows the rules **as sailed**.
+5. **Baseline.** Nearest **interception** first, against the same moving oil, distances and rules.
+
+Outputs in `outputs/routing/`: the usual three files (targets placed where each vessel meets its patch, with `meet_hours`), `comparison.json` and `baseline/`. See section 3.4.
+
+If the drift files carry neither `patch_id` nor particle ids, the patches cannot be followed and stay where they were at dispatch. The run then prints and records **STATIC**.
+
+### E. Run Unit Tests
 
 ```bash
 python3 -m unittest tests/test_scenario.py
+python -m pytest tests/test_optimization_phase1.py tests/test_optimization_phase2.py tests/test_optimization_phase3.py tests/test_optimization_phase4.py tests/test_optimization_phase5.py tests/test_optimization_phase6.py
 ```
+
+---
+
+## 3. Interfaces with Other Teams (contracts)
+
+This section is the source of truth for what the routing module **needs from** and **gives to** each team. It is written to be handed to a teammate or their coding agent as is. Paths are relative to the repository root. Coordinates are WGS84 degrees. Times are hours since the release, and timestamps are UTC with a `Z`. GeoJSON coordinates are `[longitude, latitude]`.
+
+Status today: the routing side is done and tested against a synthetic stand-in (`optimization/examples/drift_standin/`). It switches to the real drift output with no code change once 3.1 is delivered.
+
+### 3.1 Maqqavi: drift simulation (OpenDrift) → `outputs/drift/`
+
+Write the two files the dashboard already reads (`dashboard/README.md`, "Drift module"), **plus the routing fields marked below**. Extra properties are ignored by the dashboard, so they are safe to add.
+
+**Run settings agreed with the team** (check with Joud, `drift/DATA_SOURCES.md`):
+- release point **25.85 N, 55.65 E** (synthetic test point, not a detection result), Generic Medium Crude
+- release time inside Joud's data window (2026-10-19 00:00 to 2026-10-26 23:00 UTC)
+- duration at least **24 h**
+
+**`outputs/drift/drift.geojson`**: a `FeatureCollection`. Each feature is the oil at one output time: a `MultiPoint` of particles (recommended) or one `Point` per particle. `Polygon` envelopes may be added for the dashboard; routing ignores them.
+
+| Property | Needed by routing | Meaning |
+| --- | --- | --- |
+| `hours` | **required** | hours since release. **Output every 1 h** (OpenDrift `time_step_output` = 1 h) from 0 to 24 h. Any interval works, but between steps routing moves a patch in a straight line, so finer is better. 0, 6, 12 and 24 must be there for the dashboard. |
+| `timestamp` | recommended | UTC, e.g. `"2026-10-19T06:00:00Z"`; must equal release time + `hours` |
+| `particle_ids` (MultiPoint) / `particle_id` (Point) | **required for moving targets** (or `patch_id`) | the OpenDrift element number, **the same particle keeps the same id at every step**. One id per point, same order as the coordinates. |
+| `patch_id` | optional, replaces the ids above | if you group particles into patches yourself: the id of the patch these points belong to, **stable across steps** (patch `"A"` at 6 h is the same oil as patch `"A"` at 7 h). Routing then uses your patches as the targets. |
+| `status` | recommended | `"active"` = oil on the water. Anything else (`"stranded"`, `"evaporated"`, `"dispersed"` ...) is left out. One feature per status per step works well. Leaving non-active particles out of the file has the same effect. |
+| `oil_volume_m3` | recommended | oil the feature holds at that step, in m³ (OpenDrift oil mass / oil density). Carries evaporation and dispersion into the plan. A MultiPoint's volume is shared equally between its points. |
+| `kind` | optional | `"particles"` or `"envelope"` (dashboard) |
+| `synthetic` | **required while the start point is synthetic** | `true` |
+
+**`outputs/drift/meta.json`**:
+
+| Field | Needed by routing | Meaning |
+| --- | --- | --- |
+| `simulation_id` | recommended | used in the plan's `scenario_id` |
+| `start_time` | recommended | release time, UTC |
+| `release_volume_m3` | **required if features have no `oil_volume_m3`** | total oil released. Without it, routing uses a 300 m³ placeholder and says so in the plan. |
+| `n_particles` | recommended | particles released (for the per-particle share) |
+| `oil_type`, `model`, `wind_source`, `current_source` | optional | descriptive (dashboard) |
+| `synthetic` | **required** | `true` |
+
+Smallest valid example (two steps, two particles, one stranding):
+
+```json
+{"type": "FeatureCollection", "features": [
+  {"type": "Feature", "geometry": {"type": "MultiPoint", "coordinates": [[55.65, 25.85], [55.651, 25.851]]},
+   "properties": {"hours": 6, "timestamp": "2026-10-19T06:00:00Z", "kind": "particles", "status": "active",
+                  "particle_ids": [0, 1], "oil_volume_m3": 2.4, "synthetic": true}},
+  {"type": "Feature", "geometry": {"type": "MultiPoint", "coordinates": [[55.66, 25.84]]},
+   "properties": {"hours": 7, "timestamp": "2026-10-19T07:00:00Z", "kind": "particles", "status": "active",
+                  "particle_ids": [0], "oil_volume_m3": 1.1, "synthetic": true}},
+  {"type": "Feature", "geometry": {"type": "MultiPoint", "coordinates": [[55.70, 25.80]]},
+   "properties": {"hours": 7, "timestamp": "2026-10-19T07:00:00Z", "kind": "particles", "status": "stranded",
+                  "particle_ids": [1], "oil_volume_m3": 1.2, "synthetic": true}}
+]}
+```
+
+How to get these from OpenDrift (check the names against your OpenDrift version): for each output time, take the particles' `lon`, `lat`, `status` and oil mass. The particle index (the trajectory number) is the `particle_id`. OpenDrift status `0` means active; `o.status_categories` names the others. Volume = oil mass (kg) / oil density (kg/m³).
+
+**How to check your files work for routing:**
+```bash
+python -m optimization.run_drift_plan
+```
+The third line must say `followed by their particle ids` or `followed by the drift module's patch_id`. If it says `STATIC`, the ids are missing. The plan's `summary.json` message lists every assumption that had to be made, for example a missing `release_volume_m3`.
+
+### 3.2 Joud: environmental data
+
+Nothing extra is needed. Routing only relies on `drift/DATA_SOURCES.md` for the release point (25.85 N, 55.65 E) and the time window. Please tell Haris and Maqqavi if either changes.
+
+### 3.3 Nihal: fleet and scenarios
+
+`run_drift_plan.py` takes the **vessels** from a scenario file (`--fleet`, default `optimization/fixtures/gulf_standard.json`). Its `targets` are ignored, because the targets come from the drift. Each vessel needs:
+
+| Field | Unit | Note |
+| --- | --- | --- |
+| `vessel_id` | | unique |
+| `location` `{latitude, longitude}` | degrees | the port or staging point; a point on land is moved to the nearest water if that is within 15 km |
+| `speed_m_per_s` | m/s | transit speed |
+| `capacity_m3` | m³ | recovered-oil tank |
+| `available_hours` | h | shift, counted from dispatch: sailing + cleanup must fit |
+
+Keep `"synthetic"` absent or `true` for made-up fleets (the dashboard then labels the plan "Simulated scenario"). Open questions for Nihal: (a) the dispatch delay (now 6 h after release, `DriftTargetConfig.dispatch_hours` in `config.py`); (b) a real per-vessel skimming rate (now 30 m³/h for every vessel, `recovery_rate_m3_per_hour`).
+
+### 3.4 Obeid: dashboard ← `outputs/routing/`
+
+**Nothing is required**: the Respond page already works with these files (checked with `dashboard/services/routing_loader.py`, no warnings). The fields below are **optional upgrades** the dashboard can pick up.
+
+`targets.geojson`: each target is placed **where its vessel meets the patch** (unserved ones: where they were at dispatch).
+
+| Property | Meaning |
+| --- | --- |
+| `source_hours` | the drift step whose oil layer fits these targets best (the step nearest the average meeting time). Already read by the dashboard. |
+| `served_by` | vessel id, or `null` |
+| `meet_hours`, `meet_time` | when the vessel reaches the patch (hours since release; UTC). `null` if unserved. |
+| `drifted_km` | how far the patch moved between dispatch and that meeting |
+| `position_hours` | the time the point's position is for |
+
+`routes.geojson` (per vessel): `oil_collected_m3`, `cleanup_hours`, `finish_hours` (sailing + cleanup; **the response time is the largest `finish_hours`**, not the largest `estimated_travel_hours`), `sea_path` (`[[lon, lat], ...]` through water, for drawing around land).
+
+`summary.json`: `status`, `message` (every assumption in plain words), `synthetic`, `scenario_id`, `idle_vessel_ids`, `unserved_target_ids`, `source_hours`.
+
+`comparison.json`, for a "optimized vs nearest-first" panel:
+```text
+{ scenario_id, synthetic,
+  optimized: { status, message, assignments: {vessel_id: [target_id, ...]}, rule_violations: [] },
+  baseline:  { ...same... },
+  metrics: { optimized_/baseline_ + oil_recovered_m3, response_hours, targets_covered, distance_km,
+             travel_hours, longest_route_hours, distance_km_per_target;
+             *_change_percent; total_oil_m3; same_targets_covered } | null,
+  metrics_error (only when metrics is null),
+  drift: { simulation_id, follow, dispatch_hours, dispatch_time, forecast_steps_hours,
+           oil_afloat_at_dispatch_m3, targeted_oil_at_dispatch_m3, untargeted_oil_m3, assumptions },
+  replan_rounds, patch_drift_before_meeting_km: { optimized: {mean_km, max_km}, baseline: {...} } }
+```
+`drift`, `replan_rounds` and `patch_drift_before_meeting_km` appear only for drift runs (`run_drift_plan`).
+
+`baseline/`: the baseline plan as the same three files, for a toggle on the map.
+
+### 3.5 Maria: test scenarios
+
+Nothing needed. Scenario files in `tests/scenarios/` (flat `latitude`/`longitude`) already load with `run_demo`.

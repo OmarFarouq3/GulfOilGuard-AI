@@ -1,7 +1,8 @@
 """One-command demo: scenario file in, plan file out, with a baseline comparison.
 
 It also writes the dashboard files (outputs/routing/), so after this the dashboard's
-Respond page shows the plan. Run from the repository root:
+Respond page shows the plan, plus comparison.json and the baseline's files (baseline/).
+For targets made from a drift forecast, use run_drift_plan instead. Run from the repository root:
     python -m optimization.run_demo
     python -m optimization.run_demo --scenario optimization/examples/scenario_demo_hard.json
     python -m optimization.run_demo --scenario my.json --out plan.json --baseline-out baseline.json
@@ -15,7 +16,7 @@ from pathlib import Path
 from optimization.baseline import nearest_first_routes
 from optimization.checks import check_plan
 from optimization.config import DEFAULT_CONFIG
-from optimization.dashboard_export import DEFAULT_DIR, export_for_dashboard
+from optimization.dashboard_export import DEFAULT_DIR, export_comparison, export_for_dashboard
 from optimization.evaluate_routes import evaluate_routes, format_comparison
 from optimization.routing_model import solve_routes
 from optimization.scenario_io import load_scenario, save_plan, scenario_is_synthetic
@@ -24,7 +25,7 @@ from optimization.sea_distance import default_provider
 EXAMPLES = Path(__file__).parent / "examples"
 
 
-def _print_plan(title, plan, vessels, targets) -> None:
+def print_plan(title, plan, vessels, targets) -> None:
     print(f"\n{title}")
     print(f"  Status:  {plan.status}")
     print(f"  Message: {plan.message}")
@@ -55,8 +56,8 @@ def main() -> None:
     plan = solve_routes(vessels, targets, distance_provider=provider)
     baseline = nearest_first_routes(vessels, targets, distance_provider=provider)
 
-    _print_plan("OPTIMIZED PLAN (OR-Tools)", plan, vessels, targets)
-    _print_plan("BASELINE (nearest target first)", baseline, vessels, targets)
+    print_plan("OPTIMIZED PLAN (OR-Tools)", plan, vessels, targets)
+    print_plan("BASELINE (nearest target first)", baseline, vessels, targets)
 
     print("\nCOMPARISON")
     try:
@@ -76,6 +77,14 @@ def main() -> None:
         export_for_dashboard(
             plan, vessels, targets, args.dashboard_dir,
             scenario_id=scenario_id, synthetic=synthetic, distance_provider=provider,
+        )
+        export_for_dashboard(
+            baseline, vessels, targets, Path(args.dashboard_dir) / "baseline",
+            scenario_id=scenario_id, synthetic=synthetic, distance_provider=provider,
+        )
+        export_comparison(
+            plan, baseline, vessels, targets, args.dashboard_dir,
+            scenario_id=scenario_id, synthetic=synthetic,
         )
         label = " (labelled as a simulated scenario)" if synthetic else ""
         print(f"Wrote dashboard files to {args.dashboard_dir}{label}")

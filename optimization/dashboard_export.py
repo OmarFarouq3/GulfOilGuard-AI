@@ -19,6 +19,16 @@ does not know, so they are safe to add and ready for the dashboard to pick up:
                      The LineString itself is only the stops (the dashboard puts a stop
                      marker on every point of it).
   served_by          (targets) the vessel that serves the target, or null
+  source_hours       (targets, and summary) the drift forecast step whose oil layer fits
+                     these targets best. The dashboard already reads it.
+  meet_hours, ...    (targets) anything passed in `target_properties`, e.g. for moving oil
+                     the time the vessel meets the patch
+
+Next to them (the dashboard does not read these yet):
+  comparison.json    export_comparison: optimized vs baseline, metrics from evaluate_routes,
+                     each plan's assignments and rule check, plus any extra details (drift)
+  baseline/          the baseline plan as the same three files (export_for_dashboard into
+                     the sub-folder), ready for a toggle
 
 Old files are replaced (or removed) on every export, so the dashboard never mixes a new
 summary with old routes.
@@ -26,9 +36,12 @@ summary with old routes.
 
 import json
 import os
+from math import isnan
 from pathlib import Path
 
+from optimization.checks import check_plan
 from optimization.config import DEFAULT_CONFIG, REPO_ROOT, RoutingConfig
+from optimization.evaluate_routes import evaluate_routes
 from optimization.limits import service_hours
 from shared.schemas import GeoCoordinate, OptimizationOutput, ResponseTarget, Vessel
 
@@ -69,12 +82,17 @@ def export_for_dashboard(
     synthetic: bool = True,
     config: RoutingConfig = DEFAULT_CONFIG,
     distance_provider=None,
+    source_hours: float | None = None,
+    target_properties: dict[str, dict] | None = None,
 ) -> list[Path]:
     """Write routes.geojson, summary.json and targets.geojson. Returns the files written.
 
     `synthetic=True` makes the dashboard label the page "Simulated scenario". Keep it True
-    for every made-up scenario. Pass the plan's distance_provider to add sea paths.
+    for every made-up scenario. Pass the plan's distance_provider to add sea paths,
+    `source_hours` when the targets come from a drift forecast, and `target_properties`
+    ({target_id: {name: value}}) for extra per-target fields.
     """
+    target_properties = target_properties or {}
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     vessels_by_id = {v.vessel_id: v for v in vessels}
@@ -123,16 +141,20 @@ def export_for_dashboard(
         routes_file.unlink(missing_ok=True)  # an empty collection shows as a broken file
 
     summary_file = out / "summary.json"
-    _write_json(summary_file, {
+    summary = {
         "status": plan.status,
         "message": plan.message,
         "synthetic": synthetic,
         "scenario_id": scenario_id,  # extension
         "idle_vessel_ids": idle,  # extension
         "unserved_target_ids": [t.target_id for t in targets if t.target_id not in served_by],  # extension
-    })
+    }
+    if source_hours is not None:
+        summary["source_hours"] = source_hours  # extension
+    _write_json(summary_file, summary)
     written.append(summary_file)
 
+    extra = {} if source_hours is None else {"source_hours": source_hours}
     targets_file = out / "targets.geojson"
     if targets:
         _write_json(targets_file, {
@@ -145,6 +167,8 @@ def export_for_dashboard(
                         "target_id": t.target_id,
                         "oil_volume_m3": t.oil_volume_m3,
                         "served_by": served_by.get(t.target_id),
+                        **extra,
+                        **target_properties.get(t.target_id, {}),
                     },
                 }
                 for t in targets
@@ -154,3 +178,54 @@ def export_for_dashboard(
     else:
         targets_file.unlink(missing_ok=True)
     return written
+
+
+def _plan_record(plan: OptimizationOutput, vessels, targets, config) -> dict:
+    return {
+        "status": plan.status,
+        "message": plan.message,
+        "assignments": {r.vessel_id: list(r.assigned_target_ids) for r in plan.routes},
+        "rule_violations": check_plan(plan, vessels, targets, config),
+    }
+
+
+def export_comparison(
+    plan: OptimizationOutput,
+    baseline: OptimizationOutput,
+    vessels: tuple[Vessel, ...],
+    targets: tuple[ResponseTarget, ...],
+    out_dir: str | Path = DEFAULT_DIR,
+    *,
+    scenario_id: str | None = None,
+    synthetic: bool = True,
+    config: RoutingConfig = DEFAULT_CONFIG,
+    baseline_targets: tuple[ResponseTarget, ...] | None = None,
+    details: dict | None = None,
+) -> Path:
+    """Write comparison.json and return its path.
+
+    Both plans must come from the same vessels, oil and distance provider (see
+    evaluate_routes.py). When the oil moves, pass each plan's own targets as met
+    (`baseline_targets` for the baseline). `details` is added as is, e.g. the drift.
+    Write the baseline's own map files with export_for_dashboard(..., out_dir / "baseline").
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    baseline_targets = baseline_targets or targets
+    content = {
+        "scenario_id": scenario_id,
+        "synthetic": synthetic,
+        "optimized": _plan_record(plan, vessels, targets, config),
+        "baseline": _plan_record(baseline, vessels, baseline_targets, config),
+    }
+    try:
+        metrics = evaluate_routes(plan, baseline, targets, config, baseline_targets=baseline_targets)
+        # JSON has no NaN (distance per target when a plan covers nothing)
+        content["metrics"] = {k: None if isnan(v) else v for k, v in metrics.items()}
+    except ValueError as exc:  # one plan failed: say why instead of leaving old numbers
+        content["metrics"] = None
+        content["metrics_error"] = str(exc)
+    content |= details or {}
+    comparison_file = out / "comparison.json"
+    _write_json(comparison_file, content)
+    return comparison_file

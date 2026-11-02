@@ -67,6 +67,7 @@ def evaluate_routes(
     baseline: OptimizationOutput,
     targets: tuple[ResponseTarget, ...] | None = None,
     config: RoutingConfig = DEFAULT_CONFIG,
+    baseline_targets: tuple[ResponseTarget, ...] | None = None,
 ) -> dict[str, float]:
     """Compare distance (km), travel time (hours), and target coverage.
 
@@ -75,6 +76,9 @@ def evaluate_routes(
     `distance_km_per_target` is nan when a plan covers no target.
     With `targets`, also oil recovered (m3) and response time (hours until the last
     vessel finishes, cleanup included).
+    When the oil moves, each plan meets the patches at other times, so with other amounts
+    of oil: pass each plan's own targets (`targets` for the optimized plan,
+    `baseline_targets` for the baseline). `total_oil_m3` is then counted from `targets`.
     Raises ValueError if either plan did not produce a usable result.
     """
     opt = _summarize("optimized", optimized)
@@ -86,7 +90,7 @@ def evaluate_routes(
     extra: dict[str, float] = {}
     if targets is not None:
         opt_oil, opt_response = _oil_and_response(optimized, targets, config)
-        base_oil, base_response = _oil_and_response(baseline, targets, config)
+        base_oil, base_response = _oil_and_response(baseline, baseline_targets or targets, config)
         extra = {
             "total_oil_m3": float(sum(t.oil_volume_m3 for t in targets)),
             "optimized_oil_recovered_m3": opt_oil,
