@@ -11,7 +11,7 @@ and `warnings`, so the solver does not care which one it gets.
 """
 
 from math import asin, cos, radians, sin, sqrt
-from typing import Protocol, Sequence
+from typing import Callable, Protocol, Sequence
 
 from optimization.config import RoutingConfig
 from shared.schemas import GeoCoordinate
@@ -49,6 +49,19 @@ class StraightLineDistance:
         self, points: Sequence[GeoCoordinate], labels: Sequence[str] | None = None
     ) -> list[list[float]]:
         return [[haversine_km(a, b) for b in points] for a in points]
+
+    def distances_from(self, origin: GeoCoordinate) -> Callable[[GeoCoordinate], float]:
+        return lambda point: haversine_km(origin, point)
+
+
+def distances_from(provider: DistanceProvider, origin: GeoCoordinate) -> Callable[[GeoCoordinate], float]:
+    """km from `origin` to any point. Used when targets move, so the points are not known up front.
+
+    Uses the provider's fast version when it has one, otherwise one matrix_km call per point.
+    """
+    if hasattr(provider, "distances_from"):
+        return provider.distances_from(origin)
+    return lambda point: provider.matrix_km([origin, point])[0][1]
 
 
 def default_provider(config: RoutingConfig) -> DistanceProvider:

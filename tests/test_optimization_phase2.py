@@ -179,17 +179,17 @@ def test_solver_uses_sea_distance_around_an_island():
     pytest.importorskip("ortools")
     from optimization.routing_model import solve_routes
 
-    vessel = Vessel("V1", point(0.5, 0.2), 5.0, 200.0, 12.0)
+    vessel = Vessel("V1", point(0.5, 0.2), 5.0, 200.0, 20.0)  # hours for around the wall and back
     target = ResponseTarget("T1", point(0.5, 0.8), 100.0)
     straight = haversine_km(vessel.location, target.location)
 
     plan = solve_routes((vessel,), (target,), distance_provider=sea_with_wall())
     assert plan.status == "feasible", plan.message
-    assert plan.routes[0].estimated_distance_km > 1.4 * straight
+    assert plan.routes[0].estimated_distance_km > 1.4 * 2 * straight  # there and back
     assert "sea-grid" in plan.message
 
     flat = solve_routes((vessel,), (target,), distance_provider=StraightLineDistance())
-    assert flat.routes[0].estimated_distance_km == pytest.approx(straight, rel=1e-6)
+    assert flat.routes[0].estimated_distance_km == pytest.approx(2 * straight, rel=1e-6)
 
 
 def test_solver_reports_a_point_that_is_outside_the_region():

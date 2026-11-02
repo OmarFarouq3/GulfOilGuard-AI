@@ -106,11 +106,18 @@ def test_cleanup_time_counts_against_available_hours():
 
 
 def test_sailing_time_counts_against_available_hours():
-    far = target(lat=26.8, lon=54.0, volume=30.0)  # about 150 km away: 8+ h of sailing at 18 km/h
+    far = target(lat=26.8, lon=54.0, volume=30.0)  # about 185 km away: 10+ h of sailing at 18 km/h
     plan = optimize([vessel(hours=6.0)], [far])
     assert not plan.routes[0].assigned_target_ids
-    plan = optimize([vessel(hours=12.0)], [far])
+    plan = optimize([vessel(hours=24.0)], [far])  # there, 1 h of cleanup, and back
     assert plan.routes[0].assigned_target_ids == ("T1",)
+
+
+def test_the_trip_back_to_port_counts_against_available_hours():
+    far = target(lat=26.8, lon=54.0, volume=30.0)  # 10+ h out, 1 h of cleanup, 10+ h back
+    plan = optimize([vessel(hours=12.0)], [far])  # enough to get there and clean, not to get back
+    assert not plan.routes[0].assigned_target_ids
+    assert "sail back to port" in plan.message
 
 
 def test_hours_allow_only_one_of_two_targets():

@@ -3,23 +3,25 @@
 What the model enforces now:
   - vessel capacity (a vessel never takes more oil than its tank)
   - working hours (sailing + cleanup time must fit inside `available_hours`)
-  - open routes (the schema has no end port, so vessels do not come back)
+  - every vessel sails back to the port it started from (the schema has no home port,
+    so its start position is taken as its port). The trip back counts for the hours
+  - one trip per vessel: a vessel fills its tank once, it does not unload and go again
   - skipping: any target may be left out, but at a very high cost
   - distances through navigable water when the land file exists (otherwise straight
     lines, and the plan's `message` says so)
 
 What the model aims for, most important first (weights in config.py):
   1. recover the most oil (skipping a target costs more the more oil it holds)
-  2. finish the whole response early (the time the LAST vessel is done)
+  2. finish the whole response early (the time the LAST vessel is back in port)
   3. sail the fewest km
 
-NOT done yet: risk and deadlines (Phase 7), drift (Phase 8).
+NOT done here: risk and deadlines (Phase 7). Moving oil (drift) is handled AROUND this
+model, by re-planning in moving_targets.py: this model always sees fixed points.
 
 How the model is laid out (the "school bus" picture):
-  nodes 0 .. V-1        the start position of each vessel (one bus, one start)
+  nodes 0 .. V-1        the start position of each vessel (one bus, one start). It is
+                        also where that vessel ends: the bus goes back to its own garage
   nodes V .. V+T-1      the oil targets (the students waiting)
-  node  V+T             a fake "end" node, 0 km from everything, so a vessel
-                        does not have to come back (the schema has no end port)
 """
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
@@ -35,6 +37,10 @@ from shared.schemas import (
     Vessel,
     VesselRoute,
 )
+
+# ASSUMPTION approved by the team lead: the schema has no home port, so each vessel is
+# taken back to where it started. Every plan says so in its message.
+RETURN_NOTE = "every vessel sails back to the port it started from (assumed home port), one trip each"
 
 
 def solve_routes(
@@ -70,17 +76,12 @@ def _solve(
     n_vessels = len(vessels)
     points = [v.location for v in vessels] + [t.location for t in targets]
     labels = [v.vessel_id for v in vessels] + [t.target_id for t in targets]
-    n_real = len(points)
-    end_node = n_real
-    n_nodes = n_real + 1
+    n_nodes = len(points)
 
     km = provider.matrix_km(points, labels)
 
-    # Whole-number distance table in metres. The fake end node is 0 away from all.
-    dist_m = [[0] * n_nodes for _ in range(n_nodes)]
-    for i in range(n_real):
-        for j in range(n_real):
-            dist_m[i][j] = km_to_metres(km[i][j])
+    # Whole-number distance table in metres.
+    dist_m = [[km_to_metres(km[i][j]) for j in range(n_nodes)] for i in range(n_nodes)]
 
     demand = [0] * n_nodes
     cleanup_min = [0] * n_nodes
@@ -89,9 +90,8 @@ def _solve(
         cleanup_min[n_vessels + t_idx] = service_minutes(target.oil_volume_m3, config)
     capacities = [volume_to_units(v.capacity_m3, config.volume_scale) for v in vessels]
 
-    manager = pywrapcp.RoutingIndexManager(
-        n_nodes, n_vessels, list(range(n_vessels)), [end_node] * n_vessels
-    )
+    ports = list(range(n_vessels))  # each vessel starts and ends at its own node
+    manager = pywrapcp.RoutingIndexManager(n_nodes, n_vessels, ports, ports)
     routing = pywrapcp.RoutingModel(manager)
 
     # --- cost: total distance sailed ---
@@ -112,13 +112,7 @@ def _solve(
     # time callback: minutes to sail the leg, plus minutes to clean the place it leaves.
     def make_time_callback(v_idx: int):
         speed = vessels[v_idx].speed_m_per_s
-        minutes = [
-            [
-                leg_minutes(km[i][j], speed) if i < n_real and j < n_real else 0
-                for j in range(n_nodes)
-            ]
-            for i in range(n_nodes)
-        ]
+        minutes = [[leg_minutes(km[i][j], speed) for j in range(n_nodes)] for i in range(n_nodes)]
 
         def time_callback(from_index: int, to_index: int) -> int:
             a = manager.IndexToNode(from_index)
@@ -131,7 +125,7 @@ def _solve(
     hour_limits = [minutes_down(v.available_hours) for v in vessels]
     routing.AddDimensionWithVehicleTransitAndCapacity(time_indices, 0, hour_limits, True, "Time")
 
-    # --- goal 2: finish early. The "span" is the time the last vessel is done. The cost is
+    # --- goal 2: finish early. The "span" is the time the last vessel is back. The cost is
     # in metres (like the distance), so km per hour becomes metres per minute.
     routing.GetDimensionOrDie("Time").SetGlobalSpanCostCoefficient(
         round(config.response_hour_cost_km * 1000 / 60)
@@ -161,12 +155,12 @@ def _solve(
         index = routing.Start(v_idx)
         while not routing.IsEnd(index):
             node = manager.IndexToNode(index)
-            if node >= n_vessels:  # starts are below V, the fake end is never visited here
+            if node >= n_vessels:  # the vessel's own port node is below V
                 stops.append(node - n_vessels)
             index = solution.Value(routing.NextVar(index))
 
         served.update(stops)
-        path = [v_idx] + [n_vessels + s for s in stops]
+        path = [v_idx] + [n_vessels + s for s in stops] + ([v_idx] if stops else [])
         distance_km = sum(km[a][b] for a, b in zip(path, path[1:]))
         routes.append(
             VesselRoute(
@@ -174,8 +168,8 @@ def _solve(
                 assigned_target_ids=tuple(targets[s].target_id for s in stops),
                 coordinates=tuple(points[n] for n in path),
                 estimated_distance_km=distance_km,
-                # sailing time only. Cleanup time is counted against available_hours
-                # but is not part of this number.
+                # sailing time only, the trip back to port included. Cleanup time is
+                # counted against available_hours but is not part of this number.
                 estimated_travel_hours=travel_hours(distance_km, vessel.speed_m_per_s),
             )
         )
@@ -188,6 +182,7 @@ def _solve(
     notes = [
         provider.description,
         *provider.warnings,
+        RETURN_NOTE,
         f"cleanup rate {config.recovery_rate_m3_per_hour:g} m3/h (assumed)",
         f"unserved: {', '.join(unserved) if unserved else 'none'}",
     ]
