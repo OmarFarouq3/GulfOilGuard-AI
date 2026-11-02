@@ -1,6 +1,7 @@
 # Team B – Environmental data sources
 
-Downloaded by Joud. Data files are stored locally (not in Git).
+Downloaded by Joud, 1 Nov 2026. Raw files are stored locally in data/raw/ and
+clean OpenDrift-ready files are written to data/processed/ (neither is in Git).
 
 ## Region and time
 - Area (WGS84): North 27.0, South 24.75, West 55.0, East 57.0 (northern UAE coast)
