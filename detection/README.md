@@ -77,3 +77,15 @@ oil-spill accuracy still requires evaluation on held-out satellite data.
 Verified locally on Windows with Python 3.10.0 and PyTorch 2.14.1+cpu: all six
 unit tests passed, and the synthetic smoke test reduced BCE loss from 0.7084 to
 0.0205 in 60 steps. Results can vary across platforms and PyTorch versions.
+
+
+## Evaluation report
+
+Per-image metrics, threshold sweep and ranked galleries:
+
+        python -m detection.report --checkpoint runs/unet_refined_sar/best.pth
+
+Optional: `--image-dir`, `--mask-dir`, `--output-dir`, and `--limit N` for a quick test.
+Outputs in `outputs/report/`: `summary.json`, `per_image_metrics.csv`,
+`gallery_worst.png`, `gallery_median.png`, `gallery_best.png`.
+Gallery colors: green = true positive, red = false positive, blue = false negative.
