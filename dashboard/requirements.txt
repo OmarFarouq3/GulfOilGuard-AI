@@ -1,0 +1,10 @@
+# Dashboard-only dependencies. Deliberately excludes torch, opendrift and ortools:
+# the dashboard only reads result files written by the detection, drift and routing modules.
+streamlit>=1.66  # top-bar layout, keyed popover, segmented_control(required=)
+folium>=0.17
+streamlit-folium>=0.22
+plotly>=5.22
+pandas>=2.2
+numpy>=1.26
+pillow>=10.3
+pyyaml>=6.0
