@@ -208,6 +208,7 @@ def test_a_real_solver_plan_exports_cleanly(tmp_path):
     assert sorted(served + unserved) == sorted(t.target_id for t in targets)
     for f in features:
         props = f["properties"]
-        assert len(f["geometry"]["coordinates"]) == 1 + len(props["assigned_target_ids"])
+        line = f["geometry"]["coordinates"]
+        assert len(line) == 2 + len(props["assigned_target_ids"]) and line[-1] == line[0]  # back to port
         assert props["oil_collected_m3"] <= props["capacity_m3"]
         assert props["finish_hours"] <= props["available_hours"] + 1e-6

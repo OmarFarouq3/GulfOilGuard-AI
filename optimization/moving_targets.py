@@ -23,7 +23,8 @@ The baseline gets the same moving oil: "nearest target first" where nearest mean
 shortest interception trip from where the vessel is now (nearest_first_moving).
 
 While a vessel cleans a patch it drifts with it, so its next leg starts from where the
-patch is when cleaning ends.
+patch is when cleaning ends. After its last patch every vessel sails back to the port it
+started from, and a patch is only taken if the hours still cover that trip back.
 
 Honest limits:
   - between forecast steps a patch moves in a straight line (hourly steps are best)
@@ -38,7 +39,7 @@ from optimization.checks import early_result
 from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, DriftTargetConfig, RoutingConfig
 from optimization.drift_targets import PatchTrack
 from optimization.limits import leg_minutes, minutes_down, service_hours, service_minutes
-from optimization.routing_model import solve_routes
+from optimization.routing_model import RETURN_NOTE, solve_routes
 from optimization.sea_distance import DistanceProvider, distances_from, haversine_km
 from optimization.units import travel_hours
 from shared.schemas import OptimizationOutput, ResponseTarget, Vessel, VesselRoute
@@ -63,6 +64,7 @@ class MovingPlan:
     meet_hours: dict[str, float]  # target_id -> meeting time, for the served targets
     moved_km: dict[str, float]  # how far each served patch drifted from dispatch to its meeting
     rounds: int = 1
+    last_cleanup_hours: float | None = None  # hours since release when the last patch is cleaned
 
 
 def mean_or_zero(values) -> float:
@@ -86,8 +88,10 @@ def _intercept(distance_to, track: PatchTrack, depart_hours: float, speed_m_per_
 class _Voyage:
     """One vessel sailing in time: where it is, what time it is, what tank and hours are left."""
 
-    def __init__(self, vessel: Vessel, dispatch_hours: float) -> None:
+    def __init__(self, vessel: Vessel, dispatch_hours: float, provider: DistanceProvider) -> None:
         self.vessel = vessel
+        # km from the port, which is also the km back to it (sea distances are symmetric)
+        self.port_km = distances_from(provider, vessel.location)
         self.here = vessel.location
         self.clock = dispatch_hours
         self.tank = vessel.capacity_m3
@@ -95,14 +99,18 @@ class _Voyage:
         self.stops: list[Stop] = []
 
     def reach(self, track: PatchTrack, distance_to, config: RoutingConfig, gone_below_m3: float):
-        """(the stop, None) if this vessel can still catch, hold and clean the patch; else (None, why)."""
-        meet, target, km = _intercept(distance_to, track, self.clock, self.vessel.speed_m_per_s)
+        """(the stop, None) if this vessel can still catch, hold and clean the patch, and then get
+        back to port in its hours; else (None, why)."""
+        speed = self.vessel.speed_m_per_s
+        meet, target, km = _intercept(distance_to, track, self.clock, speed)
         if target.oil_volume_m3 < gone_below_m3:
             return None, "the oil is gone (stranded or weathered) by the time a vessel gets there"
         if target.oil_volume_m3 > self.tank + 1e-9:
             return None, "not enough room left in the tank"
-        if leg_minutes(km, self.vessel.speed_m_per_s) + service_minutes(target.oil_volume_m3, config) > self.minutes_left:
-            return None, "not enough working hours left to reach and clean it"
+        done = track.target_at(meet + service_hours(target.oil_volume_m3, config)).location
+        needed = leg_minutes(km, speed) + service_minutes(target.oil_volume_m3, config) + leg_minutes(self.port_km(done), speed)
+        if needed > self.minutes_left:
+            return None, "not enough working hours left to reach it, clean it and sail back to port"
         return Stop(track.target_id, meet, target, km), None
 
     def take(self, stop: Stop, track: PatchTrack, config: RoutingConfig) -> None:
@@ -113,12 +121,22 @@ class _Voyage:
         self.clock = stop.meet_hours + service_hours(volume, config)
         self.here = track.target_at(self.clock).location  # it drifted with the oil while cleaning
 
+    @property
+    def return_km(self) -> float:
+        return self.port_km(self.here) if self.stops else 0.0
+
+    @property
+    def back_hours(self) -> float:
+        """Hours since release when the vessel is back in port."""
+        return self.clock + travel_hours(self.return_km, self.vessel.speed_m_per_s)
+
     def route(self) -> VesselRoute:
-        distance_km = sum(s.leg_km for s in self.stops)
+        distance_km = sum(s.leg_km for s in self.stops) + self.return_km
+        port = (self.vessel.location,) if self.stops else ()
         return VesselRoute(
             vessel_id=self.vessel.vessel_id,
             assigned_target_ids=tuple(s.target_id for s in self.stops),
-            coordinates=(self.vessel.location, *(s.target.location for s in self.stops)),
+            coordinates=(self.vessel.location, *(s.target.location for s in self.stops), *port),
             estimated_distance_km=distance_km,
             estimated_travel_hours=travel_hours(distance_km, self.vessel.speed_m_per_s),
         )
@@ -128,7 +146,7 @@ def _unserved_reason(track, vessels, dispatch_hours, provider, config, drift_con
     """Why nobody serves this patch: could even a fresh vessel, straight from port, do it?"""
     reasons = []
     for vessel in vessels:
-        voyage = _Voyage(vessel, dispatch_hours)
+        voyage = _Voyage(vessel, dispatch_hours, provider)
         stop, why = voyage.reach(track, distances_from(provider, vessel.location), config, drift_config.gone_below_m3)
         if stop is not None:
             return "vessels were full or out of hours after serving other targets"
@@ -160,6 +178,7 @@ def _finish(
         message.append(f"{len(late)} meeting(s) after the last forecast step ({last_step:g} h); "
                        "those patches were held at their last forecast place")
     message += [
+        RETURN_NOTE,
         f"cleanup rate {config.recovery_rate_m3_per_hour:g} m3/h (assumed)",
         "unserved: " + (", ".join(
             f"{t.target_id} ({_unserved_reason(t, vessels, dispatch_hours, provider, config, drift_config)})"
@@ -174,6 +193,7 @@ def _finish(
         meet_hours={i: s.meet_hours for i, s in met.items()},
         moved_km={i: haversine_km(by_id[i].target_at(dispatch_hours).location, s.target.location) for i, s in met.items()},
         rounds=rounds,
+        last_cleanup_hours=max((v.clock for v in voyages if v.stops), default=None),
     )
 
 
@@ -195,7 +215,7 @@ def sail(
     order = {r.vessel_id: r.assigned_target_ids for r in plan.routes}
     voyages = []
     for vessel in vessels:
-        voyage = _Voyage(vessel, dispatch_hours)
+        voyage = _Voyage(vessel, dispatch_hours, provider)
         for target_id in order.get(vessel.vessel_id, ()):
             track = by_id[target_id]
             stop, _ = voyage.reach(track, distances_from(provider, voyage.here), config, drift_config.gone_below_m3)
@@ -225,10 +245,10 @@ def solve_moving(
 
 
 def _score(voyages: list["_Voyage"], dispatch_hours: float) -> tuple[float, float, float]:
-    """The solver's goals, in order: most oil, then the earliest finish, then the fewest km."""
+    """The solver's goals, in order: most oil, then everyone back in port earliest, then the fewest km."""
     oil = sum(s.target.oil_volume_m3 for v in voyages for s in v.stops)
-    finish = max((v.clock - dispatch_hours for v in voyages if v.stops), default=0.0)
-    km = sum(s.leg_km for v in voyages for s in v.stops)
+    finish = max((v.back_hours - dispatch_hours for v in voyages if v.stops), default=0.0)
+    km = sum(s.leg_km for v in voyages for s in v.stops) + sum(v.return_km for v in voyages)
     return -round(oil, 3), round(finish, 3), round(km, 3)
 
 
@@ -298,7 +318,7 @@ def _nearest_first_moving(vessels, tracks, dispatch_hours, provider, config, dri
         [v.vessel_id for v in vessels] + [t.target_id for t in tracks],
     )
     warnings = list(provider.warnings)
-    voyages = [_Voyage(v, dispatch_hours) for v in vessels]
+    voyages = [_Voyage(v, dispatch_hours, provider) for v in vessels]
     open_tracks = list(tracks)
     while open_tracks:
         best = None  # (trip km, vessel number, track number, stop)

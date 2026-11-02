@@ -118,8 +118,8 @@ def test_one_vessel_one_target():
     assert plan.status == "feasible", plan.message
     route = plan.routes[0]
     assert route.assigned_target_ids == ("T1",)
-    assert len(route.coordinates) == 2
-    expected_km = haversine_km(vessel().location, target().location)
+    assert route.coordinates == (vessel().location, target().location, vessel().location)  # back to port
+    expected_km = 2 * haversine_km(vessel().location, target().location)
     assert route.estimated_distance_km == pytest.approx(expected_km, rel=1e-6)
     assert route.estimated_travel_hours == pytest.approx(expected_km / 18.0, rel=1e-6)
 
@@ -144,7 +144,8 @@ def test_capacity_is_respected_and_extra_target_is_reported():
 
 
 def test_two_vessels_split_two_big_targets():
-    vessels = [vessel("V1", capacity=200.0), vessel("V2", lat=25.9, lon=54.2, capacity=200.0)]
+    # 14 h: V1 needs about 3.7 h out, 5 h of cleanup and 3.7 h back to port
+    vessels = [vessel("V1", capacity=200.0, hours=14.0), vessel("V2", lat=25.9, lon=54.2, capacity=200.0, hours=14.0)]
     targets = [target("T1", volume=150.0), target("T2", lat=26.0, lon=54.0, volume=150.0)]
     plan = optimize(vessels, targets)
     served = sorted(t for r in plan.routes for t in r.assigned_target_ids)

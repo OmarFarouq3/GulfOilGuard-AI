@@ -133,6 +133,13 @@ def main() -> None:
               f"{metrics['baseline_oil_recovered_m3'] / patches.oil_afloat_m3:.0%}")
     except ValueError as exc:
         print(f"  {exc}")
+    cleaned = {
+        name: None if r.last_cleanup_hours is None else round(r.last_cleanup_hours - dispatch, 2)
+        for name, r in (("optimized", optimized), ("baseline", baseline))
+    }
+    if None not in cleaned.values():
+        print(f"  Last patch cleaned {cleaned['optimized']:.2f} h after dispatch (baseline "
+              f"{cleaned['baseline']:.2f} h); the response time above adds the trip back to port.")
     moved = _moved_summary(optimized)
     print(f"  Patches drifted {moved['mean_km']:.1f} km on average (max {moved['max_km']:.1f} km) between "
           "dispatch and the vessel reaching them: how far off a plan with frozen oil would aim.")
@@ -154,6 +161,7 @@ def main() -> None:
         },
         "fleet": fleet_id,
         "replan_rounds": optimized.rounds,
+        "last_patch_cleaned_hours_after_dispatch": cleaned,
         "patch_drift_before_meeting_km": {"optimized": moved, "baseline": _moved_summary(baseline)},
     }
     out = Path(args.dashboard_dir)

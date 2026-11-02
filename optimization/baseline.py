@@ -3,7 +3,8 @@
 Rules of the baseline, in plain words:
   Look at every vessel and every target that is still open. Pick the pair with the
   shortest trip from where that vessel is now. Send the vessel there. Repeat until
-  no vessel can take another target.
+  no vessel can take another target. Then every vessel sails back to its port; a
+  target is only taken if there are still hours left to get back after it.
 
 It follows EXACTLY the same rules as our plan (same distances, tank size, speed,
 working hours and cleanup time), so the comparison is fair. It returns the same
@@ -13,6 +14,7 @@ OptimizationOutput type, so the same checks and the same dashboard code work on 
 from optimization.checks import early_result
 from optimization.config import DEFAULT_CONFIG, RoutingConfig
 from optimization.limits import leg_minutes, minutes_down, service_minutes, unserved_reason
+from optimization.routing_model import RETURN_NOTE
 from optimization.sea_distance import DistanceProvider, default_provider
 from optimization.units import travel_hours
 from shared.schemas import OptimizationOutput, ResponseTarget, Vessel, VesselRoute
@@ -65,7 +67,8 @@ def _plan(
                 volume = targets[t].oil_volume_m3
                 trip_km = km[where[v]][n_vessels + t]
                 needed = leg_minutes(trip_km, vessel.speed_m_per_s) + service_minutes(volume, config)
-                if volume <= tank_left[v] + 1e-9 and needed <= minutes_left[v]:
+                home = leg_minutes(km[n_vessels + t][v], vessel.speed_m_per_s)  # and back to port after it
+                if volume <= tank_left[v] + 1e-9 and needed + home <= minutes_left[v]:
                     if best is None or (trip_km, v, t) < best[:3]:
                         best = (trip_km, v, t, needed)
         if best is None:
@@ -79,12 +82,12 @@ def _plan(
 
     routes = []
     for v, vessel in enumerate(vessels):
-        path = paths[v]
+        path = paths[v] + ([v] if len(paths[v]) > 1 else [])  # back to port
         distance_km = sum(km[a][b] for a, b in zip(path, path[1:]))
         routes.append(
             VesselRoute(
                 vessel_id=vessel.vessel_id,
-                assigned_target_ids=tuple(targets[n - n_vessels].target_id for n in path[1:]),
+                assigned_target_ids=tuple(targets[n - n_vessels].target_id for n in paths[v][1:]),
                 coordinates=tuple(points[n] for n in path),
                 estimated_distance_km=distance_km,
                 estimated_travel_hours=travel_hours(distance_km, vessel.speed_m_per_s),
@@ -99,6 +102,7 @@ def _plan(
         "baseline: nearest target first",
         provider.description,
         *provider.warnings,
+        RETURN_NOTE,
         f"cleanup rate {config.recovery_rate_m3_per_hour:g} m3/h (assumed)",
         f"unserved: {', '.join(unserved) if unserved else 'none'}",
     ]

@@ -4,7 +4,8 @@ The file layout is the one in dashboard/README.md ("Routing module"), so the Res
 fills in with no change on the dashboard side:
 
   routes.geojson   one LineString per vessel that has work: its start, then its stops in
-                   visiting order (VesselRoute.coordinates). Idle vessels are left out, so
+                   visiting order, then its start again: the vessel sails back to the port it
+                   started from (VesselRoute.coordinates). Idle vessels are left out, so
                    the dashboard's "Vessels deployed" tile counts only working vessels.
   summary.json     OptimizationOutput without its routes: status and message.
   targets.geojson  one Point per ResponseTarget.
@@ -13,8 +14,9 @@ Fields marked "extension" are not in shared/schemas.py. The dashboard ignores th
 does not know, so they are safe to add and ready for the dashboard to pick up:
   oil_collected_m3   (the dashboard already reads this one) oil the vessel recovers
   cleanup_hours      hours spent cleaning, at the assumed rate in config.py
-  finish_hours       sailing + cleanup: when this vessel is done. estimated_travel_hours is
-                     sailing only, so "response time" should be the largest finish_hours
+  finish_hours       sailing + cleanup: when this vessel is back in port. estimated_travel_hours
+                     is sailing only (the trip back included), so "response time" should be
+                     the largest finish_hours
   sea_path           [[lon, lat], ...] through water, for drawing the route around land.
                      The LineString itself is only the stops (the dashboard puts a stop
                      marker on every point of it).

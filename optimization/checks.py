@@ -101,7 +101,8 @@ def check_plan(
     """Return a list of rule violations in a plan. An empty list means it is valid.
 
     Checks: known ids, no target served twice, capacity, working hours (sailing plus
-    cleanup, at the configured cleanup rate), and the shape of each route.
+    cleanup, at the configured cleanup rate), and the shape of each route: start, the
+    stops, then back at the start (the vessel's port). An idle route is just the start.
     """
     violations: list[str] = []
     vessels_by_id = {v.vessel_id: v for v in vessels}
@@ -132,8 +133,11 @@ def check_plan(
             violations.append(
                 f"vessel {route.vessel_id} over capacity: {load} > {vessel.capacity_m3}"
             )
-        if len(route.coordinates) != 1 + len(route.assigned_target_ids):
+        stops = len(route.assigned_target_ids)
+        if len(route.coordinates) != (1 if stops == 0 else stops + 2):
             violations.append(f"vessel {route.vessel_id}: coordinates do not match stops")
+        elif stops and route.coordinates[-1] != route.coordinates[0]:
+            violations.append(f"vessel {route.vessel_id} does not end back at its start port")
         if route.estimated_travel_hours is None:
             violations.append(f"vessel {route.vessel_id}: missing estimated_travel_hours")
         else:

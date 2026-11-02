@@ -211,6 +211,22 @@ def test_cleaning_drifts_the_vessel_with_the_oil():
     assert haversine_km(voyage.here, first.at(voyage.clock)[0]) < 0.01
 
 
+def test_vessels_sail_back_to_port_and_keep_hours_for_it():
+    # 10 km/h, a still patch 30 km out, 1 h of cleanup: 3 h out + 1 h + 3 h back = 7 h
+    still = PatchTrack("T01", (0.0,), (east(30),), (30.0,))
+    provider = StraightLineDistance()
+    short = nearest_first_moving((vessel(hours=5.0),), (still,), 0.0, provider)  # 4 h gets it there, not back
+    assert short.plan.routes[0].assigned_target_ids == ()
+    assert "sail back to port" in short.plan.message
+
+    result = nearest_first_moving((vessel(hours=8.0),), (still,), 0.0, provider)
+    (route,) = result.plan.routes
+    assert route.coordinates[-1] == route.coordinates[0] == east(0)
+    assert route.estimated_distance_km == pytest.approx(60.0, abs=0.1)
+    assert result.last_cleanup_hours == pytest.approx(4.0, abs=0.01)  # back in port 3 h later
+    assert check_plan(result.plan, (vessel(hours=8.0),), result.targets) == []
+
+
 def test_moving_plans_follow_the_rules_and_export_cleanly(tmp_path):
     pytest.importorskip("ortools")
     from optimization.moving_targets import solve_moving

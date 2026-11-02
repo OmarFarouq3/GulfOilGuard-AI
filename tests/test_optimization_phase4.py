@@ -48,8 +48,10 @@ def test_baseline_visits_the_nearest_target_first():
     plan = baseline([vessel()], [far, near])  # given in the "wrong" order on purpose
     assert plan.status == "feasible", plan.message
     assert plan.routes[0].assigned_target_ids == ("NEAR", "FAR")
-    expected = haversine_km(vessel().location, near.location) + haversine_km(
-        near.location, far.location
+    expected = (
+        haversine_km(vessel().location, near.location)
+        + haversine_km(near.location, far.location)
+        + haversine_km(far.location, vessel().location)  # back to port
     )
     assert plan.routes[0].estimated_distance_km == pytest.approx(expected, rel=1e-9)
 

@@ -40,7 +40,7 @@ must provide or can read.
 
 * **`routing_model.py` & `vessel_routing.py` (Haris)**:
   * Google OR-Tools Vehicle Routing Problem (VRP) solver.
-  * Enforces vessel capacity ($m^3$), maximum shift duration (`available_hours`), service/skimming time, and **open routes** (vessels finish at their last assigned target without returning to depot, matching the current problem formulation).
+  * Enforces vessel capacity ($m^3$), maximum shift duration (`available_hours`), service/skimming time, and **return to port**: every vessel sails back to the position it started from, which is taken as its home port because the shared schema has none (agreed with the team lead). The trip back counts for distance, sailing time and the shift limit. **One trip per vessel**: a vessel fills its tank at most once (no unloading and going out again).
 
 * **`drift_targets.py`, `moving_targets.py`, `run_drift_plan.py` (Haris)**: planning for oil that drifts:
   * `drift_targets.py` reads Maqqavi's `outputs/drift/` files, cuts the oil into patches when the vessels leave (the dispatch hour) and follows each patch through every later forecast step (`PatchTrack`).
@@ -119,7 +119,7 @@ python -m optimization.run_drift_plan --drift-dir optimization/examples/drift_st
 What happens, in order:
 1. **Patches at dispatch.** At `--dispatch-hours` (when the vessels leave port; default 6 h after the release, an ASSUMPTION in `config.py`), the oil is cut into patches: the drift module's `patch_id`, or ~3 km cells. The 15 largest become targets. Oil in the rest is reported as `untargeted_oil_m3`, never dropped silently.
 2. **Patches move.** Each patch is followed through every later forecast step (same `patch_id`, or the same particle ids): its place is the oil-weighted centre and its oil is the sum of its particles. Between steps it moves in a straight line.
-3. **Interception.** A vessel sails to where the patch **will be when it arrives**, not to where it is now. While it cleans, it drifts with the patch.
+3. **Interception.** A vessel sails to where the patch **will be when it arrives**, not to where it is now. While it cleans, it drifts with the patch. A patch is only taken if the vessel can still sail back to its start port inside its shift afterwards; after its last patch it sails home.
 4. **Re-planning.** OR-Tools only knows fixed points, so it plans to where each patch is at the guessed meeting time. The plan is then sailed against the moving oil, the guesses are updated, and it plans again until the solver aims within 2 km (about one sea-grid cell) of every real meeting place. At most 4 rounds; the best sailed round is kept. The kept plan always follows the rules **as sailed**.
 5. **Baseline.** Nearest **interception** first, against the same moving oil, distances and rules.
 
@@ -210,10 +210,10 @@ Nothing extra is needed. Routing only relies on `drift/DATA_SOURCES.md` for the 
 | Field | Unit | Note |
 | --- | --- | --- |
 | `vessel_id` | | unique |
-| `location` `{latitude, longitude}` | degrees | the port or staging point; a point on land is moved to the nearest water if that is within 15 km |
+| `location` `{latitude, longitude}` | degrees | the port or staging point. **The vessel also returns here at the end** (taken as its home port), so use the port, not a point at sea. A point on land is moved to the nearest water if that is within 15 km |
 | `speed_m_per_s` | m/s | transit speed |
 | `capacity_m3` | m³ | recovered-oil tank |
-| `available_hours` | h | shift, counted from dispatch: sailing + cleanup must fit |
+| `available_hours` | h | shift, counted from dispatch: sailing out + cleanup + sailing back to `location` must fit |
 
 Keep `"synthetic"` absent or `true` for made-up fleets (the dashboard then labels the plan "Simulated scenario"). Open questions for Nihal: (a) the dispatch delay (now 6 h after release, `DriftTargetConfig.dispatch_hours` in `config.py`); (b) a real per-vessel skimming rate (now 30 m³/h for every vessel, `recovery_rate_m3_per_hour`).
 
@@ -231,7 +231,7 @@ Keep `"synthetic"` absent or `true` for made-up fleets (the dashboard then label
 | `drifted_km` | how far the patch moved between dispatch and that meeting |
 | `position_hours` | the time the point's position is for |
 
-`routes.geojson` (per vessel): `oil_collected_m3`, `cleanup_hours`, `finish_hours` (sailing + cleanup; **the response time is the largest `finish_hours`**, not the largest `estimated_travel_hours`), `sea_path` (`[[lon, lat], ...]` through water, for drawing around land).
+`routes.geojson` (per vessel): the `LineString` is the start, the stops in visiting order, then **the start again** (the vessel sails back to its port), so a working route has `len(assigned_target_ids) + 2` points and its last point equals its first. The Respond page currently draws a small "stop N" dot on that last point, on top of the base marker; to hide it, skip the last point when it equals the first. Distances and times include the trip back. Properties: `oil_collected_m3`, `cleanup_hours`, `finish_hours` (sailing + cleanup = when the vessel is back in port; **the response time is the largest `finish_hours`**, not the largest `estimated_travel_hours`), `sea_path` (`[[lon, lat], ...]` through water, for drawing around land, the trip back included).
 
 `summary.json`: `status`, `message` (every assumption in plain words), `synthetic`, `scenario_id`, `idle_vessel_ids`, `unserved_target_ids`, `source_hours`.
 
@@ -246,9 +246,10 @@ Keep `"synthetic"` absent or `true` for made-up fleets (the dashboard then label
   metrics_error (only when metrics is null),
   drift: { simulation_id, follow, dispatch_hours, dispatch_time, forecast_steps_hours,
            oil_afloat_at_dispatch_m3, targeted_oil_at_dispatch_m3, untargeted_oil_m3, assumptions },
-  replan_rounds, patch_drift_before_meeting_km: { optimized: {mean_km, max_km}, baseline: {...} } }
+  replan_rounds, patch_drift_before_meeting_km: { optimized: {mean_km, max_km}, baseline: {...} },
+  last_patch_cleaned_hours_after_dispatch: { optimized, baseline } }
 ```
-`drift`, `replan_rounds` and `patch_drift_before_meeting_km` appear only for drift runs (`run_drift_plan`).
+`metrics.*response_hours` is the time until the last vessel is **back in port**. `last_patch_cleaned_hours_after_dispatch` is when the last patch is clean (the response time without the trip home). `drift`, `replan_rounds`, `patch_drift_before_meeting_km` and `last_patch_cleaned_hours_after_dispatch` appear only for drift runs (`run_drift_plan`).
 
 `baseline/`: the baseline plan as the same three files, for a toggle on the map.
 

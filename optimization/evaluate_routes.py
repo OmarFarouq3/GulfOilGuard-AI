@@ -51,7 +51,7 @@ def _change_percent(new: float, old: float) -> float:
 def _oil_and_response(
     plan: OptimizationOutput, targets: tuple[ResponseTarget, ...], config: RoutingConfig
 ) -> tuple[float, float]:
-    """(oil recovered in m3, hours until the last vessel is done: sailing + cleanup)."""
+    """(oil recovered in m3, hours until the last vessel is back in port: sailing + cleanup)."""
     volume_by_id = {t.target_id: t.oil_volume_m3 for t in targets}
     oil = response = 0.0
     for route in plan.routes:
@@ -71,11 +71,12 @@ def evaluate_routes(
 ) -> dict[str, float]:
     """Compare distance (km), travel time (hours), and target coverage.
 
-    Travel time means sailing time only (cleanup time is not included). Negative
+    Travel time means sailing time only, the trip back to port included (cleanup time is
+    not included). Negative
     change percentages mean the optimized plan is lower (better for distance and time).
     `distance_km_per_target` is nan when a plan covers no target.
     With `targets`, also oil recovered (m3) and response time (hours until the last
-    vessel finishes, cleanup included).
+    vessel is back in port, cleanup included).
     When the oil moves, each plan meets the patches at other times, so with other amounts
     of oil: pass each plan's own targets (`targets` for the optimized plan,
     `baseline_targets` for the baseline). `total_oil_m3` is then counted from `targets`.
@@ -123,7 +124,7 @@ def format_comparison(metrics: dict[str, float]) -> str:
     """A small plain-text table of the numbers from evaluate_routes."""
     rows = [
         ("Oil recovered (m3)", "oil_recovered_m3", "{:.0f}"),
-        ("Response time, cleanup incl. (h)", "response_hours", "{:.2f}"),
+        ("Response time, back in port (h)", "response_hours", "{:.2f}"),
         ("Targets covered", "targets_covered", "{:.0f}"),
         ("Distance (km)", "distance_km", "{:.1f}"),
         ("Sailing time, all vessels (h)", "travel_hours", "{:.2f}"),
