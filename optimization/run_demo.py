@@ -18,6 +18,7 @@ from optimization.checks import check_plan
 from optimization.config import DEFAULT_CONFIG
 from optimization.dashboard_export import DEFAULT_DIR, export_comparison, export_for_dashboard
 from optimization.evaluate_routes import evaluate_routes, format_comparison
+from optimization.limits import tank_m3
 from optimization.routing_model import solve_routes
 from optimization.scenario_io import load_scenario, save_plan, scenario_is_synthetic
 from optimization.sea_distance import default_provider
@@ -29,11 +30,15 @@ def print_plan(title, plan, vessels, targets) -> None:
     print(f"\n{title}")
     print(f"  Status:  {plan.status}")
     print(f"  Message: {plan.message}")
+    capacity = {v.vessel_id: v.capacity_m3 for v in vessels}
+    load = {t.target_id: tank_m3(t) for t in targets}
     for route in plan.routes:
         stops = " -> ".join(route.assigned_target_ids) or "(no targets)"
+        tank = sum(load.get(t, 0.0) for t in route.assigned_target_ids)
         print(
             f"  {route.vessel_id}: {stops}  |  "
-            f"{route.estimated_distance_km:.1f} km, {route.estimated_travel_hours:.2f} h sailing"
+            f"{route.estimated_distance_km:.1f} km, {route.estimated_travel_hours:.2f} h sailing, "
+            f"tank {tank:.1f} / {capacity.get(route.vessel_id, float('nan')):g} m3"
         )
     violations = check_plan(plan, vessels, targets)
     print("  Rule check: " + ("passed" if not violations else "FAILED: " + "; ".join(violations)))

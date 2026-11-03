@@ -1,7 +1,8 @@
 """The OR-Tools model for cleanup routing.
 
 What the model enforces now:
-  - vessel capacity (a vessel never takes more oil than its tank)
+  - vessel capacity (a vessel never takes more than its tank: emulsion when the target
+    knows it, see limits.tank_m3, otherwise pure oil)
   - working hours (sailing + cleanup time must fit inside `available_hours`)
   - every vessel sails back to the port it started from (the schema has no home port,
     so its start position is taken as its port). The trip back counts for the hours
@@ -28,7 +29,7 @@ from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 from optimization.checks import early_result
 from optimization.config import DEFAULT_CONFIG, RoutingConfig
-from optimization.limits import leg_minutes, minutes_down, service_minutes, unserved_reason
+from optimization.limits import leg_minutes, minutes_down, service_minutes, tank_m3, unserved_reason
 from optimization.sea_distance import DistanceProvider, default_provider
 from optimization.units import km_to_metres, travel_hours, volume_to_units
 from shared.schemas import (
@@ -85,9 +86,9 @@ def _solve(
 
     demand = [0] * n_nodes
     cleanup_min = [0] * n_nodes
-    for t_idx, target in enumerate(targets):
-        demand[n_vessels + t_idx] = volume_to_units(target.oil_volume_m3, config.volume_scale)
-        cleanup_min[n_vessels + t_idx] = service_minutes(target.oil_volume_m3, config)
+    for t_idx, target in enumerate(targets):  # the tank and the skimmer take emulsion when known
+        demand[n_vessels + t_idx] = volume_to_units(tank_m3(target), config.volume_scale)
+        cleanup_min[n_vessels + t_idx] = service_minutes(tank_m3(target), config)
     capacities = [volume_to_units(v.capacity_m3, config.volume_scale) for v in vessels]
 
     ports = list(range(n_vessels))  # each vessel starts and ends at its own node

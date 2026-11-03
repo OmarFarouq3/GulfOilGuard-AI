@@ -10,6 +10,7 @@ import io
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 from check_outputs import check_outputs, main
@@ -60,7 +61,7 @@ def valid_outputs():
 
 
 class CheckOutputsTests(unittest.TestCase):
-    def run_check(self, files, region=None):
+    def run_check(self, files, region=None, expected_release=None):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for name, content in files.items():
@@ -70,7 +71,7 @@ class CheckOutputsTests(unittest.TestCase):
                     path.write_bytes(content)
                 else:
                     path.write_text(json.dumps(content), encoding="utf-8")
-            return check_outputs(root, region)
+            return check_outputs(root, region, expected_release)
 
     def problems(self, files, region=None):
         return [f.text for f in self.run_check(files, region) if f.level == "problem"]
@@ -147,6 +148,15 @@ class CheckOutputsTests(unittest.TestCase):
         files["drift/drift.geojson"]["features"][0]["geometry"]["coordinates"] = 7
         self.assert_problem(files, "must be [longitude, latitude] numbers")
 
+    def test_geometry_that_is_not_an_object(self):
+        for bad in ([55.65, 25.85], "Point", 5):
+            with self.subTest(geometry=bad):
+                files = valid_outputs()
+                files["drift/drift.geojson"]["features"][0]["geometry"] = bad
+                files["routing/routes.geojson"]["features"][0]["geometry"] = bad
+                self.assert_problem(files, "drift.geojson feature 0: geometry must be a GeoJSON object")
+                self.assert_problem(files, "routes.geojson feature 0: geometry must be a GeoJSON object")
+
     # --- drift
 
     def test_drift_missing_hours(self):
@@ -170,6 +180,30 @@ class CheckOutputsTests(unittest.TestCase):
         files["drift/meta.json"]["positions"].reverse()
         self.assert_problem(files, "strictly increasing")
 
+    def test_release_is_reported(self):
+        self.assertTrue(any("release: 2026-10-20T06:00:00Z at 25.85, 55.65" in n for n in self.notes(valid_outputs())))
+
+    def test_release_matches_agreed_time(self):
+        agreed = datetime(2026, 10, 20, 6, tzinfo=timezone.utc)
+        self.assertEqual([f for f in self.run_check(valid_outputs(), expected_release=agreed)
+                          if f.level == "problem"], [])
+
+    def test_release_differs_from_agreed_time(self):
+        agreed = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+        found = [f.text for f in self.run_check(valid_outputs(), expected_release=agreed) if f.level == "problem"]
+        self.assertTrue(any("not the agreed 2026-10-20T12:00:00Z" in p for p in found), found)
+
+    def test_release_flag_on_command_line(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            for name, content in valid_outputs().items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content) if isinstance(content, bytes) else path.write_text(json.dumps(content))
+            self.assertEqual(main([tmp, "--release", "2026-10-20T06:00:00Z"]), 0)
+            self.assertEqual(main([tmp, "--release", "2026-10-20T12:00:00Z"]), 1)
+            self.assertEqual(main([tmp, "--release", "20 Oct"]), 2)
+
     def test_unlabelled_drift_gets_a_note(self):
         files = valid_outputs()
         files["drift/meta.json"].pop("synthetic")
@@ -187,6 +221,13 @@ class CheckOutputsTests(unittest.TestCase):
         files = valid_outputs()
         files["routing/summary.json"]["status"] = "solved"
         self.assert_problem(files, "status must be one of")
+
+    def test_status_that_is_not_text(self):
+        for bad in (["feasible"], {"value": "feasible"}, 1):
+            with self.subTest(status=bad):
+                files = valid_outputs()
+                files["routing/summary.json"]["status"] = bad
+                self.assert_problem(files, "status must be one of")
 
     def test_route_to_unknown_target(self):
         files = valid_outputs()
@@ -222,7 +263,7 @@ class CheckOutputsTests(unittest.TestCase):
     def test_response_time_note_when_cleanup_adds_time(self):
         files = valid_outputs()
         files["routing/routes.geojson"]["features"][0]["properties"]["finish_hours"] = 4.0
-        self.assertTrue(any("finishes at 4.00 h" in n for n in self.notes(files)))
+        self.assertTrue(any("largest 'finish_hours' is 4.00 h" in n for n in self.notes(files)))
 
     def test_unserved_targets_note(self):
         files = valid_outputs()

@@ -16,7 +16,8 @@ a new round can reorder the stops, so the last round is not always the best one.
 
 The plan we keep is a SAILED one (step 3), not the solver's guess. Sailing applies the
 same rules as everywhere else (tank, hours with the limits.py rounding, cleanup time at the
-oil volume found on arrival), and a stop that no longer fits is skipped. So the kept plan
+volume found on arrival: emulsion when the forecast gives the water fraction), and a stop
+that no longer fits is skipped. So the kept plan
 always follows the rules, even if the rounds did not fully settle.
 
 The baseline gets the same moving oil: "nearest target first" where nearest means the
@@ -38,7 +39,7 @@ from statistics import mean
 from optimization.checks import early_result
 from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, DriftTargetConfig, RoutingConfig
 from optimization.drift_targets import PatchTrack
-from optimization.limits import leg_minutes, minutes_down, service_hours, service_minutes
+from optimization.limits import leg_minutes, minutes_down, service_hours, service_minutes, tank_m3
 from optimization.routing_model import RETURN_NOTE, solve_routes
 from optimization.sea_distance import DistanceProvider, distances_from, haversine_km
 from optimization.units import travel_hours
@@ -106,16 +107,17 @@ class _Voyage:
         if target.oil_volume_m3 < gone_below_m3:
             return None, (f"less than {gone_below_m3:g} m3 left by the time a vessel gets there "
                           "(stranded, weathered or too small to be worth a trip)")
-        if target.oil_volume_m3 > self.tank + 1e-9:
+        load = tank_m3(target)  # emulsion when the forecast gives the water fraction
+        if load > self.tank + 1e-9:
             return None, "not enough room left in the tank"
-        done = track.target_at(meet + service_hours(target.oil_volume_m3, config)).location
-        needed = leg_minutes(km, speed) + service_minutes(target.oil_volume_m3, config) + leg_minutes(self.port_km(done), speed)
+        done = track.target_at(meet + service_hours(load, config)).location
+        needed = leg_minutes(km, speed) + service_minutes(load, config) + leg_minutes(self.port_km(done), speed)
         if needed > self.minutes_left:
             return None, "not enough working hours left to reach it, clean it and sail back to port"
         return Stop(track.target_id, meet, target, km), None
 
     def take(self, stop: Stop, track: PatchTrack, config: RoutingConfig) -> None:
-        volume = stop.target.oil_volume_m3
+        volume = tank_m3(stop.target)
         self.stops.append(stop)
         self.tank -= volume
         self.minutes_left -= leg_minutes(stop.leg_km, self.vessel.speed_m_per_s) + service_minutes(volume, config)

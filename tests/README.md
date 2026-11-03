@@ -19,8 +19,10 @@ For an additional learning check, run `python -m detection.smoke_test`. It fits 
 `check_outputs.py` checks the result files under `outputs/` against the shared contract and the dashboard's file contract (`dashboard/README.md`), including the links between teams. Run it before opening a PR that changes an exporter:
 
 ```powershell
-python tests/check_outputs.py outputs --gulf
+python tests/check_outputs.py outputs --gulf --release 2026-10-23T12:00:00Z
 ```
+
+`--gulf` adds the regional check; `--release` checks that the drift run starts at the agreed time (D3). Both are optional.
 
 `test_check_outputs.py` tests it with small synthetic files in temporary folders. See `docs/integration_plan.md` for the handoffs and open compatibility issues.
 

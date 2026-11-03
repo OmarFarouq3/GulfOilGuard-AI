@@ -3,7 +3,7 @@
 from math import isfinite
 
 from optimization.config import DEFAULT_CONFIG, RoutingConfig
-from optimization.limits import service_hours
+from optimization.limits import service_hours, tank_m3
 from shared.schemas import (
     GeoCoordinate,
     OptimizationOutput,
@@ -100,13 +100,14 @@ def check_plan(
 ) -> list[str]:
     """Return a list of rule violations in a plan. An empty list means it is valid.
 
-    Checks: known ids, no target served twice, capacity, working hours (sailing plus
-    cleanup, at the configured cleanup rate), and the shape of each route: start, the
-    stops, then back at the start (the vessel's port). An idle route is just the start.
+    Checks: known ids, no target served twice, capacity (emulsion when the targets know it),
+    working hours (sailing plus cleanup, at the configured cleanup rate), and the shape of
+    each route: start, the stops, then back at the start (the vessel's port). An idle route
+    is just the start.
     """
     violations: list[str] = []
     vessels_by_id = {v.vessel_id: v for v in vessels}
-    volume_by_id = {t.target_id: t.oil_volume_m3 for t in targets}
+    volume_by_id = {t.target_id: tank_m3(t) for t in targets}
     seen_targets: set[str] = set()
     seen_vessels: set[str] = set()
 
