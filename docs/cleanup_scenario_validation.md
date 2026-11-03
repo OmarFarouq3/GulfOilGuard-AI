@@ -22,7 +22,9 @@ python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-di
 
 `validate_cleanup.py` needs no OR-Tools. It rebuilds the patches from the raw drift file and checks the plan against them. It accepts both the layout `run_drift_plan` writes (plan in the folder, `baseline/` inside it) and the hand-shared one (`Optimized/`, `Baseline/`).
 
-**Result: 52 OK, 7 WARN, 0 FAIL.** No rule is broken. The warnings are assumptions, listed under "Issues" below. Re-run after the depot move (issue 2), the same files give 49 OK, 10 WARN, 0 FAIL. The 3 extra warnings only say that the fleet file Haris used is older than the current `GULF_DEPOTS`.
+**Latest result, on Haris's emulsion run with the harbour-entrance depots: 85 OK, 5 WARN, 0 FAIL** (section 8). Sections 1 to 7 describe his earlier pure-oil run.
+
+**Result of the earlier run: 52 OK, 7 WARN, 0 FAIL.** No rule is broken. The warnings are assumptions, listed under "Issues" below. Re-run after the depot move (issue 2), the same files give 49 OK, 10 WARN, 0 FAIL. The 3 extra warnings only say that the fleet file Haris used is older than the current `GULF_DEPOTS`.
 
 ## 1. Drift input
 
@@ -133,7 +135,16 @@ Haris's commit `e247eed` counts what a vessel takes on as emulsion, `oil / (1 - 
 - **`tank_basis: emulsion`:** patches are rebuilt with emulsion counted. Each target's `emulsion_m3`, each vessel's `emulsion_collected_m3`, the tank (FAIL if over) and the cleanup time (emulsion / 30 m³/h) are rechecked.
 - **No `tank_basis`** (a plan made before the change, such as the run in sections 3 and 4): checked as pure oil, with the emulsion load as a WARN, as before. That run still gives 0 FAIL.
 
-**Haris's sea-grid run** (3 Nov, new code, harbour-entrance depots, `run_drift_plan --fleet outputs/fleet/gulf_standard.json`). The numbers below are from his printed output. The validation files of that run are being produced by Maqqavi with the updated `validate_cleanup.py`.
+**Haris's sea-grid run** (3 Nov, new code, harbour-entrance depots, fleet = the current `gulf_standard.json`), shared in `Team C` as `Optimized/`, `Baseline/` and `comparison.json`.
+
+**Validated: 85 OK, 5 WARN, 0 FAIL.** Rerun with:
+
+```bash
+python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-dir outputs/haris \
+    --fleet optimization/fixtures/gulf_standard.json --json validation.json > validation_report.txt
+```
+
+Every target's position, oil and emulsion matches the drift. Each vessel's emulsion total, tank, cleanup time (emulsion / 30 m³/h), shift and return to port are rechecked, and no target is served twice. The 5 warnings: the two Port Saqr vessels start from a port the routing grid counts as land (below), one patch wider than 1.5 km (as before), and T06 unserved in both plans (0.4 m³, below the 0.5 m³ threshold). The validator now reads the plan's message and warns when the router had to move a port off land.
 
 | | Optimized | Baseline |
 | --- | --- | --- |

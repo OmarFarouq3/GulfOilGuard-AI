@@ -274,14 +274,20 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
 # --- C. fleet -------------------------------------------------------------------------------
 
 
-def check_fleet(vessels, release: GeoCoordinate | None, r: Report) -> list[dict]:
+def check_fleet(vessels, release: GeoCoordinate | None, plan_message: str, r: Report) -> list[dict]:
     g = "C fleet"
+    # The router moves a port that its 2.2 km land grid counts as land, and says so in the plan's message.
+    snapped = {part.split(" (")[0]: part for part in plan_message.split("; ") if "was on land and moved" in part}
     rows = []
     for v in vessels:
         depot, dist = min(((name, _km(v.location, c)) for name, c in GULF_DEPOTS.items()), key=lambda x: x[1])
         # Not a broken rule: a fleet file made before GULF_DEPOTS last changed is still a valid plan input.
         r.check(g, dist < 0.1, f"{v.vessel_id} is based at {depot} ({dist * 1000:.0f} m from its point in GULF_DEPOTS"
                 + (")" if dist < 0.1 else "; the fleet file is older than GULF_DEPOTS, re-run scenario.py)"),
+                level_if_not="WARN")
+        r.check(g, v.vessel_id not in snapped, f"{v.vessel_id}: the router used its port as given (not moved off land)"
+                if v.vessel_id not in snapped else f"{v.vessel_id}: port is land in the routing grid: "
+                f"{snapped[v.vessel_id].split(') ', 1)[-1]}, so sailing from it is approximate",
                 level_if_not="WARN")
         knots = v.speed_m_per_s * KNOTS_PER_M_PER_S
         r.check(g, knots <= 25, f"{v.vessel_id}: {knots:.1f} kn transit, {v.capacity_m3:g} m3 tank, "
@@ -440,7 +446,7 @@ def main() -> None:
         "drift_dir": str(drift_dir), "routing_dir": str(routing_dir), "fleet": args.fleet,
         "simulation_id": drift["meta"].get("simulation_id"),
         "targets": check_targets(drift_dir, plan_dir, vessels, comparison, drift, r),
-        "fleet_rows": check_fleet(vessels, release, r),
+        "fleet_rows": check_fleet(vessels, release, _read(plan_dir / "summary.json").get("message", ""), r),
         "optimized": check_routes(plan_dir, vessels, drift, r),
     }
     if baseline_dir is not None and (baseline_dir / "summary.json").exists():
