@@ -4,8 +4,8 @@
     {
       "vessel_id": "RAK-SCOUT-01",
       "location": {
-        "latitude": 25.981,
-        "longitude": 56.0482
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 9.26,
       "capacity_m3": 50.0,
@@ -14,8 +14,8 @@
     {
       "vessel_id": "RAK-SKIMMER-01",
       "location": {
-        "latitude": 25.981,
-        "longitude": 56.0482
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 6.17,
       "capacity_m3": 100.0,

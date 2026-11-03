@@ -4,8 +4,8 @@
     {
       "vessel_id": "RAK-FAST-01",
       "location": {
-        "latitude": 25.981,
-        "longitude": 56.0482
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 10.29,
       "capacity_m3": 50.0,
@@ -14,8 +14,8 @@
     {
       "vessel_id": "RAK-OSRV-01",
       "location": {
-        "latitude": 25.981,
-        "longitude": 56.0482
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 7.2,
       "capacity_m3": 200.0,

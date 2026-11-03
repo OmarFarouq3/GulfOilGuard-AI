@@ -346,7 +346,7 @@ Nothing extra is needed. Routing only relies on `drift/DATA_SOURCES.md` for the 
 | Field | Unit | Note |
 | --- | --- | --- |
 | `vessel_id` | | unique |
-| `location` `{latitude, longitude}` | degrees | the port or staging point. **The vessel also returns here at the end** (taken as its home port). Use the harbour entrance, in water, not a point on the quay: Port Saqr 25.9810 N, 56.0482 E and Hamriyah 25.4773 N, 55.4798 E (`GULF_DEPOTS`, from OpenStreetMap). A point on land is moved to the nearest water if that is within 15 km, and the plan's message says so |
+| `location` `{latitude, longitude}` | degrees | the port or staging point. **The vessel also returns here at the end** (taken as its home port). Use a point in water that the 2.2 km sea grid also counts as water (check with `sea_check`), not a point on the quay: Port Saqr 25.9850 N, 56.0350 E (a staging point on the approach, because its entrance falls in a land cell) and Hamriyah 25.4773 N, 55.4798 E (its harbour entrance, from OpenStreetMap), see `GULF_DEPOTS`. A point on land is moved to the nearest water if that is within 15 km, and the plan's message says so |
 | `speed_m_per_s` | m/s | transit speed |
 | `capacity_m3` | m³ | recovered-oil tank |
 | `available_hours` | h | shift, counted from dispatch: sailing out + cleanup + sailing back to `location` must fit |
