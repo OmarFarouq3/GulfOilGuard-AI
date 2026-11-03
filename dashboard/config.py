@@ -1,8 +1,7 @@
 """Dashboard configuration: output paths (the data contract), map defaults and colours.
 
-The dashboard never runs models. It only reads files written by the detection,
-drift and routing modules into ``outputs/``. See ``dashboard/README.md`` for the
-full data contract.
+Detect can run the U-Net in a subprocess and read its results from ``outputs/``.
+Predict and Respond read files written by their modules. See ``dashboard/README.md``.
 
 The outputs folder resolves in this order:
 1. ``GULFOILGUARD_OUTPUTS`` environment variable

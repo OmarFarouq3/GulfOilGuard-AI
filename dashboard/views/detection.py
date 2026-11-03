@@ -49,12 +49,12 @@ SPLIT_WORDS = {"val": "validation", "validation": "validation", "train": "traini
 
 
 def overall_caption(split: object, n_images: object) -> str:
-    """'Average over 1,615 validation images.' plus accuracy_caption()'s split / independence caveat."""
+    """Name the evaluated image set without implying a per-image average."""
     name = split.strip().lower() if isinstance(split, str) else ""
     word = SPLIT_WORDS.get(name, split.strip() if name else "")
     known = isinstance(n_images, int) and not isinstance(n_images, bool) and n_images > 0
     images = f"{n_images:,} {word} images" if known else f"all evaluated {word} images"
-    return f"Average over {' '.join(images.split())}. {accuracy_caption(split)}"
+    return f"Scores across {' '.join(images.split())}. {accuracy_caption(split)}"
 
 
 def checkpoint_note() -> None:
@@ -168,7 +168,7 @@ else:
 - **Dark means oil.** Oil damps the small waves that reflect radar back to the satellite, so slicks look dark.
 - **Look-alikes** also look dark: very calm water, algae and natural films, rain cells and ship wakes. They cause false alarms (lower precision).
 - **Thin or broken slicks**, and strong wind that breaks slicks up, cause missed oil (lower recall).
-- **Accuracy scores** describe the model on a labelled test set, not a guarantee for every new scene.
+- **Accuracy scores** describe the model on a labelled evaluation set, not a guarantee for every new scene.
 - **Location** is a separate step: a correct outline with wrong scene geometry still lands in the wrong place.
 """
         )

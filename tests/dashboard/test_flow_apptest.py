@@ -795,14 +795,14 @@ def score_tiles(at: AppTest) -> dict[str, str]:
 
 
 @pytest.mark.parametrize("extra, subtitle", [
-    ({"n_images": 1615}, "Average over 1,615 validation images. Scores from 0 to 1, computed on the validation split. "
+    ({"n_images": 1615}, "Scores across 1,615 validation images. Scores from 0 to 1, computed on the validation split. "
                          "That split was also used to choose the checkpoint, so these are not an independent test."),
-    ({"n_images": None}, "Average over all evaluated validation images. Scores from 0 to 1, computed on the "
+    ({"n_images": None}, "Scores across all evaluated validation images. Scores from 0 to 1, computed on the "
                          "validation split."),
-    ({"n_images": 40, "split": "test"}, "Average over 40 test images. Scores from 0 to 1, computed on the test split."),
-    ({"n_images": 40, "split": None}, "Average over 40 images. Scores from 0 to 1. The report doesn&#x27;t say which "
+    ({"n_images": 40, "split": "test"}, "Scores across 40 test images. Scores from 0 to 1, computed on the test split."),
+    ({"n_images": 40, "split": None}, "Scores across 40 images. Scores from 0 to 1. The report doesn&#x27;t say which "
                                       "images were scored."),
-    ({"n_images": "many"}, "Average over all evaluated validation images."),
+    ({"n_images": "many"}, "Scores across all evaluated validation images."),
 ])
 def test_overall_section_title_and_subtitle(split_images, stub_detection, report, extra, subtitle):
     metrics = {k: v for k, v in {**REPORT_METRICS, **extra}.items() if v is not None}

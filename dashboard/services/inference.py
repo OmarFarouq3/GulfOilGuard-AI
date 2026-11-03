@@ -171,8 +171,9 @@ def _setup_message(python: settings.Resolved | None = None) -> str:
 
 
 def run_detection(image_path: Path, image_id: str, *, checkpoint: Path | None = None, python: str | None = None,
-                  out_dir: Path | None = None, timeout_s: float = config.DETECTION_TIMEOUT_S) -> DetectionRun:
-    """Predict the oil mask for one image (or reuse a matching stored result). Never raises.
+                  out_dir: Path | None = None, timeout_s: float = config.DETECTION_TIMEOUT_S,
+                  fresh: bool = False) -> DetectionRun:
+    """Predict the oil mask for one image. ``fresh`` bypasses saved results. Never raises.
 
     ``checkpoint`` / ``python`` override the lookup in services/settings.py (tests, scripts).
     """
@@ -181,13 +182,13 @@ def run_detection(image_path: Path, image_id: str, *, checkpoint: Path | None = 
                                else settings.resolve_checkpoint())
         resolved_python = settings.given(python, "interpreter passed in") if python else settings.resolve_python()
         return _run_detection(Path(image_path), image_id, resolved_checkpoint, resolved_python,
-                              out_dir or config.DETECTION_DIR, timeout_s)
+                              out_dir or config.DETECTION_DIR, timeout_s, fresh)
     except Exception:  # last resort: a status, never an error page
         return DetectionRun("failed", "Detection could not be completed.", image_id, detail=traceback.format_exc())
 
 
 def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: settings.Resolved,
-                   resolved_python: settings.Resolved, out: Path, timeout_s: float) -> DetectionRun:
+                   resolved_python: settings.Resolved, out: Path, timeout_s: float, fresh: bool) -> DetectionRun:
     checkpoint = resolved_checkpoint.path
     if not image_path.is_file():
         return DetectionRun("image_missing", "The selected radar image is no longer available.", image_id)
@@ -196,7 +197,7 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
     if not checkpoint.is_file():
         message, detail = _checkpoint_missing_message(resolved_checkpoint)
         return DetectionRun("checkpoint_missing", message, image_id, detail=detail)
-    cached = cached_run(image_path, image_id, checkpoint, out)
+    cached = None if fresh else cached_run(image_path, image_id, checkpoint, out)
     if cached:
         return cached
 

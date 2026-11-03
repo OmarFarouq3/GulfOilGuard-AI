@@ -5,9 +5,9 @@ Every reader returns ``(value, warning)``:
 - malformed file -> ``(None, "readable warning")``
 - valid file     -> ``(value, None)``
 
-Results are cached with ``st.cache_data`` using the file's modification time as part
-of the key, so a new or overwritten output shows up on the next rerun without
-restarting Streamlit.
+Results are cached with ``st.cache_data`` using nanosecond modification and creation
+times plus file size. Replaced files then get a fresh key, including when several
+test or model outputs are written within the same clock tick.
 """
 
 from __future__ import annotations
@@ -32,6 +32,17 @@ def mtime(path: Path) -> float | None:
     """Return the file's modification time, or None if it does not exist."""
     try:
         return path.stat().st_mtime if path.is_file() else None
+    except OSError:
+        return None
+
+
+def file_stamp(path: Path) -> tuple[int, int, int] | None:
+    """Cache key for a file, precise enough for quick replacements on Windows."""
+    try:
+        stat = path.stat()
+        if not path.is_file():
+            return None
+        return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size
     except OSError:
         return None
 
@@ -75,13 +86,13 @@ def hide_paths(value: str) -> str:
 
 
 # --- JSON ----------------------------------------------------------------------
-# The cached readers take the file's mtime as ``stamp``. It must not start with "_":
+# The cached readers take the file's stat tuple as ``stamp``. It must not start with "_":
 # st.cache_data leaves underscore-prefixed parameters out of the cache key, which would
 # keep serving the old contents after a file changes.
 
 
 @st.cache_data(show_spinner=False)
-def _read_json_cached(path_str: str, stamp: float) -> tuple[Any, str | None]:
+def _read_json_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[Any, str | None]:
     path = Path(path_str)
     try:
         return json.loads(path.read_text(encoding="utf-8")), None
@@ -93,7 +104,7 @@ def _read_json_cached(path_str: str, stamp: float) -> tuple[Any, str | None]:
 
 def read_json(path: Path) -> tuple[Any, str | None]:
     """Read a JSON file tolerantly (see module docstring)."""
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_json_cached(str(path), stamp)
@@ -138,7 +149,7 @@ def _geometry_problem(geometry: Any) -> str | None:
 
 
 @st.cache_data(show_spinner=False)
-def _read_geojson_cached(path_str: str, stamp: float) -> tuple[dict | None, str | None]:
+def _read_geojson_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[dict | None, str | None]:
     path = Path(path_str)
     data, warning = _read_json_cached(path_str, stamp)
     if warning:
@@ -187,7 +198,7 @@ def read_geojson(path: Path) -> tuple[dict | None, str | None]:
     A file may be returned together with a warning when only some features are bad.
     A file with no usable features returns None (plus a warning).
     """
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_geojson_cached(str(path), stamp)
@@ -197,7 +208,7 @@ def read_geojson(path: Path) -> tuple[dict | None, str | None]:
 
 
 @st.cache_data(show_spinner=False)
-def _read_image_cached(path_str: str, stamp: float) -> tuple[bytes | None, str | None]:
+def _read_image_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[bytes | None, str | None]:
     path = Path(path_str)
     try:
         raw = path.read_bytes()
@@ -210,7 +221,7 @@ def _read_image_cached(path_str: str, stamp: float) -> tuple[bytes | None, str |
 
 def read_image(path: Path) -> tuple[bytes | None, str | None]:
     """Read and verify an image file, returning its raw bytes."""
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_image_cached(str(path), stamp)

@@ -103,6 +103,15 @@ def test_success_writes_expected_files_and_caches(files, monkeypatch):
     assert len(fake.calls) == 1  # no second subprocess
 
 
+def test_fresh_run_executes_model_despite_saved_prediction(files, monkeypatch):
+    fake = FakeRun()
+    monkeypatch.setattr(inference.subprocess, "run", fake)
+    assert run(files).state == "done"
+    assert run(files).state == "cached"
+    assert run(files, fresh=True).state == "done"
+    assert len(fake.calls) == 2
+
+
 @pytest.mark.parametrize("touch", ["image", "checkpoint"])
 def test_cache_is_invalidated_by_mtime(files, monkeypatch, touch):
     fake = FakeRun()

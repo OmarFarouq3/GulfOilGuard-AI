@@ -146,7 +146,7 @@ def detect_controls(site: SpillSite, overall: dict[str, float] | None = None) ->
                       on_click=selection.accept_simulated_detection)
         if st.button("Run detection", type="primary", icon=":material/play_arrow:", key="flow_run_detection"):
             with st.spinner("Running the detection model on this image..."):
-                result = inference.run_detection(current.image_path, current.image_id)
+                result = inference.run_detection(current.image_path, current.image_id, fresh=True)
             selection.record_detection(result)
             st.rerun()
     return False

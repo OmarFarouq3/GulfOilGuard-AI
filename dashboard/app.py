@@ -3,8 +3,8 @@
 Run from the repository root:  streamlit run dashboard/app.py
 URL options: ?demo=1 starts the simulated scenario, ?dev=1 opens diagnostics.
 
-The dashboard only reads result files (see config.py and README.md). It never imports
-torch, opendrift or ortools.
+Detect can run the U-Net in a subprocess; the Streamlit process does not import
+torch, opendrift or ortools. See config.py and README.md for output paths.
 """
 
 from __future__ import annotations
