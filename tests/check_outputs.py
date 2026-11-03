@@ -21,6 +21,7 @@ Findings have two levels:
 [longitude, latitude], so a swapped pair is still a valid point somewhere on Earth; only
 the regional check catches it.
 
+Exit code 1 if there is at least one problem. Standard library only.
 """
 
 from __future__ import annotations
@@ -107,10 +108,15 @@ def _read_features(path: Path, out: _Collector) -> list[dict] | None:
     features = [f for f in data["features"] if isinstance(f, dict)]
     if len(features) != len(data["features"]):
         out.problem(f"{path.name}: every feature must be an object")
-    for f in features:
+    for i, f in enumerate(features):
         f.setdefault("properties", {})
         if not isinstance(f["properties"], dict):
             f["properties"] = {}
+        geometry = f.get("geometry")
+        if geometry is not None and not isinstance(geometry, dict):
+            out.problem(f"{path.name} feature {i}: geometry must be a GeoJSON object, "
+                        f"got {type(geometry).__name__}; feature skipped")
+            f["_skip"] = True
     return features
 
 
@@ -220,6 +226,8 @@ def check_detection_dir(folder: Path, region: Region | None = None) -> list[Find
     else:
         features = _read_features(spill_file, out) or []
         for i, f in enumerate(features):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"spill.geojson feature {i}"
             if geometry.get("type") not in ("Polygon", "MultiPolygon"):
@@ -262,6 +270,8 @@ def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Fi
 
     counts: dict[float, int] = {}
     for i, f in enumerate(features):
+        if f.get("_skip"):
+            continue
         geometry, props = f.get("geometry") or {}, f["properties"]
         where = f"drift.geojson feature {i}"
         hours = props.get("hours")
@@ -369,9 +379,10 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     summary_file = folder / "summary.json"
     summary = _read_json(summary_file, out) if summary_file.exists() else None
     status = summary.get("status") if isinstance(summary, dict) else None
+    valid_status = isinstance(status, str) and status in VALID_STATUSES
     if not summary_file.exists():
         out.problem("summary.json is missing (required by the dashboard)")
-    elif isinstance(summary, dict) and status not in VALID_STATUSES:
+    elif isinstance(summary, dict) and not valid_status:
         out.problem(f"summary.json: status must be one of {', '.join(sorted(VALID_STATUSES))}, got {status!r}")
 
     routes, vessels, missing_vessel_info = [], [], False
@@ -379,6 +390,8 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     routes_file = folder / "routes.geojson"
     if routes_file.exists():
         for i, f in enumerate(_read_features(routes_file, out) or []):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"routes.geojson feature {i}"
             if geometry.get("type") != "LineString":
@@ -412,6 +425,8 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     targets_file = folder / "targets.geojson"
     if targets_file.exists():
         for i, f in enumerate(_read_features(targets_file, out) or []):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"targets.geojson feature {i}"
             if geometry.get("type") != "Point":
@@ -444,7 +459,7 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
                 invalid_vessels.add(v.vessel_id)
     vessels = [v for v in vessels if v.vessel_id not in invalid_vessels]
 
-    if status in VALID_STATUSES:
+    if valid_status:
         plan = OptimizationOutput(routes=tuple(routes), status=status,
                                   message=summary.get("message") if isinstance(summary, dict) else None)
         skip = []
@@ -471,8 +486,8 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     travel = [r.estimated_travel_hours for r in routes if _is_number(r.estimated_travel_hours)]
     finish = [p["finish_hours"] for p in route_props if _is_number(p.get("finish_hours"))]
     if travel and finish and max(finish) > max(travel) + 0.01:
-        out.note(f"the dashboard's response time is the longest sailing time ({max(travel):.2f} h); "
-                 f"including cleanup, the last vessel finishes at {max(finish):.2f} h ('finish_hours')")
+        out.note(f"response time (D2): the last vessel finishes cleanup at {max(finish):.2f} h "
+                 f"(largest 'finish_hours'); sailing only is {max(travel):.2f} h. Show both with clear labels")
     unserved = summary.get("unserved_target_ids") if isinstance(summary, dict) else None
     if isinstance(unserved, list) and unserved:
         out.note(f"{len(unserved)} target(s) not served ({', '.join(map(str, unserved))}); "
