@@ -1,6 +1,6 @@
 # Integration plan
 
-Status checked against `main` at `b55431a` on 2 Nov 2026; decisions D1–D3 agreed with Omar on 3 Nov 2026 (section 5). This page describes the formats the teams actually use, how to check a handoff before opening a PR, and the open compatibility issues.
+Status checked against `main` at `b55431a` on 2 Nov 2026 and updated after the end-to-end test on 3 Nov 2026 (`docs/e2e_test_report.md`); decisions D1–D3 agreed with Omar on 3 Nov 2026 (section 5). This page describes the formats the teams actually use, how to check a handoff before opening a PR, and the open compatibility issues.
 
 Sources of truth:
 - `shared/schemas.py` defines the shared dataclasses, coordinate order, UTC timestamps and units.
@@ -14,27 +14,27 @@ SAR image ──► detection.evaluate / detection.report ──► outputs/dete
                      │
                      └─ no georeferencing yet: no spill.geojson, no oil coordinates
                                   ⋮ (gap: drift starts from a synthetic release point)
-ERA5 + Copernicus files ──► drift.environmental_data ──► EnvironmentalData (clean NetCDF)
+ERA5 + Copernicus files ──► drift.environmental_data ──► wind_clean.nc, currents_clean.nc
                                                               │
-synthetic release 25.85°N 55.65°E, 20 Oct 2026 12:00 UTC ──► OpenDrift (not yet in repo) ──► outputs/drift/ ──► Predict page
+synthetic release 25.85°N 55.65°E, 23 Oct 2026 12:00 UTC ──► drift.run_gulf_demo (OpenDrift) ──► outputs/drift/ ──► Predict page
                                                               │
-                                  particles at ONE forecast hour ──► ResponseTarget list
+                     optimization.drift_targets: particles cut into patches at dispatch, followed by particle id
                                                               │
-vessels (optimization/fixtures, tests/scenarios) ──► optimization.run_demo ──► outputs/routing/ ──► Respond page
+vessels (optimization/fixtures/gulf_standard.json) ──► optimization.run_drift_plan ──► outputs/routing/ ──► Respond page
 ```
 
 The dashboard only reads files; it never runs a model, simulation or solver. Every result file may carry `"synthetic": true`, and the dashboard then labels that page "Simulated scenario".
 
 ## 2. Handoffs
 
-| # | From → to | What is handed over | Status on 2 Nov |
+| # | From → to | What is handed over | Status on 3 Nov |
 | --- | --- | --- | --- |
-| H1 | Detection → dashboard | `outputs/detection/metrics.json`, `<image_id>_mask.png`, optional `<image_id>_image.png` | **Not compatible yet**: see I1, I2 |
+| H1 | Detection → dashboard | `outputs/detection/metrics.json`, `<image_id>_mask.png`, optional `<image_id>_image.png` | `metrics.json` shared in the right format; no mask or scene image, and no code in the repo writes `outputs/detection/` (report E1) |
 | H2 | Detection → drift | `spill.geojson` polygons, read as `DetectionOutput` with `oil_coordinates` | **Not possible yet**: the dataset crops have no CRS or transform. Drift uses a synthetic release point (I3) |
-| H3 | Environmental data → drift | `EnvironmentalData`: `wind_clean.nc`, `currents_clean.nc`, from `drift.environmental_data` | Code merged (PR #6). Region lon 55.0–57.0, lat 24.75–27.0; window 19–26 Oct 2026 UTC, hourly. OpenDrift read check pending |
-| H4 | Drift → dashboard | `outputs/drift/drift.geojson` (particles per forecast hour, D1) and `meta.json` (`DriftOutput`) | Exporter not written yet (`drift/simulate_drift.py` raises `NotImplementedError`) |
-| H5 | Drift → routing | `ResponseTarget` list: clusters of the particles at one selected forecast hour (D1) | Format agreed; clustering not written yet (I4) |
-| H6 | Routing → dashboard | `outputs/routing/routes.geojson`, `summary.json`, `targets.geojson`, from `optimization.dashboard_export` | **Compatible**, verified (section 3). Display gaps I6, I7 |
+| H3 | Environmental data → drift | `wind_clean.nc`, `currents_clean.nc`, from `drift.environmental_data` | Done (PR #6, #15). Region lon 55.0–57.0, lat 24.75–27.0; 19–26 Oct 2026 UTC, hourly. Read by OpenDrift in the 23 Oct run |
+| H4 | Drift → dashboard | `outputs/drift/drift.geojson` (particles per hour, D1) and `meta.json` (`DriftOutput`) | Done (PR #19): 1,000 particles, hourly 0–24 h, outline polygons; passes the checker and the dashboard loader |
+| H5 | Drift → routing | `ResponseTarget` list: patches of the particles at one forecast hour (D1) | Done (PR #20): `optimization.drift_targets` and `run_drift_plan`; verified on the 23 Oct run |
+| H6 | Routing → dashboard | `outputs/routing/routes.geojson`, `summary.json`, `targets.geojson`, `comparison.json`, `baseline/` | **Compatible**, verified. Display gaps: response time (report E2) and unserved targets (I7, report E7) |
 | H7 | Scenario files → routing | `optimization.scenario_io.load_scenario` reads both `optimization/fixtures/` and `tests/scenarios/` formats | Verified on all three files below |
 
 Coverage rule for routing (answers the open question from day 1): when some targets cannot be served, the solver returns `feasible`, lists the skipped targets in `message`, and `dashboard_export` writes them to `unserved_target_ids` in `summary.json`. Full coverage is therefore not required, and `check_optimization(..., require_full_coverage=False)` stays the default.
@@ -65,6 +65,8 @@ What was run on 2 Nov:
 
 ## 4. Compatibility issues
 
+Status on 3 Nov 2026 (end-to-end test, `docs/e2e_test_report.md`): **resolved** I1 (`metrics.json` shared in the dashboard format), I4 (particles in `drift.geojson`, Team C clusters one forecast hour), I5 (`source_hours` written), I8 (drift and routing use the northern UAE region), I9 (D3 moved to 23 Oct 12:00 UTC, the time the drift run uses), I10 (drift README updated). **Still open:** I2 (report E1), I6 (report E2), I7 (report E7). The report lists the issues found in the test (E1–E7) with owners and priorities.
+
 | ID | Between | What happens | Evidence | Proposed fix | Owner | Blocks today's milestone |
 | --- | --- | --- | --- | --- | --- | --- |
 | I1 | Detection → dashboard | Metric tiles stay empty and no warning appears. `evaluate.py` writes the scores under `"metrics"` and `report.py` under `"micro"`; the dashboard reads `dice`, `iou`, `precision`, `recall` at the top level only | Section 3 | Write `outputs/detection/metrics.json` with the four scores at the top level, plus `"split": "val"` and the limitations text. Keep the existing reports as they are | Ayham, with Obeid | Yes: "masks and metrics for the dashboard" |
@@ -75,7 +77,7 @@ What was run on 2 Nov:
 | I6 | Routing → dashboard | "Response time" (Overview and Respond) is the longest `estimated_travel_hours`, which is sailing only. `dashboard_export` also writes `finish_hours` (sailing + cleanup) | `gulf_standard`: 2.85 h shown, last vessel finishes at 8.69 h | **Agreed (D2):** the main metric is the largest `finish_hours` (8.69 h on `gulf_standard`); sailing time is shown separately (2.85 h), each with a clear label | Obeid | No, but it changes a headline number in the pitch |
 | I7 | Routing → dashboard | Unserved targets are not shown. `constrained_triage` serves 2 of 4 targets with status `feasible`; `summary.json` lists the other two in `unserved_target_ids`, which the dashboard does not read | Section 3 | Show unserved targets (and `served_by` on the target markers) on the Respond page | Obeid | No |
 | I8 | Scenarios ↔ forcing region | The environmental data covers lon 55.0–57.0. `tests/scenarios/abu_dhabi_offshore.json` (lon 52.7–54.7) and the dashboard demo scenario (map centre 24.5°N, 54.0°E) lie outside it, so they cannot be driven by real forcing. Team C fixtures and the drift release point are in the covered northern UAE / RAK area | `drift/environmental_data.py`, `dashboard/config.py` | Use the RAK area for the end-to-end demo. Add a RAK scenario to `tests/scenarios/` once the drift run exists | Maria, Obeid | No |
-| I9 | Environmental data → drift | Release time needed inside the data window (19 Oct 00:00 – 26 Oct 23:00 UTC) | `drift/DATA_SOURCES.md` | **Agreed (D3):** 20 Oct 2026 12:00 UTC, run ends 21 Oct 12:00 UTC. Inside the documented window; confirm on the actual files with the command in section 5 | Joud (file check), Maqqavi (`meta.json`) | Yes, until the file check passes |
+| I9 | Environmental data → drift | Release time needed inside the data window (19 Oct 00:00 – 26 Oct 23:00 UTC) | `drift/DATA_SOURCES.md` | **Resolved (D3):** 23 Oct 2026 12:00 UTC, used by the drift run and inside the data window | Joud, Maqqavi | No |
 | I10 | Docs | `drift/README.md` still says `environmental_data.py` raises `NotImplementedError`; it is implemented | Code review | Update the README | Joud | No |
 
 ## 5. Decisions (agreed 3 Nov 2026)
@@ -86,13 +88,9 @@ What was run on 2 Nov:
 
 **D2. Response time (I6).** The main response metric is the estimated cleanup completion time: sailing plus cleanup, the largest `finish_hours` over all vessels (8.69 h on `gulf_standard`). Sailing time is shown separately (2.85 h on `gulf_standard`), and both carry clear labels. The pitch quotes the completion time.
 
-**D3. Release time (I9).** The first 24-hour Gulf simulation starts on **20 Oct 2026 at 12:00 UTC** from the synthetic point 25.85°N, 55.65°E, so the forecast steps are 20 Oct 12:00, 20 Oct 18:00, 21 Oct 00:00 and 21 Oct 12:00 UTC. This is inside the window in `drift/DATA_SOURCES.md` (19 Oct 00:00 – 26 Oct 23:00 UTC) and the point is inside the data region. To confirm on the actual files, run from the repository root with the raw files in `data/`:
+**D3. Release time (I9).** The first 24-hour Gulf simulation starts on **23 Oct 2026 at 12:00 UTC** from the synthetic point 25.85°N, 55.65°E, so the forecast steps are 23 Oct 12:00, 23 Oct 18:00, 24 Oct 00:00 and 24 Oct 12:00 UTC. Omar first agreed 20 Oct 12:00 UTC and changed it to 23 Oct on 3 Nov, because the drift run, the routing plan and its validation already used 23 Oct. Both are synthetic test dates inside the data window (19 Oct 00:00 – 26 Oct 23:00 UTC).
 
-```powershell
-python -c "from datetime import datetime, timezone; from pathlib import Path; from drift.environmental_data import collect_environmental_data as c; print(c((55.0, 24.75, 57.0, 27.0), datetime(2026, 10, 20, 12, tzinfo=timezone.utc), datetime(2026, 10, 21, 12, tzinfo=timezone.utc), Path('data/coverage_check')))"
-```
-
-It raises a `ValueError` if the files do not cover the area and period, or if an hourly step is missing. It writes its 24-hour copies to `data/coverage_check/`, so the full-week files in `data/processed/` are not overwritten. Tested on synthetic files with the same names, variables and window: it passes for this period and raises for a run ending after 26 Oct 23:00. The box must also contain the slick for the whole 24 hours; if particles reach its edge, OpenDrift has no forcing beyond it.
+To check a drift output against D3: `python tests/check_outputs.py outputs --gulf --release 2026-10-23T12:00:00Z`.
 
 ## 6. Rules that still apply
 
