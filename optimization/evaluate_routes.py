@@ -17,7 +17,7 @@ How to read the numbers:
 from dataclasses import dataclass
 
 from optimization.config import DEFAULT_CONFIG, RoutingConfig
-from optimization.limits import service_hours
+from optimization.limits import service_hours, tank_m3
 from shared.schemas import OptimizationOutput, ResponseTarget
 
 
@@ -51,13 +51,13 @@ def _change_percent(new: float, old: float) -> float:
 def _oil_and_response(
     plan: OptimizationOutput, targets: tuple[ResponseTarget, ...], config: RoutingConfig
 ) -> tuple[float, float]:
-    """(oil recovered in m3, hours until the last vessel is back in port: sailing + cleanup)."""
-    volume_by_id = {t.target_id: t.oil_volume_m3 for t in targets}
+    """(pure oil recovered in m3, hours until the last vessel is back in port: sailing + cleanup)."""
+    by_id = {t.target_id: t for t in targets}
     oil = response = 0.0
     for route in plan.routes:
-        volumes = [volume_by_id[t] for t in route.assigned_target_ids if t in volume_by_id]
-        oil += sum(volumes)
-        cleanup = sum(service_hours(v, config) for v in volumes)
+        served = [by_id[t] for t in route.assigned_target_ids if t in by_id]
+        oil += sum(t.oil_volume_m3 for t in served)
+        cleanup = sum(service_hours(tank_m3(t), config) for t in served)
         response = max(response, (route.estimated_travel_hours or 0.0) + cleanup)
     return oil, response
 

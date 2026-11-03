@@ -5,6 +5,7 @@ Usage, from the repository root:
     python tests/check_outputs.py sample_outputs  # or any folder with the same layout
     python tests/check_outputs.py outputs --gulf  # also require points in the Gulf region
     python tests/check_outputs.py outputs --sites # per-site folders: outputs/sites/<id>/{drift,routing}/
+    python tests/check_outputs.py outputs --release 2026-10-23T12:00:00Z  # agreed release time (D3)
 
 The folder layout and file fields are the ones in dashboard/README.md ("Data contract"):
     <outputs>/detection/  metrics.json, mask.png or <image_id>_mask.png, spill.geojson (optional)
@@ -26,14 +27,19 @@ files belong together: comparison.json / summary.json `scenario_id` is the drift
 initial_location is within 1 km of the site's marker in spills.geojson (without that file the
 dashboard puts the marker at initial_location itself).
 
+--release turns a drift run that starts at another time into a problem. Without it, the
+release time and point found in meta.json are only reported as a note.
+
 --gulf applies the optional regional check from contract_checks. GeoJSON stores
 [longitude, latitude], so a swapped pair is still a valid point somewhere on Earth; only
 the regional check catches it.
 
+Exit code 1 if there is at least one problem. Standard library only.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import sys
@@ -116,10 +122,15 @@ def _read_features(path: Path, out: _Collector) -> list[dict] | None:
     features = [f for f in data["features"] if isinstance(f, dict)]
     if len(features) != len(data["features"]):
         out.problem(f"{path.name}: every feature must be an object")
-    for f in features:
+    for i, f in enumerate(features):
         f.setdefault("properties", {})
         if not isinstance(f["properties"], dict):
             f["properties"] = {}
+        geometry = f.get("geometry")
+        if geometry is not None and not isinstance(geometry, dict):
+            out.problem(f"{path.name} feature {i}: geometry must be a GeoJSON object, "
+                        f"got {type(geometry).__name__}; feature skipped")
+            f["_skip"] = True
     return features
 
 
@@ -236,6 +247,8 @@ def check_detection_dir(folder: Path, region: Region | None = None) -> list[Find
     else:
         features = _read_features(spill_file, out) or []
         for i, f in enumerate(features):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"spill.geojson feature {i}"
             if geometry.get("type") not in ("Polygon", "MultiPolygon"):
@@ -259,7 +272,8 @@ def check_detection_dir(folder: Path, region: Region | None = None) -> list[Find
 # --- Drift ----------------------------------------------------------------------------
 
 
-def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Finding], set[float]]:
+def check_drift_dir(folder: Path, region: Region | None = None,
+                    expected_release: datetime | None = None) -> tuple[list[Finding], set[float]]:
     """Findings and the forecast hours present in drift.geojson."""
     out = _Collector("drift", region)
     hours_found: set[float] = set()
@@ -278,6 +292,8 @@ def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Fi
 
     counts: dict[float, int] = {}
     for i, f in enumerate(features):
+        if f.get("_skip"):
+            continue
         geometry, props = f.get("geometry") or {}, f["properties"]
         where = f"drift.geojson feature {i}"
         hours = props.get("hours")
@@ -299,7 +315,10 @@ def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Fi
         missing = [h for h in DRIFT_HORIZONS if float(h) not in hours_found]
         if missing:
             out.note(f"drift.geojson: no features for hour(s) {missing}; agreed horizons are {list(DRIFT_HORIZONS)}")
-        if counts:
+        if counts and len(set(counts.values())) == 1:
+            n, hours = next(iter(counts.values())), sorted(counts)
+            out.note(f"particles: {n} at each of {len(hours)} steps ({hours[0]:g} to {hours[-1]:g} h)")
+        elif counts:
             summary = ", ".join(f"{h:g} h: {n}" for h, n in sorted(counts.items()))
             out.note(f"particles per step: {summary}")
         else:
@@ -313,6 +332,16 @@ def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Fi
         meta = None
     if isinstance(meta, dict):
         release = _check_meta(meta, out)
+        init = meta.get("initial_location")
+        where = (f" at {init.get('latitude')}, {init.get('longitude')}" if isinstance(init, dict) else "")
+        if release is not None:
+            out.note(f"release: {release.strftime('%Y-%m-%dT%H:%M:%SZ')}{where}")
+    if expected_release is not None and features:
+        if release is None:
+            out.problem("cannot check the release time: meta.json has no start_time or positions")
+        elif abs((release - expected_release).total_seconds()) > HOURS_TOLERANCE * 3600:
+            out.problem(f"release time is {release.strftime('%Y-%m-%dT%H:%M:%SZ')}, not the agreed "
+                        f"{expected_release.strftime('%Y-%m-%dT%H:%M:%SZ')}")
     if release is not None:
         for i, f in enumerate(features):
             stamp, hours = _utc(f["properties"].get("timestamp")), f["properties"].get("hours")
@@ -386,16 +415,20 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     summary_file = folder / "summary.json"
     summary = _read_json(summary_file, out) if summary_file.exists() else None
     status = summary.get("status") if isinstance(summary, dict) else None
+    valid_status = isinstance(status, str) and status in VALID_STATUSES
     if not summary_file.exists():
         out.problem("summary.json is missing (required by the dashboard)")
-    elif isinstance(summary, dict) and status not in VALID_STATUSES:
+    elif isinstance(summary, dict) and not valid_status:
         out.problem(f"summary.json: status must be one of {', '.join(sorted(VALID_STATUSES))}, got {status!r}")
 
     routes, vessels, missing_vessel_info = [], [], False
     route_props: list[dict] = []
+    returns_to_start = False
     routes_file = folder / "routes.geojson"
     if routes_file.exists():
         for i, f in enumerate(_read_features(routes_file, out) or []):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"routes.geojson feature {i}"
             if geometry.get("type") != "LineString":
@@ -414,6 +447,7 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
             routes.append(VesselRoute(vessel_id, tuple(ids), coords,
                                       props.get("estimated_distance_km"), props.get("estimated_travel_hours")))
             route_props.append(props)
+            returns_to_start |= len(coords) > 1 and coords[0] == coords[-1]
             given = [k for k in VESSEL_KEYS if k in props]
             if len(given) == len(VESSEL_KEYS) and coords:
                 vessels.append(Vessel(vessel_id, coords[0], *(props[k] for k in VESSEL_KEYS)))
@@ -429,6 +463,8 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     targets_file = folder / "targets.geojson"
     if targets_file.exists():
         for i, f in enumerate(_read_features(targets_file, out) or []):
+            if f.get("_skip"):
+                continue
             geometry, props = f.get("geometry") or {}, f["properties"]
             where = f"targets.geojson feature {i}"
             if geometry.get("type") != "Point":
@@ -461,7 +497,7 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
                 invalid_vessels.add(v.vessel_id)
     vessels = [v for v in vessels if v.vessel_id not in invalid_vessels]
 
-    if status in VALID_STATUSES:
+    if valid_status:
         plan = OptimizationOutput(routes=tuple(routes), status=status,
                                   message=summary.get("message") if isinstance(summary, dict) else None)
         skip = []
@@ -488,8 +524,9 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
     travel = [r.estimated_travel_hours for r in routes if _is_number(r.estimated_travel_hours)]
     finish = [p["finish_hours"] for p in route_props if _is_number(p.get("finish_hours"))]
     if travel and finish and max(finish) > max(travel) + 0.01:
-        out.note(f"the dashboard's response time is the longest sailing time ({max(travel):.2f} h); "
-                 f"including cleanup, the last vessel finishes at {max(finish):.2f} h ('finish_hours')")
+        back = ", including the trip back to port" if returns_to_start else ""
+        out.note(f"response time (D2): largest 'finish_hours' is {max(finish):.2f} h (sailing + cleanup{back}); "
+                 f"longest sailing time is {max(travel):.2f} h. Show both with clear labels")
     unserved = summary.get("unserved_target_ids") if isinstance(summary, dict) else None
     if isinstance(unserved, list) and unserved:
         out.note(f"{len(unserved)} target(s) not served ({', '.join(map(str, unserved))}); "
@@ -503,10 +540,11 @@ def check_routing_dir(folder: Path, drift_hours: set[float] | None = None,
 # --- All sections ---------------------------------------------------------------------
 
 
-def check_outputs(root: Path, region: Region | None = None) -> list[Finding]:
+def check_outputs(root: Path, region: Region | None = None,
+                  expected_release: datetime | None = None) -> list[Finding]:
     root = Path(root)
     findings = check_detection_dir(root / "detection", region)
-    drift_findings, drift_hours = check_drift_dir(root / "drift", region)
+    drift_findings, drift_hours = check_drift_dir(root / "drift", region, expected_release)
     findings += drift_findings
     findings += check_routing_dir(root / "routing", drift_hours, region)
     return findings
@@ -572,8 +610,12 @@ def _check_site_links(site: Path, markers: dict[str, tuple[float, float]] | None
     return out.findings
 
 
-def check_sites(root: Path, region: Region | None = None) -> list[Finding]:
-    """The drift and routing checks for every <root>/sites/<id>/, plus the links within each site."""
+def check_sites(root: Path, region: Region | None = None,
+                expected_release: datetime | None = None) -> list[Finding]:
+    """The drift and routing checks for every <root>/sites/<id>/, plus the links within each site.
+
+    ``expected_release`` (--release) is checked for every site's drift run.
+    """
     sites_dir = Path(root) / "sites"
     out = _Collector("sites")
     folders = sorted(p for p in sites_dir.iterdir() if p.is_dir()) if sites_dir.is_dir() else []
@@ -583,7 +625,7 @@ def check_sites(root: Path, region: Region | None = None) -> list[Finding]:
     markers = _site_markers(Path(root), out)
     findings = list(out.findings)
     for site in folders:
-        drift_findings, drift_hours = check_drift_dir(site / "drift", region)
+        drift_findings, drift_hours = check_drift_dir(site / "drift", region, expected_release)
         routing_findings = check_routing_dir(site / "routing", drift_hours, region)
         findings += [Finding(f"{site.name} {f.section}", f.level, f.text) for f in drift_findings + routing_findings]
         findings += _check_site_links(site, markers)
@@ -591,21 +633,31 @@ def check_sites(root: Path, region: Region | None = None) -> list[Finding]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
-    region = GULF_REGION if "--gulf" in args else None
-    per_site = "--sites" in args
-    folders = [a for a in args if a not in ("--gulf", "--sites")]
-    root = Path(folders[0]) if folders else REPO_ROOT / "outputs"
+    parser = argparse.ArgumentParser(description="Check the result files under an outputs folder.")
+    parser.add_argument("folder", nargs="?", default=str(REPO_ROOT / "outputs"))
+    parser.add_argument("--gulf", action="store_true", help="also require points in the Gulf region")
+    parser.add_argument("--release", help="agreed drift release time, ISO 8601 UTC, e.g. 2026-10-23T12:00:00Z")
+    parser.add_argument("--sites", action="store_true",
+                        help="check every <folder>/sites/<id>/ (drift and routing per site) instead of drift/ and routing/")
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    region = GULF_REGION if args.gulf else None
+    expected = _utc(args.release) if args.release else None
+    if args.release and expected is None:
+        print(f"--release must be ISO 8601 with a timezone, e.g. 2026-10-23T12:00:00Z, got {args.release!r}")
+        return 2
+    root = Path(args.folder)
     if not root.is_dir():
         print(f"Folder not found: {root}")
         return 1
-    if per_site:
-        findings = check_detection_dir(root / "detection", region) + check_sites(root, region)
+    if args.sites:
+        findings = check_detection_dir(root / "detection", region) + check_sites(root, region, expected)
     else:
-        findings = check_outputs(root, region)
-    print(f"Checking {root}" + (f" (region: {region.name})" if region else "")
-          + (", per site" if per_site else "") + "\n")
-    sections = list(dict.fromkeys(f.section for f in findings)) if per_site else ["detection", "drift", "routing"]
+        findings = check_outputs(root, region, expected)
+    extras = [f"region: {region.name}"] if region else []
+    extras += [f"agreed release: {args.release}"] if expected else []
+    extras += ["per site"] if args.sites else []
+    print(f"Checking {root}" + (f" ({'; '.join(extras)})" if extras else "") + "\n")
+    sections = list(dict.fromkeys(f.section for f in findings)) if args.sites else ["detection", "drift", "routing"]
     for section in sections:
         items = [f for f in findings if f.section == section]
         problems = [f for f in items if f.level == "problem"]

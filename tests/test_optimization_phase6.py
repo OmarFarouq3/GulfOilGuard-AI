@@ -87,7 +87,8 @@ def test_feature_volumes_and_particle_ids(tmp_path):
     particles = particles_at(forecast, 6)
     assert [p.volume_m3 for p in particles] == [20.0, 20.0]
     assert [p.particle_id for p in particles] == ["7", "8"]
-    assert forecast.notes == ()  # nothing had to be assumed
+    # only the tank basis had to be assumed: no meta.json, so no water fraction for emulsion
+    assert len(forecast.notes) == 1 and "counted as pure oil" in forecast.notes[0]
     assert not forecast.synthetic
 
 
