@@ -104,7 +104,8 @@ class _Voyage:
         speed = self.vessel.speed_m_per_s
         meet, target, km = _intercept(distance_to, track, self.clock, speed)
         if target.oil_volume_m3 < gone_below_m3:
-            return None, "the oil is gone (stranded or weathered) by the time a vessel gets there"
+            return None, (f"less than {gone_below_m3:g} m3 left by the time a vessel gets there "
+                          "(stranded, weathered or too small to be worth a trip)")
         if target.oil_volume_m3 > self.tank + 1e-9:
             return None, "not enough room left in the tank"
         done = track.target_at(meet + service_hours(target.oil_volume_m3, config)).location

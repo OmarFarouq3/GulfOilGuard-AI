@@ -1,0 +1,9 @@
+# Cleanup routing only (optimization/). Lighter than the root requirements.txt:
+# no torch or opendrift needed to plan routes from existing drift files.
+ortools>=9.10      # vehicle routing solver
+numpy>=1.26
+scipy>=1.11        # Dijkstra on the sea grid
+pillow>=10.3       # rasterises the land polygons into the sea grid
+pyshp>=2.3         # reads data/land/ne_10m_land.shp
+matplotlib>=3.8    # only for optimization.sea_check plots
+pytest>=8.0        # tests

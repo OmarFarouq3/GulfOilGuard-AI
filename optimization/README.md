@@ -70,6 +70,72 @@ must provide or can read.
 
 ## 2. Quickstart & Usage
 
+### 0. Setup and the full Gulf run (start here)
+
+Every command runs from the **repository root**. Needs Python 3.10 or newer.
+
+**Step 1: environment (once).** `optimization/requirements.txt` is enough for routing; the root `requirements.txt` (torch, OpenDrift) is not needed.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate                 # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r optimization/requirements.txt
+```
+
+**Step 2: land data (once, recommended).** Download [`ne_10m_land.zip`](https://www.naturalearthdata.com/http//www.naturalearthdata.com/download/10m/physical/ne_10m_land.zip) (Natural Earth, public domain) and unzip it so that `data/land/ne_10m_land.shp` exists. Without it, routing still runs but uses straight lines that may cross land, and says so in every plan's message. The first run builds the sea grid (cached in `data/cache/`); later runs start fast. `data/` is not committed.
+
+**Step 3: drift forecast.** Put the drift module's two files (Maqqavi's OpenDrift run, section 3.1) into `outputs/drift/`:
+
+```text
+outputs/drift/drift.geojson
+outputs/drift/meta.json
+```
+
+`outputs/` is not committed, so get these from the drift module or the team. No drift files yet? Use the synthetic stand-in: `python -m optimization.drift_standin`, then add `--drift-dir optimization/examples/drift_standin` to step 4.
+
+**Step 4: plan the cleanup.**
+
+```bash
+python -m optimization.run_drift_plan | tee outputs/part3_gulf_run.txt
+```
+
+This reads the drift files, cuts the oil into patches when the vessels leave (6 h after release), follows each patch as it drifts, plans the vessel routes with OR-Tools and builds the nearest-first baseline against the same moving oil. It prints both plans and a comparison table. Check the third printed line: it must say `followed by their particle ids` (moving targets), not `STATIC`.
+
+It writes (`outputs/routing/` is what the dashboard's Respond page reads):
+
+| File | Content |
+| --- | --- |
+| `outputs/routing/routes.geojson` | one route per working vessel: port, stops in order, back to port |
+| `outputs/routing/targets.geojson` | the oil patches, placed where each vessel meets its patch |
+| `outputs/routing/summary.json` | status, every assumption in plain words, idle vessels, unserved targets |
+| `outputs/routing/comparison.json` | optimized vs baseline: assignments, rule violations, metrics, drift details |
+| `outputs/routing/baseline/` | the baseline plan as the same three files |
+
+**Step 5 (optional): other dispatch times.** When the vessels leave is an assumption (6 h). To see how the comparison changes, write each run to its own folder so `outputs/routing/` stays the main plan:
+
+```bash
+python -m optimization.run_drift_plan --dispatch-hours 0  --dashboard-dir outputs/routing_d0
+python -m optimization.run_drift_plan --dispatch-hours 12 --dashboard-dir outputs/routing_d12
+```
+
+Other options: `--fleet <scenario.json>` (vessels, default `optimization/fixtures/gulf_standard.json`), `--drift-dir <folder>`. `python -m optimization.run_drift_plan --help` lists them.
+
+**Step 6: tests.**
+
+```bash
+python -m pytest tests/test_scenario.py tests/test_optimization_phase*.py -q
+```
+
+These are the routing tests only (`tests/test_model.py` is the detection model and needs torch). They run on built-in and stand-in data, so they pass without the drift files or the land data; they take about 2 minutes.
+
+**Step 7: see it in the dashboard.** The dashboard has its own light requirements:
+
+```bash
+python -m pip install -r dashboard/requirements.txt
+python dashboard/check_schema.py
+streamlit run dashboard/app.py            # then open 03 Respond
+```
+
 ### A. Load a Scenario in Python
 
 ```python
@@ -115,10 +181,10 @@ python -m optimization.sea_check --scenario optimization/fixtures/smoke_test.jso
 ### D. Plan from a Drift Forecast: Moving Oil (Phase 6)
 
 ```bash
-# Real OpenDrift output (once Maqqavi has written outputs/drift/, see section 3.1)
+# Real OpenDrift output (Maqqavi's drift.geojson + meta.json in outputs/drift/, see section 3.1)
 python -m optimization.run_drift_plan --dispatch-hours 6
 
-# Until then: a SYNTHETIC stand-in at the agreed start point 25.85 N, 55.65 E (not a simulation result)
+# For tests: a SYNTHETIC stand-in at the agreed start point 25.85 N, 55.65 E (not a simulation result)
 python -m optimization.drift_standin
 python -m optimization.run_drift_plan --drift-dir optimization/examples/drift_standin
 ```
@@ -147,7 +213,7 @@ python -m pytest tests/test_optimization_phase1.py tests/test_optimization_phase
 
 This section is the source of truth for what the routing module **needs from** and **gives to** each team. It is written to be handed to a teammate or their coding agent as is. Paths are relative to the repository root. Coordinates are WGS84 degrees. Times are hours since the release, and timestamps are UTC with a `Z`. GeoJSON coordinates are `[longitude, latitude]`.
 
-Status today: the routing side is done and tested against a synthetic stand-in (`optimization/examples/drift_standin/`). It switches to the real drift output with no code change once 3.1 is delivered.
+Status today: Maqqavi's OpenDrift run (`openoil-25.85N-55.65E-20261023T1200Z`: 1000 particles, hourly 0 to 24 h, release 2026-10-23 12:00 UTC) is delivered and meets 3.1. Copy its `drift.geojson` and `meta.json` into `outputs/drift/` and `run_drift_plan` uses it with no code change; the patches are followed by their particle ids. The synthetic stand-in (`optimization/examples/drift_standin/`) is kept for tests.
 
 ### 3.1 Maqqavi: drift simulation (OpenDrift) → `outputs/drift/`
 
