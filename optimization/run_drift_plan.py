@@ -11,6 +11,7 @@ The fleet comes from a scenario file; its targets are ignored. Run from the repo
     python -m optimization.run_drift_plan
     python -m optimization.run_drift_plan --drift-dir optimization/examples/drift_standin
     python -m optimization.run_drift_plan --dispatch-hours 12 --fleet optimization/fixtures/gulf_standard.json
+    python -m optimization.run_drift_plan --pure-oil    # tanks as pure oil, to compare with emulsion
 """
 
 import argparse
@@ -85,11 +86,14 @@ def main() -> None:
                         help="when the vessels leave port, hours since release (a drift step)")
     parser.add_argument("--fleet", default=str(DEFAULT_FLEET), help="scenario file with the vessels")
     parser.add_argument("--dashboard-dir", default=str(DEFAULT_DIR))
+    parser.add_argument("--pure-oil", action="store_true",
+                        help="count tank use and cleanup time as pure oil, not emulsion (for comparison)")
     args = parser.parse_args()
     dispatch = _whole(args.dispatch_hours)
+    drift_config = replace(DEFAULT_DRIFT_CONFIG, count_emulsion=not args.pure_oil)
 
     try:
-        forecast = load_drift(args.drift_dir)
+        forecast = load_drift(args.drift_dir, drift_config)
     except FileNotFoundError as exc:
         standin = STANDIN_DIR.relative_to(REPO_ROOT)
         raise SystemExit(f"{exc}\nNo drift output yet? Test with the synthetic stand-in:\n"
@@ -112,6 +116,11 @@ def main() -> None:
           f"holding {targeted:.1f} m3 ({patches.untargeted_m3:.1f} m3 in small patches not targeted)")
     for note in forecast.notes:
         print(f"  assumption: {note}")
+    water = forecast.water_fraction
+    if water:
+        print(f"  emulsion: water fraction {water[dispatch]:.0%} at dispatch, {water[steps[-1]]:.0%} at "
+              f"{steps[-1]:g} h, so 1 m3 of oil fills {1 / (1 - water[dispatch]):.2f} to "
+              f"{1 / (1 - water[steps[-1]]):.2f} m3 of tank")
     print(f"Fleet: {fleet_id}, {len(vessels)} vessels")
 
     provider = default_provider(DEFAULT_CONFIG)  # one provider, so both plans measure alike
@@ -157,6 +166,8 @@ def main() -> None:
             "targeted_oil_at_dispatch_m3": round(targeted, 2),
             "untargeted_oil_m3": round(patches.untargeted_m3, 2),
             "cell_deg": DEFAULT_DRIFT_CONFIG.cell_deg,
+            "tank_basis": "emulsion" if water else "pure oil",
+            "water_fraction_by_hour": {f"{h:g}": round(w, 3) for h, w in water.items()} or None,
             "assumptions": notes,
         },
         "fleet": fleet_id,

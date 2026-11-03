@@ -12,8 +12,14 @@ fills in with no change on the dashboard side:
 
 Fields marked "extension" are not in shared/schemas.py. The dashboard ignores the ones it
 does not know, so they are safe to add and ready for the dashboard to pick up:
-  oil_collected_m3   (the dashboard already reads this one) oil the vessel recovers
-  cleanup_hours      hours spent cleaning, at the assumed rate in config.py
+  oil_collected_m3   (the dashboard already reads this one) pure oil the vessel recovers
+  emulsion_collected_m3, tank_used_percent
+                     (routes, when the targets know their emulsion) what the vessel takes on:
+                     oil plus the water mixed into it, and how full that leaves its tank
+  emulsion_m3, water_fraction
+                     (targets, same condition) the patch's emulsion when the vessel meets it
+  cleanup_hours      hours spent cleaning (skimming the emulsion when known), at the assumed
+                     rate in config.py
   finish_hours       sailing + cleanup: when this vessel is back in port. estimated_travel_hours
                      is sailing only (the trip back included), so "response time" should be
                      the largest finish_hours
@@ -44,7 +50,7 @@ from pathlib import Path
 from optimization.checks import check_plan
 from optimization.config import DEFAULT_CONFIG, REPO_ROOT, RoutingConfig
 from optimization.evaluate_routes import evaluate_routes
-from optimization.limits import service_hours
+from optimization.limits import EmulsionTarget, service_hours, tank_m3
 from shared.schemas import GeoCoordinate, OptimizationOutput, ResponseTarget, Vessel
 
 DEFAULT_DIR = REPO_ROOT / "outputs" / "routing"
@@ -98,7 +104,7 @@ def export_for_dashboard(
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     vessels_by_id = {v.vessel_id: v for v in vessels}
-    volume_by_id = {t.target_id: t.oil_volume_m3 for t in targets}
+    targets_by_id = {t.target_id: t for t in targets}
     served_by: dict[str, str] = {}
 
     route_features = []
@@ -107,18 +113,23 @@ def export_for_dashboard(
         if not route.assigned_target_ids:
             idle.append(route.vessel_id)
             continue
-        oil = sum(volume_by_id.get(t, 0.0) for t in route.assigned_target_ids)
-        cleanup = sum(service_hours(volume_by_id[t], config) for t in route.assigned_target_ids if t in volume_by_id)
+        served = [targets_by_id[t] for t in route.assigned_target_ids if t in targets_by_id]
+        load = sum(tank_m3(t) for t in served)
+        cleanup = service_hours(load, config)
         properties = {
             "vessel_id": route.vessel_id,
             "assigned_target_ids": list(route.assigned_target_ids),
             "estimated_distance_km": route.estimated_distance_km,
             "estimated_travel_hours": route.estimated_travel_hours,
-            "oil_collected_m3": oil,
+            "oil_collected_m3": sum(t.oil_volume_m3 for t in served),
             "cleanup_hours": cleanup,
             "finish_hours": (route.estimated_travel_hours or 0.0) + cleanup,
         }
         vessel = vessels_by_id.get(route.vessel_id)
+        if any(isinstance(t, EmulsionTarget) for t in served):
+            properties["emulsion_collected_m3"] = load
+            if vessel is not None:
+                properties["tank_used_percent"] = 100 * load / vessel.capacity_m3
         if vessel is not None:  # the dashboard wants all three or none
             properties["speed_m_per_s"] = vessel.speed_m_per_s
             properties["capacity_m3"] = vessel.capacity_m3
@@ -169,6 +180,8 @@ def export_for_dashboard(
                         "target_id": t.target_id,
                         "oil_volume_m3": t.oil_volume_m3,
                         "served_by": served_by.get(t.target_id),
+                        **({"emulsion_m3": t.emulsion_m3, "water_fraction": t.water_fraction}
+                           if isinstance(t, EmulsionTarget) else {}),
                         **extra,
                         **target_properties.get(t.target_id, {}),
                     },

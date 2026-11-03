@@ -13,7 +13,7 @@ OptimizationOutput type, so the same checks and the same dashboard code work on 
 
 from optimization.checks import early_result
 from optimization.config import DEFAULT_CONFIG, RoutingConfig
-from optimization.limits import leg_minutes, minutes_down, service_minutes, unserved_reason
+from optimization.limits import leg_minutes, minutes_down, service_minutes, tank_m3, unserved_reason
 from optimization.routing_model import RETURN_NOTE
 from optimization.sea_distance import DistanceProvider, default_provider
 from optimization.units import travel_hours
@@ -64,7 +64,7 @@ def _plan(
         best = None  # (trip km, vessel, target, minutes needed)
         for v, vessel in enumerate(vessels):
             for t in open_targets:
-                volume = targets[t].oil_volume_m3
+                volume = tank_m3(targets[t])
                 trip_km = km[where[v]][n_vessels + t]
                 needed = leg_minutes(trip_km, vessel.speed_m_per_s) + service_minutes(volume, config)
                 home = leg_minutes(km[n_vessels + t][v], vessel.speed_m_per_s)  # and back to port after it
@@ -74,7 +74,7 @@ def _plan(
         if best is None:
             break
         _, v, t, needed = best
-        tank_left[v] -= targets[t].oil_volume_m3
+        tank_left[v] -= tank_m3(targets[t])
         minutes_left[v] -= needed
         where[v] = n_vessels + t
         paths[v].append(n_vessels + t)
