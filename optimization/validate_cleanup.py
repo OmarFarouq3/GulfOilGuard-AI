@@ -17,9 +17,11 @@ What is checked, in five groups:
   C. fleet          ports are known depots (Port Saqr, Hamriyah), speeds and tanks
   D. routes         start and end at the home port, tank and cleanup time (as emulsion when
                     the plan counted it, see tank_basis in comparison.json; else pure oil, with
-                    the emulsion as a warning), working hours, no target served twice,
-                    served_by agrees, unserved
-  E. comparison     rule violations, optimized vs baseline
+                    the emulsion as a warning), sailing time = distance / speed, distance no
+                    shorter than a straight line, finish_hours = sailing + cleanup, working
+                    hours, no target served twice, served_by agrees, unserved
+  E. comparison     rule violations, and every metric in comparison.json recalculated from the
+                    route and target files (not taken from the file)
 
 Every line is OK, WARN (plausible but an assumption to state) or FAIL (a broken rule).
 Run from the repository root:
@@ -90,6 +92,11 @@ def _km(a: GeoCoordinate, b: GeoCoordinate) -> float:
     north = (a.latitude - b.latitude) * 111.2
     east = (a.longitude - b.longitude) * 111.2 * cos(radians((a.latitude + b.latitude) / 2))
     return hypot(north, east)
+
+
+def _line_km(coords) -> float:
+    """Length of a [[lon, lat], ...] line, straight between its points."""
+    return sum(_km(_point(a), _point(b)) for a, b in zip(coords, coords[1:]))
 
 
 def _point(coords) -> GeoCoordinate:
@@ -365,14 +372,32 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
         cleanup = load / rate
         r.check(g, abs(cleanup - p["cleanup_hours"]) <= max(0.01, EMULSION_TOL * cleanup),
                 f"{vid}: cleanup {p['cleanup_hours']:.2f} h = {load:.1f} m3 {basis} / {rate:g} m3/h")
-        r.check(g, p["finish_hours"] <= v.available_hours + 1e-6,
-                f"{vid}: sailing {p['estimated_travel_hours']:.2f} h + cleanup {p['cleanup_hours']:.2f} h = "
-                f"{p['finish_hours']:.2f} h of a {v.available_hours:g} h shift ({p['estimated_distance_km']:.1f} km, "
+        # Sailing: the route's distance at the vessel's speed (out, between stops and back to port).
+        km = p["estimated_distance_km"]
+        sailing = km * 1000 / v.speed_m_per_s / 3600
+        r.check(g, abs(sailing - p["estimated_travel_hours"]) < 0.01,
+                f"{vid}: sailing {p['estimated_travel_hours']:.2f} h = {km:.1f} km / "
+                f"{v.speed_m_per_s * KNOTS_PER_M_PER_S:.1f} kn (rechecked {sailing:.2f} h)")
+        # The distance cannot be shorter than straight lines through the stops; the drawn sea path
+        # (grid cell centres) is a little longer than the routed distance, so it is an upper bound.
+        straight = _line_km(f["geometry"]["coordinates"])
+        drawn = _line_km(p["sea_path"]) if p.get("sea_path") else None
+        r.check(g, km >= 0.99 * straight and (drawn is None or km <= drawn * 1.01),
+                f"{vid}: {km:.1f} km is between the straight line through its stops ({straight:.1f} km)"
+                + ("" if drawn is None else f" and its drawn sea path ({drawn:.1f} km)"), level_if_not="WARN")
+        # finish_hours must be sailing + cleanup, both as rechecked above.
+        finish = p["estimated_travel_hours"] + cleanup
+        r.check(g, abs(finish - p["finish_hours"]) <= max(0.01, EMULSION_TOL * finish),
+                f"{vid}: finish_hours {p['finish_hours']:.2f} h = sailing {p['estimated_travel_hours']:.2f} h + "
+                f"cleanup {cleanup:.2f} h (rechecked {finish:.2f} h)")
+        r.check(g, finish <= v.available_hours + 1e-6,
+                f"{vid}: finishes in {finish:.2f} h of a {v.available_hours:g} h shift ({km:.1f} km, "
                 "trip back to port included)")
         out.append({"vessel_id": vid, "targets": assigned, "oil_m3": round(oil, 2), "emulsion_m3": round(emulsion, 1),
-                    "capacity_m3": v.capacity_m3, "distance_km": round(p["estimated_distance_km"], 1),
-                    "travel_hours": round(p["estimated_travel_hours"], 2), "cleanup_hours": round(p["cleanup_hours"], 2),
-                    "finish_hours": round(p["finish_hours"], 2), "available_hours": v.available_hours})
+                    "capacity_m3": v.capacity_m3, "distance_km": round(km, 1),
+                    "travel_hours": round(p["estimated_travel_hours"], 2), "cleanup_hours": round(cleanup, 2),
+                    "finish_hours": round(finish, 2), "available_hours": v.available_hours,
+                    "_exact": {"oil": oil, "km": km, "sailing": p["estimated_travel_hours"], "finish": finish}})
 
     unserved = summary.get("unserved_target_ids", [])
     unserved_m3 = sum(targets[t]["oil_volume_m3"] for t in unserved if t in targets)
@@ -384,27 +409,81 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
     late = [t for t, p in targets.items() if (p.get("meet_hours") or 0) > max(drift_info["afloat_by_hour"])]
     r.check(g, not late, "every meeting is inside the forecast window" + ("" if not late else f": not {late}"), "WARN")
     return {"routes": out, "unserved": unserved, "unserved_m3": unserved_m3, "idle": summary.get("idle_vessel_ids", []),
-            "status": summary.get("status"), "message": summary.get("message")}
+            "status": summary.get("status"), "message": summary.get("message"),
+            "total_oil_m3": sum(t["oil_volume_m3"] for t in targets.values())}
 
 
 # --- E. comparison --------------------------------------------------------------------------
 
 
-def check_comparison(comparison: dict, r: Report) -> dict:
+def _recalculated(plan: dict) -> dict:
+    """The comparison metrics of one plan, from its own route and target files (evaluate_routes' definitions)."""
+    rows = [row["_exact"] for row in plan["routes"]]
+    covered = {t for row in plan["routes"] for t in row["targets"]}
+    km = sum(x["km"] for x in rows)
+    return {"oil_recovered_m3": sum(x["oil"] for x in rows), "response_hours": max((x["finish"] for x in rows), default=0.0),
+            "distance_km": km, "travel_hours": sum(x["sailing"] for x in rows),
+            "longest_route_hours": max((x["sailing"] for x in rows), default=0.0), "targets_covered": len(covered),
+            "distance_km_per_target": km / len(covered) if covered else float("nan"), "_covered": covered}
+
+
+def check_comparison(comparison: dict, optimized: dict, baseline: dict | None, r: Report) -> dict:
+    """Recalculate every metric in comparison.json from the plan files; none is taken on trust."""
     g = "E comparison"
     for side in ("optimized", "baseline"):
         v = (comparison.get(side) or {}).get("rule_violations", [])
-        r.check(g, not v, f"{side}: no rule violations" + ("" if not v else f": {v}"))
+        r.check(g, not v, f"{side}: comparison.json lists no rule violations" + ("" if not v else f": {v}"))
     m = comparison.get("metrics") or {}
     if not m:
         r.warn(g, f"no metrics: {comparison.get('metrics_error')}")
         return {}
-    r.ok(g, f"oil recovered: optimized {m['optimized_oil_recovered_m3']:.1f} m3 vs baseline "
-         f"{m['baseline_oil_recovered_m3']:.1f} m3 (of {m.get('total_oil_m3', 0):.1f} m3 in targets)")
-    r.ok(g, f"response time (last vessel back in port): optimized {m['optimized_response_hours']:.2f} h vs "
-         f"baseline {m['baseline_response_hours']:.2f} h; distance {m['optimized_distance_km']:.1f} vs "
-         f"{m['baseline_distance_km']:.1f} km")
-    return m
+    if baseline is None:
+        r.warn(g, "no baseline plan files, so the comparison metrics are only reported, not recalculated")
+        return {"reported": m}
+
+    opt, base = _recalculated(optimized), _recalculated(baseline)
+    mine = {f"{side}_{k}": v for side, plan in (("optimized", opt), ("baseline", base))
+            for k, v in plan.items() if not k.startswith("_")}
+
+    def change(a, b):
+        return 0.0 if b == 0 else (a - b) / b * 100.0
+
+    for k in ("oil_recovered", "response_hours", "distance", "travel_hours"):
+        key = {"oil_recovered": "oil_recovered_m3", "distance": "distance_km"}.get(k, k)
+        mine[f"{k}_change_percent"] = change(mine[f"optimized_{key}"], mine[f"baseline_{key}"])
+    mine["targets_covered_difference"] = opt["targets_covered"] - base["targets_covered"]
+    mine["same_targets_covered"] = 1.0 if opt["_covered"] == base["_covered"] else 0.0
+    mine["total_oil_m3"] = optimized["total_oil_m3"]  # all targets in the optimized plan's targets.geojson
+
+    labels = {
+        "total_oil_m3": ("oil in all targets", "m3"), "oil_recovered_m3": ("oil recovered", "m3"),
+        "response_hours": ("response time, last vessel back in port", "h"), "distance_km": ("distance", "km"),
+        "travel_hours": ("sailing time, all vessels", "h"), "longest_route_hours": ("longest single route", "h"),
+        "targets_covered": ("targets covered", ""), "distance_km_per_target": ("distance per target", "km"),
+    }
+    mismatched = []
+    for key in m:
+        if key not in mine:
+            mismatched.append(f"{key} (not recalculated)")
+            continue
+        a, b = m[key], mine[key]
+        tol = 0.05 if key.endswith("_percent") else max(0.01, 0.001 * abs(b))
+        if not (a == b or abs(a - b) <= tol):
+            mismatched.append(f"{key}: file {a:.3f}, recalculated {b:.3f}")
+    r.check(g, not mismatched, f"all {len(m)} metrics in comparison.json recalculated from the route and target "
+            "files and equal" + ("" if not mismatched else f": {'; '.join(mismatched)}"))
+    for key, (label, unit) in labels.items():
+        if key == "total_oil_m3":
+            r.ok(g, f"{label}: {mine[key]:.1f} {unit} (recalculated)")
+            continue
+        o, b = mine[f"optimized_{key}"], mine[f"baseline_{key}"]
+        extra = f", {change(o, b):+.1f} %" if key in ("oil_recovered_m3", "response_hours", "distance_km", "travel_hours") else ""
+        num = "{:g}" if key == "targets_covered" else "{:.2f}"
+        r.ok(g, f"{label}: optimized {num.format(o)} vs baseline {num.format(b)}{' ' + unit if unit else ''}{extra} "
+             "(recalculated)")
+    r.ok(g, "same targets covered by both plans" if mine["same_targets_covered"] else
+         "the plans cover different targets, so read coverage before distance and time")
+    return {"reported": m, "recalculated": mine}
 
 
 # --- synthetic fixture vs real --------------------------------------------------------------
@@ -452,7 +531,7 @@ def main() -> None:
     if baseline_dir is not None and (baseline_dir / "summary.json").exists():
         result["baseline"] = check_routes(baseline_dir, vessels, drift, r, label="baseline")
     if comparison:
-        result["metrics"] = check_comparison(comparison, r)
+        result["metrics"] = check_comparison(comparison, result["optimized"], result.get("baseline"), r)
     else:
         r.warn("E comparison", f"no comparison.json in {routing_dir}: baseline not checked")
     if args.synthetic_fixture and Path(args.synthetic_fixture).exists():

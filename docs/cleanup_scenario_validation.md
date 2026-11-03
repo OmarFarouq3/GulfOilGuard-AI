@@ -15,13 +15,13 @@ Everything here is **SYNTHETIC**: the release (300 m³ Generic Medium Crude at 2
 
 The data files are shared through the team OneDrive (Team C folder) and are not in Git. `validate_cleanup.py` needs no OR-Tools. It rebuilds the patches from the raw drift file and checks the plan against them. It accepts both the layout `run_drift_plan` writes (plan in the folder, `baseline/` inside it) and the hand-shared one (`Optimized/`, `Baseline/`).
 
-**Results.** No rule is broken in any run. The warnings are assumptions to state, listed under "Issues" below.
+**Results.** No rule is broken in any run. The warnings are assumptions to state, listed under "Issues" below. The two later runs are checked with the current validator, which also recalculates sailing time (distance / speed), `finish_hours` (sailing + cleanup) and every metric in `comparison.json` from the route and target files, so the comparison numbers are verified, not just reported. The earlier run was checked before those checks were added, and its files have since been replaced by Haris's latest.
 
 | Run | Fleet it used (`Team C/Fleet/`) | Result | Section |
 | --- | --- | --- | --- |
 | Haris, earlier, tanks as pure oil | `gulf_standard_old_depots.json` (depots on port roads) | 52 OK, 7 WARN, 0 FAIL | 2 to 4 |
-| Haris, latest, tanks as emulsion | `gulf_standard_entrance.json` (Port Saqr at its harbour entrance) | 85 OK, 5 WARN, 0 FAIL | 7 |
-| Nihal, local sea-grid re-run with the current depots | `gulf_standard.json` (Port Saqr approach point) | 87 OK, 3 WARN, 0 FAIL | 7 |
+| Haris, latest, tanks as emulsion | `gulf_standard_entrance.json` (Port Saqr at its harbour entrance) | 106 OK, 7 WARN, 0 FAIL | 7 |
+| Nihal, local sea-grid re-run with the current depots | `gulf_standard.json` (Port Saqr approach point) | 110 OK, 3 WARN, 0 FAIL | 7 |
 
 To re-run a check, pass the fleet that run used, for example the latest:
 
@@ -135,9 +135,9 @@ Haris's commit `e247eed` counts what a vessel takes on as emulsion, `oil / (1 - 
 
 **Haris's sea-grid run** (3 Nov, new code, Port Saqr at its harbour entrance, fleet `gulf_standard_entrance.json`), shared in `Team C` as `Optimized/`, `Baseline/` and `comparison.json`.
 
-**Validated: 85 OK, 5 WARN, 0 FAIL** (re-run command at the top).
+**Validated: 106 OK, 7 WARN, 0 FAIL** (re-run command at the top).
 
-Every target's position, oil and emulsion matches the drift. Each vessel's emulsion total, tank, cleanup time (emulsion / 30 m³/h), shift and return to port are rechecked, and no target is served twice. The 5 warnings: the two Port Saqr vessels start from a port the routing grid counts as land (below), one patch wider than 1.5 km (as before), and T06 unserved in both plans (0.4 m³, below the 0.5 m³ threshold). The validator now reads the plan's message and warns when the router had to move a port off land.
+Every target's position, oil and emulsion matches the drift. Each vessel's emulsion total, tank, cleanup time (emulsion / 30 m³/h), sailing time (distance / speed), `finish_hours` (sailing + cleanup), shift and return to port are rechecked, and no target is served twice. Each route's distance lies between the straight line through its stops and its drawn sea path. All 21 metrics in `comparison.json` (oil, response time, distance, sailing, longest route, coverage, distance per target and the changes in %) are recalculated from the route and target files and agree. The 7 warnings: the two Port Saqr vessels start from a port the routing grid counts as land (below), and their fleet file is older than the current Port Saqr point (2 warnings each); one patch wider than 1.5 km (as before); and T06 unserved in both plans (0.4 m³, below the 0.5 m³ threshold).
 
 | | Optimized | Baseline |
 | --- | --- | --- |
@@ -157,13 +157,13 @@ What changed:
 - **Optimized vs baseline:** the same oil (199 vs 200 m³) and the same response time (10.67 vs 10.75 h), but **28.7 % less distance and 19.9 % less sailing time**, with FALCON kept in port. The baseline sends all three vessels, including FALCON on an 83 km round trip for about 12 m³ of oil. For the presentation, the gain is efficiency and a vessel kept free, not more oil recovered. This replaces the "optimizer equals baseline" result in section 4.
 - My earlier local preview with straight-line distances showed the baseline recovering only 128 m³. That came from the straight-line distances and does not hold on the sea grid.
 - Cleanup time is now about twice as long (the skimmer pumps the emulsion), which makes the night-time assumption (issue 3) cover more hours.
-- **Port Saqr's harbour entrance (25.981 N, 56.048 E) was land on the 2.2 km routing grid**, so both Port Saqr vessels were moved 2.1 km in this run. Since fixed: Port Saqr is now the approach point 25.9850 N, 56.0350 E (issue 2). My sea-grid re-run with it (same code and drift, local land file): **87 OK, 3 WARN, 0 FAIL**. No port is moved, and the result is the same plan: 199 vs 200 m³, 10.50 vs 10.59 h, **28.0 % less distance** (184.6 vs 256.5 km) and **19.3 % less sailing**. Haris's re-run with the current fleet will replace the table above.
+- **Port Saqr's harbour entrance (25.981 N, 56.048 E) was land on the 2.2 km routing grid**, so both Port Saqr vessels were moved 2.1 km in this run. Since fixed: Port Saqr is now the approach point 25.9850 N, 56.0350 E (issue 2). My sea-grid re-run with it (same code and drift, local land file): **110 OK, 3 WARN, 0 FAIL**. No port is moved, and the result is the same plan: 199 vs 200 m³, 10.50 vs 10.59 h, **28.0 % less distance** (184.6 vs 256.5 km) and **19.3 % less sailing**. Haris's re-run with the current fleet will replace the table above.
 
 ## 8. Status
 
 - Targets, volumes, grouping, fleet, capacity, working hours, cleanup time and return to port are all **verified against the real files**, for both of Haris's runs.
 - Issue 1 (emulsion vs tank): fixed in Haris's routing (`e247eed`). The validator checks the tank and cleanup time on the same basis as the plan.
-- Issue 2 (depots on land): fixed on this branch. No vessel is moved off land in any fixture. **Next:** Haris re-runs `run_drift_plan` with the current `gulf_standard.json`, then `validate_cleanup.py` is rerun on his outputs (expected 87 OK, 3 WARN, 0 FAIL, as in my local re-run). Joud to confirm the staging point.
+- Issue 2 (depots on land): fixed on this branch. No vessel is moved off land in any fixture. **Next:** Haris re-runs `run_drift_plan` with the current `gulf_standard.json`, then `validate_cleanup.py` is rerun on his outputs (expected 110 OK, 3 WARN, 0 FAIL, as in my local re-run). Joud to confirm the staging point.
 - Issue 3 (night operations): accepted as a stated assumption.
 - Issues 4 to 6: assumptions to state in the presentation. Issue 7: Maqqavi to align the version note.
 - Shared on OneDrive in `Team C/Validation/`: `validation_report.txt` (the printed report), `validation.json` (every check and number) and this write-up. The fleet files are in `Team C/Fleet/`.
