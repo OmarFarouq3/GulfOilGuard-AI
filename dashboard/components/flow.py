@@ -83,13 +83,19 @@ def _next(step: str) -> None:
 # --- Detect -------------------------------------------------------------------------------
 
 
-def detect_controls(site: SpillSite) -> None:
+def detect_controls(site: SpillSite, overall: dict[str, float] | None = None) -> bool:
+    """Detect step for the selected spill; True if a per-image score block was shown.
+
+    ``overall`` are the model's overall scores the page already loaded (real evaluation only); each
+    per-image tile then shows the matching overall value as a small secondary line.
+    """
     progress()
     _incident(site, show_source=True)
     current = selection.current()
     run = selection.detection_run()
 
     if selection.detection_done():
+        scored = False
         if run and run.ok:
             info = run.info
             details = [f"checkpoint {info['checkpoint']}" if info.get("checkpoint") else None,
@@ -98,7 +104,7 @@ def detect_controls(site: SpillSite) -> None:
                        if info.get("oil_fraction") is not None else None]
             st.html(f'<span class="gog-chip gog-chip-live"><span class="gog-dot"></span>{ui.esc(run.message)}</span>'
                     f'<p class="gog-flow-note">{ui.esc(" · ".join(d for d in details if d))}</p>')
-            scored = _image_score(current)
+            scored = _image_score(current, overall)
             _provenance(
                 ["Radar image: a sample from the local dataset",
                  "Oil mask and overlay: U-Net prediction on that image",
@@ -113,14 +119,14 @@ def detect_controls(site: SpillSite) -> None:
                              "Model scores (illustrative values)",
                              "Slick outline and area on the map, placed at the selected spill"])
         _next("predict")
-        return
+        return scored
 
     if not selection.image_available(current):
         ui.inline_empty("No radar image is assigned to this incident, so the model has nothing to read. "
                         "Assign one on Overview, or continue with the simulated detection.")
         st.button("Use simulated detection", icon=":material/science:", key="flow_detect_simulated",
                   on_click=selection.accept_simulated_detection)
-        return
+        return False
 
     left, right = st.columns([2, 3], gap="large")
     with left:
@@ -143,6 +149,7 @@ def detect_controls(site: SpillSite) -> None:
                 result = inference.run_detection(current.image_path, current.image_id)
             selection.record_detection(result)
             st.rerun()
+    return False
 
 
 PRECISION_UNDEFINED = "No oil was predicted, so precision is undefined"
@@ -153,10 +160,11 @@ SCORE_CAPTIONS = {
 }
 
 
-def _image_score(current: selection.Selection) -> bool:
+def _image_score(current: selection.Selection, overall: dict[str, float] | None = None) -> bool:
     """The selected image's row of Team A's per-image report; True if its scores are shown.
 
     A row matches on the image's split folder AND its file name: train/ and val/ reuse names.
+    Each score tile also shows the model's overall value for that score ("Overall 0.87") when known.
     """
     split = image_picker.image_split(current.image_path)
     row = None if split == "train" else report_loader.per_image_report().lookup(split, current.image_path.name)
@@ -175,10 +183,11 @@ def _image_score(current: selection.Selection) -> bool:
     ui.section("Score for this image", SCORE_CAPTIONS[split])
     tiles = []
     for key, value in row.scores().items():
+        secondary = f"Overall {overall[key]:.2f}" if overall and overall.get(key) is not None else None
         if key == "precision" and row.precision_undefined:  # the report writes 0/0 as 0
-            tiles.append((charts.METRIC_LABELS[key], None, "", PRECISION_UNDEFINED))
+            tiles.append((charts.METRIC_LABELS[key], None, "", PRECISION_UNDEFINED, secondary))
         else:
-            tiles.append((charts.METRIC_LABELS[key], f"{value:.2f}", "", charts.METRIC_HINTS[key]))
+            tiles.append((charts.METRIC_LABELS[key], f"{value:.2f}", "", charts.METRIC_HINTS[key], secondary))
     ui.stat_tiles(tiles + [("Reference oil", f"{row.ref_oil_fraction * 100:.1f}", "%",
                             "Share of the image that is oil in the reference mask")])
     return True

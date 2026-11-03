@@ -414,7 +414,7 @@ def test_timeline_and_overview_use_the_mixed_wording(images, stub_detection):
 
 def test_accuracy_caption_only_with_metrics(images, stub_detection):
     text = run_stubbed_detection(new_app(), images[0])
-    assert "How accurate is the model?" in text and ACCURACY_CAPTION not in text
+    assert "Overall model accuracy" in text and ACCURACY_CAPTION not in text
     assert "never saw in training" not in text
 
 
@@ -694,7 +694,7 @@ def test_diagnostics_list_the_report_files(images, report):
 
 
 def accuracy_caption(at: AppTest) -> str:
-    bodies = [b for b in html_bodies(at, "gog-section") if "How accurate is the model?" in b]
+    bodies = [b for b in html_bodies(at, "gog-section") if "Overall model accuracy" in b]
     assert len(bodies) == 1
     return bodies[0]
 
@@ -772,3 +772,107 @@ def test_diagnostics_paths_are_relative_unless_dev(split_images, stub_detection,
                        str(Path.home())):
             assert secret not in page and secret.replace("\\", "\\\\") not in page
         assert f"\\{user}\\" not in page and f"/{user}/" not in page
+
+
+# --- Overall vs per-image scores ------------------------------------------------------------------
+
+OVERALL = "Overall model accuracy"
+STATIC_NOTE = ("These overall scores don&#x27;t change from image to image; the score for the selected image is "
+               "shown above.")
+
+
+def overall_section(at: AppTest) -> str:
+    bodies = [b for b in html_bodies(at, "gog-section") if OVERALL in b]
+    assert len(bodies) == 1
+    return bodies[0]
+
+
+def score_tiles(at: AppTest) -> dict[str, str]:
+    """{tile label: the tile's HTML} of the per-image block."""
+    import re
+    cells = score_block(at).split('<div class="gog-stat">')[1:]
+    return {re.search(r'gog-stat-label">(.*?)</div>', c, re.S).group(1).strip(): c for c in cells}
+
+
+@pytest.mark.parametrize("extra, subtitle", [
+    ({"n_images": 1615}, "Average over 1,615 validation images. Scores from 0 to 1, computed on the validation split. "
+                         "That split was also used to choose the checkpoint, so these are not an independent test."),
+    ({"n_images": None}, "Average over all evaluated validation images. Scores from 0 to 1, computed on the "
+                         "validation split."),
+    ({"n_images": 40, "split": "test"}, "Average over 40 test images. Scores from 0 to 1, computed on the test split."),
+    ({"n_images": 40, "split": None}, "Average over 40 images. Scores from 0 to 1. The report doesn&#x27;t say which "
+                                      "images were scored."),
+    ({"n_images": "many"}, "Average over all evaluated validation images."),
+])
+def test_overall_section_title_and_subtitle(split_images, stub_detection, report, extra, subtitle):
+    metrics = {k: v for k, v in {**REPORT_METRICS, **extra}.items() if v is not None}
+    section = overall_section(run_with_report(split_images["val/palsar_0.png"], metrics=metrics))
+    assert "<h3>Overall model accuracy</h3>" in section and subtitle in section
+    assert "How accurate is the model?" not in section
+
+
+def test_overall_title_without_scores(split_images, stub_detection, report):
+    at = new_app()
+    run_stubbed_detection(at, split_images["val/palsar_0.png"])  # no metrics.json at all
+    assert "Overall model accuracy" in overall_section(at)
+    assert STATIC_NOTE not in page_text(at)
+
+
+def test_static_note_only_next_to_a_per_image_score(split_images, stub_detection, report):
+    at = run_with_report(split_images["val/palsar_0.png"])
+    notes = [b for b in html_bodies(at, "gog-flow-note") if STATIC_NOTE in b]
+    assert len(notes) == 1
+    bodies = [h.proto.body for h in at.get("html")]
+    order = [i for i, b in enumerate(bodies) if "Score for this image" in b or OVERALL in b or STATIC_NOTE in b]
+    assert [("Score for this image" in bodies[i], OVERALL in bodies[i], STATIC_NOTE in bodies[i]) for i in order] == [
+        (True, False, False), (False, True, False), (False, False, True)]  # block, then section, then note
+
+
+@pytest.mark.parametrize("image, csv", [
+    ("train/palsar_0.png", PER_IMAGE_CSV),          # training data
+    ("misc/palsar_0.png", PER_IMAGE_CSV),           # split unknown
+    ("val/palsar_9.png", PER_IMAGE_CSV),            # not in the report
+    ("val/palsar_5.png", PER_IMAGE_CSV),            # no oil in the reference mask
+])
+def test_no_static_note_without_per_image_scores(split_images, stub_detection, report, image, csv):
+    at = run_with_report(split_images[image], csv)
+    assert STATIC_NOTE not in page_text(at) and "Overall 0." not in page_text(at)
+
+
+def test_no_static_note_without_a_selection(images, report):
+    write_metrics(REPORT_METRICS)
+    at = open_page(checked(new_app().run()), DETECT)
+    assert OVERALL in overall_section(at) and STATIC_NOTE not in page_text(at)
+
+
+def test_each_score_tile_shows_the_overall_value(split_images, stub_detection, report):
+    tiles = score_tiles(run_with_report(split_images["val/palsar_0.png"]))
+    expected = {"Dice": ("0.77", "Overall 0.87"), "IoU": ("0.63", "Overall 0.77"),
+                "Precision": ("0.74", "Overall 0.85"), "Recall": ("0.81", "Overall 0.89")}
+    for label, (value, overall) in expected.items():
+        assert f">{value}<" in tiles[label] and f'<div class="gog-stat-secondary">{overall}</div>' in tiles[label]
+    assert "gog-stat-secondary" not in tiles["Reference oil"]
+
+
+def test_no_overall_line_for_a_missing_overall_score(split_images, stub_detection, report):
+    metrics = {k: v for k, v in REPORT_METRICS.items() if k != "recall"}  # only three overall scores
+    tiles = score_tiles(run_with_report(split_images["val/palsar_0.png"], metrics=metrics))
+    assert "Overall 0.87" in tiles["Dice"] and "gog-stat-secondary" not in tiles["Recall"]
+    assert ">0.81<" in tiles["Recall"]  # the per-image value itself is unchanged
+
+
+def test_no_overall_lines_without_overall_scores(split_images, stub_detection, report):
+    (report / "per_image_metrics.csv").write_text(PER_IMAGE_CSV, encoding="utf-8")
+    write_metrics({"split": "val", "model": "U-Net"})  # the report's split, but no scores
+    at = new_app()
+    run_stubbed_detection(at, split_images["val/palsar_0.png"])
+    tiles = score_tiles(at)
+    assert ">0.77<" in tiles["Dice"] and "gog-stat-secondary" not in score_block(at)
+    assert STATIC_NOTE not in page_text(at)  # no overall section with scores, so no note either
+
+
+def test_undefined_precision_keeps_its_dash_next_to_the_overall_line(split_images, stub_detection, report):
+    csv = PER_IMAGE_CSV + "palsar_9.png,583,0.0,0.0,0.0,0.0\n"
+    tiles = score_tiles(run_with_report(split_images["val/palsar_9.png"], csv))
+    assert "gog-stat-empty" in tiles["Precision"] and "precision is undefined" in tiles["Precision"]
+    assert "Overall 0.85" in tiles["Precision"] and ">0.00<" in tiles["Dice"]

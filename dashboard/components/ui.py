@@ -56,10 +56,15 @@ def section(title: str, caption: str | None = None) -> None:
     st.html(f'<div class="gog-section"><h3>{esc(title)}</h3>{cap}</div>')
 
 
-def stat_tiles(tiles: list[tuple[str, str | None, str, str]]) -> None:
-    """Row of glass KPI tiles: (label, value or None, unit, hint). None renders as an elegant dash."""
+def stat_tiles(tiles: list[tuple]) -> None:
+    """Row of glass KPI tiles: (label, value or None, unit, hint[, secondary]). None renders as an elegant dash.
+
+    ``secondary`` is an optional small line under the hint (e.g. "Overall 0.87"); left out when None.
+    """
     cells = []
-    for label, value, unit, hint in tiles:
+    for label, value, unit, hint, *rest in tiles:
+        secondary = rest[0] if rest else None
+        extra = f'<div class="gog-stat-secondary">{esc(secondary)}</div>' if secondary else ""
         if value is None:
             number = f'<span class="gog-stat-value gog-stat-empty">{EMPTY_VALUE}</span>'
         else:
@@ -69,7 +74,7 @@ def stat_tiles(tiles: list[tuple[str, str | None, str, str]]) -> None:
             f"""<div class="gog-stat">
                   <div class="gog-stat-label">{esc(label)}</div>
                   <div class="gog-stat-number">{number}</div>
-                  <div class="gog-stat-hint">{esc(hint)}</div>
+                  <div class="gog-stat-hint">{esc(hint)}</div>{extra}
                 </div>"""
         )
     st.html(f'<div class="gog-stats">{"".join(cells)}</div>')

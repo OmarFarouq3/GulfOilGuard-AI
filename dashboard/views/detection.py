@@ -43,6 +43,20 @@ def accuracy_caption(split: object) -> str:
     return "Scores from 0 to 1. The report doesn't say which images were scored."
 
 
+OVERALL_TITLE = "Overall model accuracy"
+STATIC_NOTE = "These overall scores don't change from image to image; the score for the selected image is shown above."
+SPLIT_WORDS = {"val": "validation", "validation": "validation", "train": "training", "test": "test"}
+
+
+def overall_caption(split: object, n_images: object) -> str:
+    """'Average over 1,615 validation images.' plus accuracy_caption()'s split / independence caveat."""
+    name = split.strip().lower() if isinstance(split, str) else ""
+    word = SPLIT_WORDS.get(name, split.strip() if name else "")
+    known = isinstance(n_images, int) and not isinstance(n_images, bool) and n_images > 0
+    images = f"{n_images:,} {word} images" if known else f"all evaluated {word} images"
+    return f"Average over {' '.join(images.split())}. {accuracy_caption(split)}"
+
+
 def checkpoint_note() -> None:
     """Whether the scores were computed on the checkpoint this dashboard runs (checkpoint_sha256)."""
     check = report_loader.check_checkpoint(inference.checkpoint_path())
@@ -53,7 +67,7 @@ def checkpoint_note() -> None:
 
 
 def galleries() -> None:
-    """report.py's best / median / worst validation images, when the files exist."""
+    """report.py's best / median / worst validation images (under Overall model accuracy), when the files exist."""
     shown, _warnings = load_galleries()  # unreadable files are listed under Diagnostics
     if not shown:
         return
@@ -66,8 +80,9 @@ def galleries() -> None:
 
 
 site = selected_site()
+image_scored = False  # a "Score for this image" block with scores is on the page
 if site:
-    flow.detect_controls(site)
+    image_scored = flow.detect_controls(site, data.metrics if real_report else None)
 else:
     flow.no_selection_prompt()
 
@@ -100,12 +115,14 @@ else:
 
     # --- Model quality ---------------------------------------------------------
     if data.metrics:
-        ui.section("How accurate is the model?", accuracy_caption(data.metrics_info.get("split")))
+        ui.section(OVERALL_TITLE, overall_caption(data.metrics_info.get("split"), data.metrics_info.get("n_images")))
         ui.stat_tiles([
             (charts.METRIC_LABELS[k], f"{data.metrics[k]:.2f}" if k in data.metrics else None, "",
              charts.METRIC_HINTS[k])
             for k in config.DETECTION_METRICS
         ])
+        if image_scored:
+            st.html(f'<p class="gog-flow-note">{ui.esc(STATIC_NOTE)}</p>')
         if real_report:
             checkpoint_note()
         left, right = st.columns([3, 2], gap="large")
@@ -123,7 +140,7 @@ else:
             if isinstance(data.metrics_info.get("limitations"), str):
                 st.caption(data.metrics_info["limitations"])
     else:
-        ui.section("How accurate is the model?")
+        ui.section(OVERALL_TITLE)
         ui.inline_empty("Accuracy scores will appear here once the model has been evaluated.")
     if real_report:
         galleries()

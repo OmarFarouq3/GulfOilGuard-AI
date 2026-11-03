@@ -192,6 +192,7 @@ header[data-testid="stHeader"],
 .gog-stat-empty { color: rgba(143, 169, 184, 0.45); font-weight: 500; }
 .gog-stat-unit { color: var(--gog-muted); font-size: 0.95rem; font-weight: 500; }
 .gog-stat-hint { color: var(--gog-muted); font-size: 0.8rem; line-height: 1.35; }
+.gog-stat-secondary { margin-top: 0.35rem; color: var(--gog-muted); font-size: 0.75rem; opacity: 0.85; }
 
 /* ---- Stage cards (overview) ---- */
 .gog-stage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.9rem; }
