@@ -55,3 +55,22 @@ response use where a missed spill is costlier than a false alarm; this is a team
   test results.
 - The dataset is not Gulf-specific; the scores do not show performance on Gulf imagery.
 - Size bins use pixel counts at 256x256 and are arbitrary cut-offs.
+
+## Empty-reference images (76)
+
+76 of 1,615 validation images have no oil in the reference mask. They are excluded from the
+macro scores (which average over the 1,539 images with oil) but included in the micro scores.
+The model predicts oil on 15 of them (19.7%) and correctly predicts nothing on the other 61.
+
+## How these files were produced
+
+From the repo root (checkpoint SHA-256 is recorded in `summary.json` and `metrics.json`):
+
+    python -m detection.report --checkpoint runs/unet_refined_sar/best.pth --image-dir <val images> --mask-dir <val masks>
+    python -m detection.finalize_report --checkpoint runs/unet_refined_sar/best.pth
+
+The first command writes `outputs/report/` (per-image CSV, `summary.json`, galleries). The
+second adds the `split` column and provenance keys (`checkpoint_sha256`, `checkpoint_file`,
+`split`, `created`) and writes the flat dashboard file `outputs/detection/metrics.json`.
+Rerun both whenever the checkpoint changes. `metrics.json` holds overall validation scores,
+not scores for a single image.
