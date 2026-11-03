@@ -330,3 +330,17 @@ iframe[title="streamlit_folium.st_folium"] { border-radius: var(--gog-radius); b
 .gog-prov-sim h5 { color: var(--gog-violet); }
 @media (max-width: 640px) { .gog-prov { grid-template-columns: 1fr; } }
 .gog-kpi-status { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0.2rem; color: var(--gog-muted); font-size: 0.85rem; }
+
+/* ---- Plain tables (ui.table): cells wrap, numbers align right, a wide table scrolls sideways ---- */
+.gog-table-wrap { overflow-x: auto; border: 1px solid var(--gog-border); border-radius: var(--gog-radius); background: var(--gog-surface); }
+.gog-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.gog-table th, .gog-table td { padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; overflow-wrap: break-word; }
+.gog-table th { color: var(--gog-muted); font-weight: 500; font-size: 0.82rem; border-bottom: 1px solid var(--gog-border); }
+.gog-table tr + tr td { border-top: 1px solid rgba(94, 234, 212, 0.07); }
+.gog-table .gog-num { text-align: right; white-space: nowrap; }
+.gog-scroll-hint { display: none; margin: 0 0 0.35rem; color: var(--gog-muted); font-size: 0.8rem; }
+@media (max-width: 640px) {
+  .gog-scroll-hint { display: block; }
+  .gog-table th, .gog-table td { padding: 0.45rem 0.55rem; }
+  .gog-compare-vessels .gog-table { min-width: 520px; }
+}

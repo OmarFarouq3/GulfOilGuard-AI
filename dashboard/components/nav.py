@@ -125,6 +125,8 @@ def site_diagnostics() -> list[str]:
         for data in (drift, routing):
             if data is not None:
                 warnings.extend(data.warnings)
+        if marker is not None:
+            warnings.extend(scenario.site_comparison(marker)[2])  # comparison.json and baseline/
         if validation[site_id][1]:
             warnings.append(f"Site `{site_id}`: its validation.json reports failed checks.")
     warnings += [f"Marker `{s.spill_id}` has no site folder: Predict and Respond show no data for it."

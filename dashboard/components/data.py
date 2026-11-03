@@ -130,7 +130,16 @@ def drift_stage() -> Stage:
 def routing_stage() -> Stage:
     site = selected_site()
     if site:
-        return _stage("respond", scenario.selected_routing(site, demo_mode()) if selection.respond_done() else None)
+        if not selection.respond_done():
+            return _stage("respond", None)
+        data = scenario.selected_routing(site, demo_mode())
+        stage = _stage("respond", data)
+        # A site's own plan for its real forecast: labelled like that forecast (Predict, Overview panel).
+        if scenario.sites_mode(demo_mode()) and data is not None and stage.status == "simulated":
+            forecast = site_forecast(site)
+            if forecast.status == "forecast" and scenario.plan_belongs_to(data, forecast.data):
+                stage = Stage("respond", data, "forecast", stage.has_issue)
+        return stage
     if scenario.sites_mode(demo_mode()):
         return _stage("respond", None)
     data: RoutingData | None = mock_data.routing() if demo_mode() else load_routing()

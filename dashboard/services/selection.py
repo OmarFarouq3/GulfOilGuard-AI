@@ -39,6 +39,7 @@ PREDICT_DONE_KEY = DOWNSTREAM_PREFIX + "predict_done"
 RESPOND_DONE_KEY = DOWNSTREAM_PREFIX + "respond_done"
 OWNER_KEY = DOWNSTREAM_PREFIX + "owner"  # (spill_id, image_path, source) the results belong to
 SOURCE_KEY = "sel_source"  # current data source, set by sync() on every run
+STASH_KEY = "sel_stash"  # (spill_id, image_path, image_id) of a selection dropped only because it wasn't offered
 STEPS = ("detect", "predict", "respond")
 StepState = Literal["done", "ready", "locked"]
 
@@ -138,15 +139,25 @@ def sync(valid_spill_ids: Iterable[str], source: Any) -> None:
     The single place that decides whether the selection is still valid, so ``active()``
     and every page agree:
     - a spill id that is no longer offered (spill list changed, demo toggled) clears the
-      whole selection;
+      whole selection, but the spill and its image are restored if that spill is offered again
+      (switching the demo off brings the site back; its steps must be run again);
     - results computed for another spill, image or data ``source`` (demo flag + where the
       drift / routing come from) are dropped, so steps never stay "done" over swapped data;
     - a model detection whose ``<image_id>_*`` files have disappeared is no longer done.
     """
     st.session_state[SOURCE_KEY] = source
-    spill_id = selected_spill_id()
-    if spill_id is not None and spill_id not in set(valid_spill_ids):
+    spill_id, valid = selected_spill_id(), set(valid_spill_ids)
+    if spill_id is not None and spill_id not in valid:
+        # Not offered any more (e.g. the demo catalogue replaced the site markers): remember the
+        # spill and its image, and restore them once that spill is offered again.
+        stash = (spill_id, st.session_state.get(IMAGE_PATH_KEY), st.session_state.get(IMAGE_ID_KEY))
         clear_selection()
+        st.session_state[STASH_KEY] = stash
+        return
+    stash = st.session_state.get(STASH_KEY)
+    if spill_id is None and stash and stash[0] in valid:
+        st.session_state.pop(STASH_KEY)
+        st.session_state[SPILL_KEY], st.session_state[IMAGE_PATH_KEY], st.session_state[IMAGE_ID_KEY] = stash
         return
     owner = st.session_state.get(OWNER_KEY)
     if owner is not None and tuple(owner) != _owner():
@@ -222,6 +233,7 @@ def select_spill(spill_id: str, rng: random.Random | None = None) -> None:
     if spill_id == previous.spill_id and previous.image_path is not None:
         return
     clear_downstream()
+    st.session_state.pop(STASH_KEY, None)  # a deliberate choice replaces any remembered one
     st.session_state[SPILL_KEY] = spill_id
     # A new spill gets a different image than the last one, so the change is visible.
     _store_image(image_picker.choose_image(available_images(), exclude=previous.image_path, rng=rng))
@@ -237,7 +249,7 @@ def reroll_image(rng: random.Random | None = None) -> None:
 
 
 def clear_selection() -> None:
-    for key in (SPILL_KEY, IMAGE_PATH_KEY, IMAGE_ID_KEY):
+    for key in (SPILL_KEY, IMAGE_PATH_KEY, IMAGE_ID_KEY, STASH_KEY):
         st.session_state.pop(key, None)
     clear_downstream()
 

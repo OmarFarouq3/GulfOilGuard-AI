@@ -61,7 +61,7 @@ def trajectory_point(hours: float) -> tuple[float, float] | None:
 STEP_KEY = "drift_step"
 SAVED_STEP_KEY = "drift_step_saved"  # not a widget key: survives leaving the page
 NOT_AFLOAT_COLOR = "#8fa9b8"  # muted slate: never an oil colour
-NOT_AFLOAT_LABEL = "No longer afloat (stranded, evaporated, ...)"
+NOT_AFLOAT_LABEL = "No longer afloat"
 DETAIL_LABELS = {"model": "Drift model", "oil_type": "Oil type", "release_volume_m3": f"Oil released ({M3})",
                  "n_particles": "Particles", "wind_source": "Wind data", "current_source": "Current data"}
 ASSUMPTION_LABELS = {"sea_water_temperature_c": "Water temperature (°C, assumed)",

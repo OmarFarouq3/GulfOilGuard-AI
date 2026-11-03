@@ -127,6 +127,22 @@ def legend(items: list[tuple[str, str, str]]) -> None:
     st.html(f'<div class="gog-legend">{entries}</div>')
 
 
+def table(headers: list[str], rows: list[list | tuple], numeric: tuple[int, ...] = (), key: str = "",
+          scroll_hint: bool = False) -> None:
+    """Plain table whose cells wrap, so it stays readable on a phone; numeric columns align right.
+
+    A table still too wide scrolls sideways; ``scroll_hint`` then says so on narrow screens.
+    """
+    def cell(tag: str, i: int, value: object) -> str:
+        return f'<{tag} class="{"gog-num" if i in numeric else ""}">{esc(value)}</{tag}>'
+
+    head = "".join(cell("th", i, h) for i, h in enumerate(headers))
+    body = "".join("<tr>" + "".join(cell("td", i, v) for i, v in enumerate(row)) + "</tr>" for row in rows)
+    hint = '<p class="gog-scroll-hint">Scroll sideways to see all columns →</p>' if scroll_hint else ""
+    st.html(f'{hint}<div class="gog-table-wrap {esc(key)}"><table class="gog-table"><thead><tr>{head}</tr></thead>'
+            f"<tbody>{body}</tbody></table></div>")
+
+
 def details_table(rows: dict[str, object]) -> None:
     """Compact two-column key/value list for model details."""
     body = "".join(f"<dt>{esc(k)}</dt><dd>{esc(v)}</dd>" for k, v in rows.items())

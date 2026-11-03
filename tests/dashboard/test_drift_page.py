@@ -33,7 +33,7 @@ N = 10  # particles
 GONE = {12: {"stranded": 3, "evaporated": 1}, 24: {"stranded": 4}}  # particles no longer afloat
 FORECAST_CHIP = "Real forecast, simulated release"
 SIMULATED_CHIP = "Simulated scenario"
-NOT_AFLOAT = "No longer afloat (stranded, evaporated, ...)"
+NOT_AFLOAT = "No longer afloat"
 
 
 def iso(hours: float) -> str:
@@ -302,7 +302,7 @@ def test_no_longer_afloat_layer_and_legend(write_drift, drawn):
     assert gone == [("#8fa9b8", 4, {"stranded", "evaporated"})]
     assert all(statuses <= {"active"} for _color, _n, statuses in oil)  # oil layers hold active particles only
     assert sum(n for _c, n, _s in oil if _c == config.oil_color_for_hour(12)) == 6
-    assert NOT_AFLOAT in legend(at)
+    assert f"</span>{NOT_AFLOAT}</span>" in legend(at)  # the exact label, nothing after it
 
 
 def test_no_grey_layer_when_everything_is_afloat(write_drift, drawn):

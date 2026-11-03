@@ -93,6 +93,9 @@ def site_files(site_id: str) -> dict[str, dict[str, Path]]:
         "routing": {"routes": base / "routing" / "routes.geojson", "summary": base / "routing" / "summary.json",
                     "targets": base / "routing" / "targets.geojson",
                     "comparison": base / "routing" / "comparison.json"},  # optional; not read by the pages yet
+        "baseline": {"routes": base / "routing" / "baseline" / "routes.geojson",  # nearest-target plan
+                     "summary": base / "routing" / "baseline" / "summary.json",
+                     "targets": base / "routing" / "baseline" / "targets.geojson"},
         "site": {"validation": base / SITE_VALIDATION_FILE},
     }
 

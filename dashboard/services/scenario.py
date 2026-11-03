@@ -26,15 +26,17 @@ marker keeps a warning and is not presented as a real forecast.
 from __future__ import annotations
 
 import dataclasses
+import re
 
 import config
 from services import mock_data
 from services.detection_loader import load_scene, parse_spill
 from services.drift_loader import load_drift
+from services.files import read_json_object
 from services.geo import features_center, haversine_km, offset_deg, translate_coords, translate_features
 from services.inference import DetectionRun
 from services.models import DetectionData, DriftData, RouteEntry, RoutingData, SpillSite
-from services.routing_loader import load_routing
+from services.routing_loader import load_comparison, load_routing
 from services.schema import GeoCoordinate
 from services.spill_loader import site_ids
 
@@ -174,6 +176,44 @@ def site_routing(site: SpillSite) -> RoutingData | None:
     return dataclasses.replace(data, anchored_to=site.spill_id)
 
 
+def site_comparison(site: SpillSite) -> tuple[dict | None, RoutingData | None, list[str]]:
+    """The site's comparison.json and its nearest-target baseline plan (routing/baseline/), with warnings."""
+    files = config.site_files(site.spill_id)
+    comparison, warnings = load_comparison(files["routing"]["comparison"])
+    baseline = load_routing(files["baseline"])
+    if baseline is not None:
+        warnings += baseline.warnings
+        baseline = baseline if baseline.has_content else None
+    return comparison, baseline, warnings
+
+
+# The team's per-site checks (validation.json) a viewer should know about, shown as written.
+VIEWER_CHECKS = ("unserved targets", "as emulsion", "patch size")
+
+
+_ID_LIST = re.compile(r"\[('[^'\[\]]*'(?:,\s*'[^'\[\]]*')*)\]")
+
+
+def _plain_lists(text: str) -> str:
+    """"unserved targets: ['T05', 'T06']" -> "unserved targets: T05, T06" (only lists of quoted ids)."""
+    return _ID_LIST.sub(lambda m: ", ".join(part.strip().strip("'") for part in m.group(1).split(",")), text)
+
+
+def site_validation_warnings(site: SpillSite) -> list[str]:
+    """WARN lines of the site's validation.json about unserved oil, emulsion volume and patch width."""
+    raw, _warning = read_json_object(config.site_files(site.spill_id)["site"]["validation"])
+    checks = raw.get("checks") if isinstance(raw, dict) else None
+    return [f"{c.get('group', '')}: {_plain_lists(c['text'])}" for c in checks or []
+            if isinstance(c, dict) and c.get("level") == "WARN" and isinstance(c.get("text"), str)
+            and any(word in c["text"] for word in VIEWER_CHECKS)]
+
+
+def plan_belongs_to(routing: RoutingData, drift: DriftData | None) -> bool:
+    """The plan's scenario_id names this drift run (``<simulation_id>`` or ``<simulation_id>@...``)."""
+    sim = drift.trajectory.simulation_id if drift and drift.trajectory else None
+    return bool(sim and routing.scenario_id and (routing.scenario_id == sim or routing.scenario_id.startswith(f"{sim}@")))
+
+
 def selected_drift(site: SpillSite, demo: bool) -> DriftData | None:
     """The real forecast for the spill it was made for (not moved); otherwise a scenario moved to the spill.
 
@@ -214,7 +254,9 @@ def anchor_routing(routing: RoutingData, site: SpillSite, offset: Offset) -> Rou
         routes=routes, status=routing.status, message=routing.message,
         targets=[dataclasses.replace(t, location=_shift(t.location, offset)) for t in routing.targets],
         target_source_hours=routing.target_source_hours, synthetic=True, warnings=list(routing.warnings),
-        is_mock=routing.is_mock, anchored_to=site.spill_id,
+        is_mock=routing.is_mock, anchored_to=site.spill_id, target_info=dict(routing.target_info),
+        unserved_target_ids=list(routing.unserved_target_ids), idle_vessel_ids=list(routing.idle_vessel_ids),
+        scenario_id=routing.scenario_id,  # sea paths are left out: they don't fit a moved plan
     )
 
 

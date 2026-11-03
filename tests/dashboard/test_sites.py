@@ -493,3 +493,40 @@ def test_selected_step_is_kept_after_leaving_the_page(sites):
     at.run()
     go(at, "views/overview.py")
     assert go(at, "views/drift.py").select_slider[0].value == 12
+
+
+
+# --- Demo toggle: the selected site comes back -------------------------------------------------------------
+
+
+def test_switching_the_demo_off_restores_the_selected_site(sites):
+    sites("S1", "S2")
+    at = new_app("S2")
+    image = at.session_state[selection.IMAGE_PATH_KEY] if selection.IMAGE_PATH_KEY in at.session_state else None
+    at.session_state["demo_mode"] = True
+    at.run()
+    assert selection.SPILL_KEY not in at.session_state  # S2 is not a demo marker
+    at.session_state["demo_mode"] = False
+    at.run()
+    assert at.session_state[selection.SPILL_KEY] == "S2"
+    assert (at.session_state[selection.IMAGE_PATH_KEY] if selection.IMAGE_PATH_KEY in at.session_state else None) == image
+    assert "Site S2" in " ".join(bodies(at, "gog-incident-head"))
+
+
+def test_a_deliberate_choice_replaces_the_remembered_site(sites, session):
+    sites("S1", "S2")
+    session[selection.SPILL_KEY] = "S2"
+    selection.sync(["GOG-SIM-01"], ("demo",))  # demo markers: S2 is remembered
+    assert selection.STASH_KEY in session and selection.SPILL_KEY not in session
+    selection.clear_selection()  # the user clears the selection on purpose
+    selection.sync(["S1", "S2"], ("sites",))
+    assert selection.SPILL_KEY not in session
+
+
+def test_the_remembered_site_waits_until_it_is_offered_again(session):
+    session[selection.SPILL_KEY] = "S2"
+    selection.sync(["GOG-SIM-01"], ("demo",))
+    selection.sync(["GOG-SIM-01", "GOG-SIM-02"], ("demo",))
+    assert selection.SPILL_KEY not in session
+    selection.sync(["S1", "S2"], ("sites",))
+    assert session[selection.SPILL_KEY] == "S2" and selection.STASH_KEY not in session

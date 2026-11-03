@@ -116,6 +116,12 @@ class RoutingData:
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
     anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
+    # Extensions written by optimization/dashboard_export.py (not in schema), all optional:
+    route_paths: dict[str, list[tuple[float, float]]] = field(default_factory=dict)  # vessel_id -> sea_path (lat, lon)
+    target_info: dict[str, dict[str, Any]] = field(default_factory=dict)  # target_id -> served_by, meet/position_hours
+    unserved_target_ids: list[str] = field(default_factory=list)
+    idle_vessel_ids: list[str] = field(default_factory=list)
+    scenario_id: str | None = None  # the drift run the plan was made for (+ "@dispatch...")
 
     @property
     def has_content(self) -> bool:
