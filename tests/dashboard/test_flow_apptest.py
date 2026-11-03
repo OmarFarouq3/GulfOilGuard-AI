@@ -21,6 +21,7 @@ from services.scenario import SIMULATED_OUTLINE
 OVERVIEW, DETECT, PREDICT, RESPOND = "views/overview.py", "views/detection.py", "views/drift.py", "views/cleanup.py"
 LOCKED = "This step is locked"
 SIMULATED_CHIP = "Simulated scenario"
+MIXED_CHIP = "Real detection, simulated location"
 TRACEBACK = "Traceback (most recent call last): secret/path/boom.py"
 
 
@@ -72,6 +73,13 @@ def html_bodies(at: AppTest, css_class: str) -> list[str]:
     """Bodies of the st.html elements that carry ``css_class`` (one specific card, not the page)."""
     return [h.proto.body for h in at.get("html") if f'class="{css_class}' in h.proto.body
             or f" {css_class}" in h.proto.body.split(">", 1)[0]]
+
+
+def heading(at: AppTest) -> str:
+    """The page heading card (title + status chip) only."""
+    bodies = html_bodies(at, "gog-heading")
+    assert len(bodies) == 1
+    return bodies[0]
 
 
 def expanders(at: AppTest) -> list[str]:
@@ -141,7 +149,7 @@ def test_overview_without_images_shows_the_empty_state_card(tmp_path, monkeypatc
     assert len(cards) == 1
     card = cards[0]
     assert "No radar images found" in card and str(directory) in card and "GOG_IMAGE_DIR" in card
-    assert ".png" in card and ".jpg" in card
+    assert ".png" in card and ".jpg" in card and "assets/images/val" in card
     assert not [p for p in at.get("page_link") if p.proto.label == "Continue to Detect"]
     open_page(at, DETECT)
     assert LOCKED not in page_text(at) and has_button(at, "flow_detect_simulated")
@@ -194,7 +202,8 @@ def test_detect_predict_respond_unlock_in_order(images, stub_detection, demo):
     button(at, "flow_run_detection").click()
     text = page_text(checked(at.run()))
     assert stub_detection == [image_picker.image_id(images[0])]
-    assert "U-Net prediction" in text and "Simulated slick outline" in text and SIMULATED_CHIP in text
+    assert "U-Net prediction" in text and "Simulated slick outline" in text
+    assert MIXED_CHIP in heading(at) and SIMULATED_CHIP not in heading(at)  # real mask, simulated location
     assert SIMULATED_OUTLINE in text  # the outline's tooltip, not "Scene: <image_id>"
 
     assert LOCKED in page_text(open_page(at, RESPOND))  # still locked: Predict not done
@@ -202,13 +211,15 @@ def test_detect_predict_respond_unlock_in_order(images, stub_detection, demo):
     assert LOCKED not in text
     button(at, "flow_run_predict").click()
     text = page_text(checked(at.run()))
-    assert "Simulated drift scenario, positioned at the selected spill" in text and SIMULATED_CHIP in text
+    assert "Simulated drift scenario, positioned at the selected spill" in text
+    assert SIMULATED_CHIP in heading(at) and MIXED_CHIP not in heading(at)  # Predict unchanged
 
     text = page_text(open_page(at, RESPOND))
     assert LOCKED not in text
     button(at, "flow_run_respond").click()
     text = page_text(checked(at.run()))
-    assert "Simulated response plan" in text and SIMULATED_CHIP in text and at.dataframe
+    assert "Simulated response plan" in text and at.dataframe
+    assert SIMULATED_CHIP in heading(at) and MIXED_CHIP not in heading(at)  # Respond unchanged
 
     assert page_text(open_page(at, OVERVIEW)).count("gog-progress-done") == 3
 
@@ -226,7 +237,10 @@ def test_missing_checkpoint_falls_back_to_simulated_and_unlocks_predict(images):
     button(at, "flow_run_detection").click()
     text = page_text(checked(at.run()))
     assert "No trained detection model" in text and "GOG_CHECKPOINT" in text and "demo scene" in text
-    assert "no-model.pth" not in text  # the path is a technical detail (?dev=1 only)
+    assert SIMULATED_CHIP in heading(at) and MIXED_CHIP not in heading(at)  # fully simulated
+    notice = " ".join(html_bodies(at, "gog-notice"))
+    assert "no-model.pth" in notice  # the file is named ...
+    assert str(images[0].parent.parent) not in notice  # ... but its full path is a ?dev=1 detail
     assert LOCKED not in page_text(open_page(at, PREDICT))
 
 
@@ -361,3 +375,94 @@ def test_every_page_renders_without_selection(images, demo):
         text = page_text(open_page(at, page))
         if page != OVERVIEW:
             assert "No incident selected" in text
+
+
+# --- Status labels, metrics caption, image source (dashboard review fixes) ------------------------
+
+ACCURACY_CAPTION = "computed on the validation split"
+
+
+def write_metrics(content: dict) -> None:
+    import json
+    inference.config.DETECTION_DIR.mkdir(parents=True, exist_ok=True)
+    (inference.config.DETECTION_DIR / "metrics.json").write_text(json.dumps(content), encoding="utf-8")
+
+
+def run_stubbed_detection(at: AppTest, image) -> str:
+    select(at, "GOG-SIM-01", image)
+    open_page(at, DETECT)
+    button(at, "flow_run_detection").click()
+    return page_text(checked(at.run()))
+
+
+def test_model_mask_with_synthetic_scores_stays_simulated(images, stub_detection):
+    """A real mask next to illustrative ("synthetic") scores is not "real detection": fully simulated wording."""
+    write_metrics({"synthetic": True, "dice": 0.7, "iou": 0.6, "precision": 0.7, "recall": 0.7})
+    at = new_app()
+    run_stubbed_detection(at, images[0])
+    assert SIMULATED_CHIP in heading(at) and MIXED_CHIP not in heading(at)
+
+
+def test_timeline_and_overview_use_the_mixed_wording(images, stub_detection):
+    at = new_app()
+    text = run_stubbed_detection(at, images[0])
+    assert "gog-step-detect-mixed" in text  # timeline dot for the mixed state
+    open_page(at, OVERVIEW)
+    assert any(MIXED_CHIP in body for body in html_bodies(at, "gog-stage-num"))  # Detect card in the flow
+    assert SIMULATED_CHIP in html_bodies(at, "gog-kpi-status")[0]  # headline area comes from the simulated outline
+
+
+def test_accuracy_caption_only_with_metrics(images, stub_detection):
+    text = run_stubbed_detection(new_app(), images[0])
+    assert "How accurate is the model?" in text and ACCURACY_CAPTION not in text
+    assert "never saw in training" not in text
+
+
+def test_accuracy_caption_and_evaluate_py_scores(images, stub_detection):
+    """metrics.json exactly as detection/evaluate.py writes it: scores nested, absolute checkpoint path."""
+    write_metrics({
+        "checkpoint": "C:/Users/someone/models/oil_unet/best.pth", "epoch": 12, "pairs": 1615, "threshold": 0.5,
+        "image_size": 256, "aggregation": "global pixel counts (micro)",
+        "metrics": {"dice": 0.8689, "iou": 0.7682, "precision": 0.8459, "recall": 0.8932},
+        "counts": {"true_positive": 1},
+        "limitations": "Provider validation split used for model selection; not an independent test set."})
+    text = run_stubbed_detection(new_app(), images[0])
+    assert ACCURACY_CAPTION in text and "not an independent test" in text and "never saw in training" not in text
+    assert "0.87" in text and "1615" in text and "best.pth" in text
+    assert "C:/Users/someone" not in text  # never a local path
+
+
+def test_image_source_caption_from_file_name(tmp_path, monkeypatch):
+    from dashboard_testkit import make_image
+    directory = tmp_path / "images"
+    expected = {"sentinel_12.png": "Sentinel-1 SAR sample from the local dataset",
+                "palsar_0.png": "ALOS PALSAR SAR sample from the local dataset", "scene_9.png": None}
+    paths = {name: make_image(directory / name) for name in expected}
+    monkeypatch.setenv("GOG_IMAGE_DIR", str(directory))
+    monkeypatch.setenv("GOG_CHECKPOINT", str(tmp_path / "no-model.pth"))
+    for name, source in expected.items():
+        at = new_app()
+        select(at, "GOG-SIM-01", paths[name])
+        caption = next(str(i.proto) for i in at.get("image") if "not geolocated to this spill" in str(i.proto))
+        incident_line = " ".join(html_bodies(open_page(at, DETECT), "gog-flow-incident"))
+        if source:
+            assert source in caption and source in incident_line
+        else:
+            for text in (caption, incident_line):
+                assert "SAR sample from" not in text and "Sentinel" not in text and "PALSAR" not in text
+
+
+def test_checkpoint_message_full_paths_only_with_dev(images):
+    """Item 3: viewers see which files were checked; full paths only with ?dev=1."""
+    import os
+    missing = os.environ["GOG_CHECKPOINT"]
+    for dev in (False, True):
+        at = new_app(dev=dev)
+        select(at, "GOG-SIM-01", images[0])
+        open_page(at, DETECT)
+        button(at, "flow_run_detection").click()
+        checked(at.run())
+        notice = " ".join(html_bodies(at, "gog-notice"))
+        assert "Checked, in order:" in notice and "no-model.pth" in notice and missing not in notice
+        details = [c.value for e in at.expander if e.label == "Technical details" for c in e.code]
+        assert bool(details) == dev and (missing in details[0] if dev else True)

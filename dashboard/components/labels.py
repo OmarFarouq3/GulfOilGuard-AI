@@ -7,6 +7,9 @@ fails if the schema gains a status that has no wording here.
 
 from __future__ import annotations
 
+from typing import get_args
+
+from components.data import Status
 from services.schema import SOLVER_STATUSES, ResponseTarget, Vessel, VesselRoute, suffix_unit, unit
 
 KM = unit(VesselRoute, "estimated_distance_km")
@@ -15,6 +18,17 @@ M3 = unit(ResponseTarget, "oil_volume_m3")
 M_PER_S = unit(Vessel, "speed_m_per_s")
 KM2 = "km²"  # area: the schema has no area field or unit (polygon areas are a dashboard extension)
 assert suffix_unit("wind_speed_m_per_s") == M_PER_S
+
+# Stage status (components.data.Status) -> (chip style, chip wording, timeline tooltip)
+STAGE_STATUS: dict[str, tuple[str, str, str]] = {
+    "live": ("gog-chip-live", "Live data", "Live data available"),
+    "simulated": ("gog-chip-sim", "Simulated scenario", "Showing a simulated scenario"),
+    "mixed": ("gog-chip-mixed", "Real detection, simulated location",
+              "Real model output on a radar image; the incident location is simulated"),
+    "empty": ("gog-chip-empty", "No data yet", "No data yet"),
+}
+assert set(STAGE_STATUS) == set(get_args(Status)), "stage status wording out of sync with components.data.Status"
+
 
 def slick_tooltip(outline_simulated: bool) -> dict[str, str]:
     """Map tooltip fields for detected slicks. A simulated outline shows its ``outline`` property

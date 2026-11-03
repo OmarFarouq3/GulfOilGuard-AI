@@ -1,7 +1,7 @@
 """Run the U-Net on the selected radar image, in a subprocess (Streamlit never imports torch).
 
-``run_detection`` calls ``python -m detection.predict_cli`` with ``GOG_DETECTION_PYTHON``
-(default: this interpreter), which writes ``<image_id>_{image,mask,overlay}.png`` into
+``run_detection`` calls ``python -m detection.predict_cli`` with the detection interpreter
+(services/settings.py: GOG_DETECTION_PYTHON, .env, .venv-detect/, else this interpreter), which writes ``<image_id>_{image,mask,overlay}.png`` into
 ``outputs/detection/``, the names ``detection_loader`` already reads. A small manifest
 ``<image_id>_run.json`` records which image (path + mtime) and checkpoint (path + mtime)
 produced them; while both are unchanged, a re-run returns the stored result instantly.
@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import traceback
 from dataclasses import dataclass, field
@@ -26,10 +25,11 @@ from typing import Any, Literal
 
 import config
 from services import schema  # noqa: F401  (puts the repo root on sys.path for shared/)
+from services import settings
 from shared.detection_cli import EXIT_NO_TORCH, KINDS, MODULE, RESULT_PREFIX, atomic_replace
 
-CHECKPOINT_ENV = "GOG_CHECKPOINT"
-PYTHON_ENV = "GOG_DETECTION_PYTHON"
+CHECKPOINT_ENV = settings.CHECKPOINT_KEY
+PYTHON_ENV = settings.PYTHON_KEY
 DETAIL_LINES = 40
 
 RunState = Literal["done", "cached", "checkpoint_missing", "image_missing", "setup_needed", "failed", "timeout"]
@@ -49,12 +49,13 @@ class DetectionRun:
 
 
 def checkpoint_path() -> Path:
-    env_value = os.environ.get(CHECKPOINT_ENV)
-    return Path(env_value).expanduser() if env_value else config.DETECTION_CHECKPOINT
+    """GOG_CHECKPOINT, else .env, else checkpoints/unet_best.pth if present, else the built-in default."""
+    return settings.resolve_checkpoint().path
 
 
 def detection_python() -> str:
-    return os.environ.get(PYTHON_ENV) or sys.executable
+    """GOG_DETECTION_PYTHON, else .env, else .venv-detect/ if present, else this interpreter."""
+    return str(settings.resolve_python().path)
 
 
 def output_files(image_id: str, out_dir: Path | None = None) -> dict[str, Path]:
@@ -119,37 +120,56 @@ def _tail(text: str) -> str:
     return "\n".join((text or "").strip().splitlines()[-DETAIL_LINES:])
 
 
-def _setup_message() -> str:
-    if os.environ.get(PYTHON_ENV):
-        return (f"The Python set in {PYTHON_ENV} has no PyTorch. Point it at an interpreter with PyTorch, "
-                "or continue with the simulated detection.")
-    return (f"The dashboard's Python has no PyTorch, so the model can't run here. Set {PYTHON_ENV} to a "
-            f"Python with PyTorch and {CHECKPOINT_ENV} to the model file, or continue with the simulated detection.")
+def _checked(resolved: settings.Resolved, last_state: str | None = None) -> tuple[str, str]:
+    """(viewer text naming files only, technical detail with full paths for ?dev=1)."""
+    short = settings.describe(resolved.checked, last_state=last_state)
+    full = settings.describe(resolved.checked, full=True, last_state=last_state, separator="\n")
+    return short, f"Checked, in order:\n{full}"
+
+
+def _checkpoint_missing_message(checkpoint: settings.Resolved) -> tuple[str, str]:
+    short, detail = _checked(checkpoint)
+    return (f"No trained detection model was found. Checked, in order: {short}. Put the model at "
+            f"{settings.STANDARD_CHECKPOINT.as_posix()} or set {CHECKPOINT_ENV}.", detail)
+
+
+def _setup_message(python: settings.Resolved | None = None) -> str:
+    python = python or settings.resolve_python()
+    short, _detail = _checked(python, last_state="no PyTorch")
+    return (f"The detection model needs a Python with PyTorch. Checked, in order: {short}. Create "
+            f"{settings.DETECT_VENV}/ with PyTorch or set {PYTHON_ENV} (and {CHECKPOINT_ENV} if the model file "
+            "is elsewhere), or continue with the simulated detection.")
 
 
 def run_detection(image_path: Path, image_id: str, *, checkpoint: Path | None = None, python: str | None = None,
                   out_dir: Path | None = None, timeout_s: float = config.DETECTION_TIMEOUT_S) -> DetectionRun:
-    """Predict the oil mask for one image (or reuse a matching stored result). Never raises."""
+    """Predict the oil mask for one image (or reuse a matching stored result). Never raises.
+
+    ``checkpoint`` / ``python`` override the lookup in services/settings.py (tests, scripts).
+    """
     try:
-        return _run_detection(Path(image_path), image_id, Path(checkpoint or checkpoint_path()), python,
+        resolved_checkpoint = (settings.given(checkpoint, "checkpoint passed in") if checkpoint
+                               else settings.resolve_checkpoint())
+        resolved_python = settings.given(python, "interpreter passed in") if python else settings.resolve_python()
+        return _run_detection(Path(image_path), image_id, resolved_checkpoint, resolved_python,
                               out_dir or config.DETECTION_DIR, timeout_s)
     except Exception:  # last resort: a status, never an error page
         return DetectionRun("failed", "Detection could not be completed.", image_id, detail=traceback.format_exc())
 
 
-def _run_detection(image_path: Path, image_id: str, checkpoint: Path, python: str | None, out: Path,
-                   timeout_s: float) -> DetectionRun:
+def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: settings.Resolved,
+                   resolved_python: settings.Resolved, out: Path, timeout_s: float) -> DetectionRun:
+    checkpoint = resolved_checkpoint.path
     if not image_path.is_file():
         return DetectionRun("image_missing", "The selected radar image is no longer available.", image_id)
     if not checkpoint.is_file():
-        return DetectionRun("checkpoint_missing",
-                            f"No trained detection model was found. Set {CHECKPOINT_ENV} to the model file to run it.",
-                            image_id, detail=f"Checkpoint not found: {checkpoint}")
+        message, detail = _checkpoint_missing_message(resolved_checkpoint)
+        return DetectionRun("checkpoint_missing", message, image_id, detail=detail)
     cached = cached_run(image_path, image_id, checkpoint, out)
     if cached:
         return cached
 
-    command = _command(python or detection_python(), checkpoint, image_path, out, image_id)
+    command = _command(str(resolved_python.path), checkpoint, image_path, out, image_id)
     try:
         result = subprocess.run(command, cwd=config.REPO_ROOT, capture_output=True, timeout=timeout_s,
                                 text=True, encoding="utf-8", errors="replace",
@@ -163,7 +183,9 @@ def _run_detection(image_path: Path, image_id: str, checkpoint: Path, python: st
 
     detail = _tail(result.stderr) or _tail(result.stdout)
     if result.returncode == EXIT_NO_TORCH:
-        return DetectionRun("setup_needed", _setup_message(), image_id, detail=detail)
+        checked = _checked(resolved_python, last_state="no PyTorch")[1]
+        return DetectionRun("setup_needed", _setup_message(resolved_python), image_id,
+                            detail=f"{checked}\n\n{detail}".strip())
     if result.returncode != 0:
         return DetectionRun("failed", f"Detection failed (exit code {result.returncode}).", image_id, detail=detail)
 

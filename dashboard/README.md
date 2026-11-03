@@ -19,6 +19,26 @@ macOS/Linux: `python3 -m venv .venv && source .venv/bin/activate`, then use the 
 
 `dashboard/requirements.txt` is deliberately lightweight (Streamlit 1.66 or newer). You do **not** need the root `requirements.txt` (torch, opendrift, ortools) to run the dashboard. Launch from the repo root so `.streamlit/config.toml` (theme, hidden Streamlit chrome) is picked up.
 
+### Real detection (optional)
+
+The Detect step runs the trained U-Net in a separate Python that has PyTorch; the dashboard's own environment stays torch-free. With the **standard layout nothing needs configuring**:
+
+```text
+checkpoints/unet_best.pth   the trained checkpoint (request it from the detection team; git-ignored)
+.venv-detect/               a Python with PyTorch: Scripts\python.exe on Windows, bin/python elsewhere
+assets/images/              radar images (git-ignored)
+```
+
+Create the detection environment once, from the repository root:
+
+```powershell
+py -3.13 -m venv .venv-detect
+.venv-detect\Scripts\python.exe -m pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+.venv-detect\Scripts\python.exe -m pip install numpy==2.2.6 Pillow==12.3.0
+```
+
+If your files live elsewhere, copy `.env.example` to `.env` (git-ignored) and set `GOG_CHECKPOINT`, `GOG_DETECTION_PYTHON` or `GOG_IMAGE_DIR` there, or set them as real environment variables. Each setting resolves as **environment variable > `.env` > standard layout**, then the built-in fallback (`runs/unet_refined_sar/best.pth`; the dashboard's own Python, which has no PyTorch and makes Detect report "setup needed"). Relative paths are resolved from the repository root, never from the working directory, so it does not matter where Streamlit is started. When detection can't run, the Detect page lists every location it checked, in order (file names only; full paths with `?dev=1`), and the options panel's Diagnostics shows what was resolved. Without a checkpoint or PyTorch, the simulated detection is still available.
+
 ### Navigation
 
 There is no sidebar. The top bar is a response timeline: **Overview → 01 Detect → 02 Predict → 03 Respond**. The dot after each step shows its status: sea green = live data, violet = simulated scenario, slate = no data yet.
@@ -166,11 +186,13 @@ The incidents offered on the Overview map. One `Point` feature per incident with
 
 ### Radar images → `assets/images/`
 
-Clicking a spill assigns a **random** `.png`/`.jpg` from `assets/images/` (recursive; override with the `GOG_IMAGE_DIR` environment variable). The image is a sample from the local dataset and is not geolocated to the spill. The folder is git-ignored, so copy images in locally. The selection (`sel_spill_id`, `sel_image_path`, `sel_image_id`) lives in `st.session_state` and is shared by all pages; see `services/selection.py`.
+Clicking a spill assigns a **random** `.png`/`.jpg` from `assets/images/` (recursive; override with the `GOG_IMAGE_DIR` environment variable). The image is a sample from the local dataset and is not geolocated to the spill. The folder is git-ignored, so copy images in locally. For demos, point `GOG_IMAGE_DIR` at `assets/images/val`.
+
+> **Warning:** the image folder may contain the detection model's own training data (the Refined Deep-SAR SOS `train/` crops were used to fit it, and `val/` to choose the checkpoint). Predictions on these images look better than they would on new imagery, so a demo must not be presented as an accuracy test. File names starting with `sentinel_` or `palsar_` are labelled Sentinel-1 / ALOS PALSAR in the UI (per `docs/literature_review.md`); other names get no sensor label. The selection (`sel_spill_id`, `sel_image_path`, `sel_image_id`) lives in `st.session_state` and is shared by all pages; see `services/selection.py`.
 
 ### Selected-spill flow (Detect → Predict → Respond)
 
-With a spill selected, each page follows it and unlocks in order. **Detect** runs the U-Net on the assigned image in a subprocess (`python -m detection.predict_cli`, so Streamlit never imports torch) and writes `outputs/detection/<image_id>_{image,mask,overlay}.png` plus a `<image_id>_run.json` cache manifest. Settings: `GOG_CHECKPOINT` (default `runs/unet_refined_sar/best.pth`), `GOG_DETECTION_PYTHON` (an interpreter with torch; default the dashboard's own), timeout `DETECTION_TIMEOUT_S` in `config.py`. Without a checkpoint the page falls back to the simulated detection; without PyTorch it explains which variables to set and offers the simulated detection. Error details (tracebacks, paths) appear only with `?dev=1`. Results are re-checked on every run: a spill that is no longer offered, a demo-mode toggle or a change in where drift / routing come from resets the steps, and a detection whose files were deleted has to be run again. **Predict** and **Respond** reuse the existing drift and routing results (or the demo scenario), moved so the drift's release point sits on the selected spill (`services/scenario.py`), and are always labelled simulated.
+With a spill selected, each page follows it and unlocks in order. **Detect** runs the U-Net on the assigned image in a subprocess (`python -m detection.predict_cli`, so Streamlit never imports torch) and writes `outputs/detection/<image_id>_{image,mask,overlay}.png` plus a `<image_id>_run.json` cache manifest. Where the checkpoint and the interpreter are is resolved as described in [Real detection](#real-detection-optional); the timeout is `DETECTION_TIMEOUT_S` in `config.py`. Without a checkpoint the page falls back to the simulated detection; without PyTorch it explains which variables to set and offers the simulated detection. Error details (tracebacks, paths) appear only with `?dev=1`. Results are re-checked on every run: a spill that is no longer offered, a demo-mode toggle or a change in where drift / routing come from resets the steps, and a detection whose files were deleted has to be run again. **Predict** and **Respond** reuse the existing drift and routing results (or the demo scenario), moved so the drift's release point sits on the selected spill (`services/scenario.py`), and are always labelled simulated.
 
 ## Code layout
 
@@ -200,6 +222,7 @@ dashboard/
     routing_loader.py     -> RoutingData | None
     spill_loader.py       -> SpillData | None (Overview map incidents)
     image_picker.py       lists / randomly picks radar images (no Streamlit; unit-testable)
+    settings.py           checkpoint / detection Python / image folder: env > .env > standard layout
     selection.py          selected spill + image in session_state, map-click parsing
     mock_data.py          demo scenario (synthetic)
     geo.py, imaging.py    small helpers (no shapely/geopandas)

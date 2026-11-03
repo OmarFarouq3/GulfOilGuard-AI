@@ -19,6 +19,16 @@ def _remove_test_outputs():
     shutil.rmtree(dashboard_testkit.TEST_OUTPUTS, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_layout(tmp_path_factory, monkeypatch):
+    """Every test sees an empty repo layout: no real .env, checkpoints/ or .venv-detect/ from this machine.
+
+    Tests that want a layout build one under services.settings.ROOT (or pass ``root=`` explicitly).
+    """
+    from services import settings
+    monkeypatch.setattr(settings, "ROOT", tmp_path_factory.mktemp("repo"))
+
+
 @pytest.fixture
 def session(monkeypatch) -> dict:
     """A plain dict standing in for st.session_state (services.selection only uses mapping ops)."""

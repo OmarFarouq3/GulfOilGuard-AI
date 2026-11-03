@@ -11,7 +11,8 @@ import streamlit as st
 import config
 from components import illustrations
 from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode
-from services import image_picker, selection
+from components.labels import STAGE_STATUS
+from services import image_picker, selection, settings
 from services.detection_loader import load_detection
 from services.drift_loader import load_drift
 from services.files import format_mtime
@@ -19,11 +20,7 @@ from services.routing_loader import load_routing
 from services.selection import available_images
 from services.spill_loader import load_spills
 
-STATUS_HELP = {
-    "live": "Live data available",
-    "simulated": "Showing a simulated scenario",
-    "empty": "No data yet",
-}
+STATUS_HELP = {status: help_text for status, (_css, _label, help_text) in STAGE_STATUS.items()}
 STEPS = (("detect", "01", "Detect"), ("predict", "02", "Predict"), ("respond", "03", "Respond"))
 # With a spill selected, the timeline doubles as its progress indicator.
 STEP_HELP = {
@@ -96,8 +93,12 @@ def diagnostics() -> None:
 
     st.caption(f"Radar image folder ({len(available_images())} readable images)")
     st.code(str(image_picker.image_dir()), language=None, wrap_lines=True)
+    st.caption("Detection setup (environment > .env > standard layout)")
+    checkpoint, python = settings.resolve_checkpoint(), settings.resolve_python()
+    st.code(f"checkpoint: {checkpoint.path}  [{checkpoint.source}{'' if checkpoint.path.is_file() else ', missing'}]\n"
+            f"python:     {python.path}  [{python.source}]", language=None, wrap_lines=True)
 
-    warnings = []
+    warnings = list(settings.env_file()[1])
     for loader in (load_detection, load_drift, load_routing, load_spills):
         data = loader()
         if data is not None:

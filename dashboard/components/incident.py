@@ -72,7 +72,8 @@ def _selected(site: SpillSite, simulated: bool) -> None:
         ui.inline_empty("The assigned radar image can't be displayed. Pick another image.")
     else:
         st.image(shown, width="stretch", alt="Radar image assigned to this incident",
-                 caption=f"Random sample from the local radar dataset ({current.image_path.name}). "
+                 caption=f"{_source_prefix(current.image_path)}Random sample from the local radar dataset "
+                         f"({current.image_path.name}). "
                          "It is not geolocated to this spill.")
     with st.container(horizontal=True, gap="small", vertical_alignment="center"):
         st.button("Pick another image", icon=":material/shuffle:", key="sel_reroll_image",
@@ -80,6 +81,12 @@ def _selected(site: SpillSite, simulated: bool) -> None:
                   help="Draw a different random image from the local radar dataset")
         _clear_button()
     st.page_link(DETECT_PAGE, label="Continue to Detect", icon=":material/arrow_forward:", icon_position="right")
+
+
+def _source_prefix(path) -> str:
+    """'Sentinel-1 SAR sample from the local dataset. ' when the file name says so, else nothing."""
+    source = image_picker.image_source(path)
+    return f"{source}. " if source else ""
 
 
 def _clear_button() -> None:
@@ -94,5 +101,6 @@ def _images_missing() -> None:
               <code>.jpg</code> radar images (subfolders are fine) to
               <code class="gog-path">{ui.esc(image_picker.image_dir())}</code>
               or point the <code>{image_picker.IMAGE_DIR_ENV}</code> environment variable at another folder,
-              then refresh. The folder is not in git, so every machine needs its own copy.</div>"""
+              then refresh. The folder is not in git, so every machine needs its own copy. For a demo,
+              <code>{image_picker.IMAGE_DIR_ENV}</code> can point at <code>assets/images/val</code>.</div>"""
     )

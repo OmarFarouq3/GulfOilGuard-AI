@@ -47,7 +47,8 @@ DETECTION_FILES = {
     "image": DETECTION_DIR / "image.png",  # optional: the SAR input scene
     "mask": DETECTION_DIR / "mask.png",
     "overlay": DETECTION_DIR / "overlay.png",
-    "metrics": DETECTION_DIR / "metrics.json",
+    "metrics": DETECTION_DIR / "metrics.json",  # detection/evaluate.py (scores nested under "metrics")
+    "summary": DETECTION_DIR / "summary.json",  # detection/report.py (scores nested under "micro"), fallback
     "spill": DETECTION_DIR / "spill.geojson",
 }
 
@@ -70,8 +71,8 @@ ROUTING_FILES = {
 SPILLS_FILE = OUTPUTS_DIR / "spills.geojson"
 
 # Detection runs (services/inference.py): the U-Net runs in a subprocess, never in Streamlit.
-# GOG_CHECKPOINT overrides the checkpoint; GOG_DETECTION_PYTHON names an interpreter with torch
-# (default: the dashboard's own interpreter).
+# Where the checkpoint and the interpreter with torch are is resolved in services/settings.py
+# (environment, .env, then checkpoints/unet_best.pth and .venv-detect/); this is the last fallback.
 DETECTION_CHECKPOINT = REPO_ROOT / "runs" / "unet_refined_sar" / "best.pth"
 DETECTION_TIMEOUT_S = 300  # first torch import + model load on CPU can be slow
 

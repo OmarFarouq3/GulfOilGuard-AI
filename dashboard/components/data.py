@@ -1,8 +1,10 @@
 """One place that decides which data each page shows and how to label it.
 
-Status per stage:
+Status per stage (wording in components/labels.py STAGE_STATUS):
 - ``live``: real outputs were found
 - ``simulated``: demo scenario is on, or the outputs label themselves ``"synthetic": true``
+- ``mixed``: Detect only: a real model mask on a real radar image, while the spill site and the
+  outline on the map are simulated (the image is not geolocated)
 - ``empty``: nothing to show yet
 
 With a spill selected on Overview (services.selection), each stage follows that spill
@@ -25,7 +27,7 @@ from services.routing_loader import load_routing
 from services.spill_loader import load_spills
 
 DEMO_STATE_KEY = "demo_mode"
-Status = Literal["live", "simulated", "empty"]
+Status = Literal["live", "simulated", "mixed", "empty"]
 
 
 def demo_mode() -> bool:
@@ -44,8 +46,16 @@ class Stage:
 def _stage(key: str, data: Any) -> Stage:
     if data is None or not data.has_content:
         return Stage(key, None, "empty", bool(data and data.warnings))
+    if _real_detection_simulated_location(data):
+        return Stage(key, data, "mixed", bool(data.warnings))
     simulated = data.is_mock or data.synthetic  # loaders set `synthetic` from "synthetic": true flags
     return Stage(key, data, "simulated" if simulated else "live", bool(data.warnings))
+
+
+def _real_detection_simulated_location(data: Any) -> bool:
+    """Model mask on a real image + simulated outline, and nothing else synthetic (e.g. sample scores)."""
+    return (isinstance(data, DetectionData) and data.mask_source == "model" and data.outline_simulated
+            and not data.is_mock and data.metrics_info.get("synthetic") is not True)
 
 
 def dev_mode() -> bool:
@@ -72,9 +82,15 @@ def selected_site() -> SpillSite | None:
 
 
 def combined_status(stages: dict[str, Stage]) -> Status:
-    """One status for numbers built from several stages: simulated if any input is simulated."""
+    """One status for numbers built from several stages: simulated if any input is simulated.
+
+    A ``mixed`` detection counts as simulated here: the slick area in the headline numbers comes
+    from its simulated outline, not from the real mask.
+    """
     statuses = {s.status for s in stages.values()}
-    return "simulated" if "simulated" in statuses else "live" if "live" in statuses else "empty"
+    if statuses & {"simulated", "mixed"}:
+        return "simulated"
+    return "live" if "live" in statuses else "empty"
 
 
 def detection_stage() -> Stage:

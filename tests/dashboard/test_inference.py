@@ -68,8 +68,13 @@ def test_missing_checkpoint_is_a_status_not_an_exception(files, monkeypatch):
     assert "nope.pth" in result.detail and not fake.calls
 
 
-def test_checkpoint_comes_from_env_else_config(tmp_path, monkeypatch):
-    assert inference.checkpoint_path() == inference.config.DETECTION_CHECKPOINT
+def test_checkpoint_comes_from_env_else_standard_layout_else_default(tmp_path, monkeypatch):
+    from services import settings
+    assert inference.checkpoint_path() == settings.ROOT / "runs" / "unet_refined_sar" / "best.pth"
+    standard = settings.ROOT / "checkpoints" / "unet_best.pth"
+    standard.parent.mkdir(parents=True)
+    standard.write_bytes(b"x")
+    assert inference.checkpoint_path() == standard
     monkeypatch.setenv("GOG_CHECKPOINT", str(tmp_path / "x.pth"))
     assert inference.checkpoint_path() == tmp_path / "x.pth"
 
@@ -195,13 +200,22 @@ def test_no_torch_without_override_explains_the_setup(files, monkeypatch):
     assert result.state == "setup_needed" and not result.ok
     assert "GOG_DETECTION_PYTHON" in result.message and "GOG_CHECKPOINT" in result.message
     assert "simulated detection" in result.message and "\n" not in result.message
+    # what was checked, in order, ending with the interpreter that was used
+    message = result.message
+    order = ["GOG_DETECTION_PYTHON environment variable: not set", "GOG_DETECTION_PYTHON in .env: not set",
+             "standard layout .venv-detect/", "the dashboard's own Python"]
+    positions = [message.index(part) for part in order]
+    assert positions == sorted(positions) and "no PyTorch" in message
 
 
 def test_no_torch_with_override_names_the_override(files, monkeypatch):
     monkeypatch.setenv("GOG_DETECTION_PYTHON", "C:/somewhere/python.exe")
     monkeypatch.setattr(inference.subprocess, "run", FakeRun(returncode=3))
     result = run(files)
-    assert result.state == "setup_needed" and "Python set in GOG_DETECTION_PYTHON has no PyTorch" in result.message
+    assert result.state == "setup_needed"
+    assert "GOG_DETECTION_PYTHON environment variable python.exe: no PyTorch" in result.message
+    assert "C:/somewhere" not in result.message and "somewhere" in result.detail  # full path: ?dev=1 only
+    assert ".env" not in result.message.split("Checked, in order:")[1].split(".")[0]  # stopped at the variable
 
 
 # --- Fix 8: run_detection never raises -----------------------------------------------------------

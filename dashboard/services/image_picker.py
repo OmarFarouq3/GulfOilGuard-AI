@@ -5,13 +5,13 @@ No Streamlit here, so everything is easy to unit-test. The folder resolves in th
 2. the ``GOG_IMAGE_DIR`` environment variable
 3. ``<repo root>/assets/images`` (git-ignored: every machine needs its own copy)
 
-The picked image is a random sample from the dataset. It is NOT geolocated to any spill.
+(GOG_IMAGE_DIR may also come from ``<repo root>/.env``; see services/settings.py.) The picked
+image is a random sample from the dataset. It is NOT geolocated to any spill.
 """
 
 from __future__ import annotations
 
 import hashlib
-import os
 import random
 import re
 from collections.abc import Sequence
@@ -20,18 +20,18 @@ from pathlib import Path
 from PIL import Image
 
 import config
+from services import settings
 
 IMAGE_DIR = config.REPO_ROOT / "assets" / "images"
-IMAGE_DIR_ENV = "GOG_IMAGE_DIR"
+IMAGE_DIR_ENV = settings.IMAGE_DIR_KEY
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg")
 
 
 def image_dir(directory: str | Path | None = None) -> Path:
-    """The folder to search: the argument, else GOG_IMAGE_DIR, else assets/images."""
+    """The folder to search: the argument, else GOG_IMAGE_DIR (environment, then .env), else assets/images."""
     if directory is not None:
         return Path(directory)
-    env_value = os.environ.get(IMAGE_DIR_ENV)
-    return Path(env_value).expanduser() if env_value else IMAGE_DIR
+    return settings.resolve_image_dir().path
 
 
 def _is_hidden(path: Path, root: Path) -> bool:
@@ -75,6 +75,21 @@ def pick_random_image(directory: str | Path | None = None, exclude: str | Path |
                       rng: random.Random | None = None) -> Path | None:
     """Random readable image from the folder, or None if there is none."""
     return choose_image(list_images(directory), exclude, rng)
+
+
+# File-name prefix -> sensor, for the Refined Deep-SAR SOS crops in assets/images
+# (docs/literature_review.md: "ALOS PALSAR and Sentinel-1A, 8,070 crops of 256x256 px").
+SENSOR_PREFIXES = {"sentinel_": "Sentinel-1", "palsar_": "ALOS PALSAR"}
+
+
+def image_source(path: str | Path) -> str | None:
+    """'Sentinel-1 SAR sample from the local dataset' from the file-name prefix; None when unknown.
+
+    Only the documented prefixes count; anything else is not guessed.
+    """
+    stem = Path(path).stem.lower()
+    sensor = next((name for prefix, name in SENSOR_PREFIXES.items() if stem.startswith(prefix)), None)
+    return f"{sensor} SAR sample from the local dataset" if sensor else None
 
 
 def image_id(path: str | Path, root: str | Path | None = None) -> str:

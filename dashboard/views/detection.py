@@ -17,7 +17,7 @@ data = stage.data
 ui.page_heading(
     "Step 01 · Detect",
     "Spot the slick from orbit",
-    "A U-Net model reads SAR imagery imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
+    "A U-Net model reads SAR imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
     stage,
 )
 site = selected_site()
@@ -54,8 +54,9 @@ else:
         ui.inline_empty("The radar image and detected oil outline will appear here.")
 
     # --- Model quality ---------------------------------------------------------
-    ui.section("How accurate is the model?", "Scores from 0 to 1 on images the model never saw in training.")
     if data.metrics:
+        ui.section("How accurate is the model?", "Scores from 0 to 1, computed on the validation split. That "
+                   "split was also used to choose the checkpoint, so these are not an independent test.")
         hints = {
             "dice": "Overlap between detected and true oil",
             "iou": "Shared area over combined area",
@@ -72,16 +73,21 @@ else:
             st.plotly_chart(figure, width="stretch", config=charts.CHART_CONFIG)
         with right:
             labels = {"model": "Model", "split": "Evaluated on", "n_images": "Images evaluated",
-                      "threshold": "Decision threshold"}
+                      "threshold": "Decision threshold", "checkpoint": "Checkpoint", "epoch": "Checkpoint epoch",
+                      "image_size": "Input size (px)", "aggregation": "Aggregation",
+                      "n_with_oil": "Images with oil", "n_empty_reference": "Images without oil"}
             details = {labels.get(k, k.replace("_", " ").capitalize()): v
                        for k, v in data.metrics_info.items()
-                       if k != "synthetic" and not isinstance(v, (dict, list))}
+                       if k not in ("synthetic", "limitations") and not isinstance(v, (dict, list))}
             ui.section("Evaluation details")
             if details:
                 ui.details_table(details)
             else:
                 ui.inline_empty("Model and evaluation details will appear here.")
+            if isinstance(data.metrics_info.get("limitations"), str):
+                st.caption(data.metrics_info["limitations"])
     else:
+        ui.section("How accurate is the model?")
         ui.inline_empty("Accuracy scores will appear here once the model has been evaluated.")
 
     # --- Map -------------------------------------------------------------------

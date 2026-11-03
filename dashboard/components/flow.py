@@ -11,7 +11,7 @@ import streamlit as st
 from components import ui
 from components.data import dev_mode
 from components.labels import KM
-from services import inference, scenario, selection
+from services import image_picker, inference, scenario, selection
 from services.files import read_image
 from services.imaging import preview_png
 from services.models import SpillSite
@@ -47,9 +47,11 @@ def no_selection_prompt() -> None:
         st.page_link(OVERVIEW_PAGE, label="Pick a spill on Overview", icon=":material/arrow_back:")
 
 
-def _incident(site: SpillSite) -> None:
+def _incident(site: SpillSite, show_source: bool = False) -> None:
     current = selection.current()
     image = f" · Radar image {ui.esc(current.image_path.name)}" if current.image_path else ""
+    source = image_picker.image_source(current.image_path) if show_source and current.image_path else None
+    image += f" ({ui.esc(source)})" if source else ""
     st.html(f'<div class="gog-flow-incident"><b>{ui.esc(site.name)}</b> · {ui.coordinates(site.location.latitude, site.location.longitude)}{image}</div>')
 
 
@@ -83,7 +85,7 @@ def _next(step: str) -> None:
 
 def detect_controls(site: SpillSite) -> None:
     progress()
-    _incident(site)
+    _incident(site, show_source=True)
     current = selection.current()
     run = selection.detection_run()
 

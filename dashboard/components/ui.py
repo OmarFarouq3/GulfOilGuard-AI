@@ -13,15 +13,12 @@ import streamlit as st
 
 from components import illustrations
 from components.data import Stage
+from components.labels import STAGE_STATUS
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 EMPTY_VALUE = "—"
 
-STATUS_CHIPS = {
-    "live": ("gog-chip-live", "Live data"),
-    "simulated": ("gog-chip-sim", "Simulated scenario"),
-    "empty": ("gog-chip-empty", "No data yet"),
-}
+STATUS_CHIPS = {status: (css, label) for status, (css, label, _help) in STAGE_STATUS.items()}
 
 
 def esc(value: object) -> str:
@@ -40,7 +37,7 @@ def chip(status: str) -> str:
 
 
 def page_heading(eyebrow: str, title: str, subtitle: str, stage: Stage | None = None) -> None:
-    """Large page heading with an optional status chip (e.g. "Simulated scenario")."""
+    """Large page heading with an optional status chip ("Simulated scenario", "Real detection, ...")."""
     status = chip(stage.status) if stage and stage.status != "empty" else ""
     st.html(
         f"""<div class="gog-heading">

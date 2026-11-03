@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 import re
 
@@ -39,7 +40,8 @@ def test_lists_only_readable_visible_images_recursively(tmp_path):
 
 
 def test_image_dir_resolution_argument_env_default(tmp_path, monkeypatch):
-    assert ip.image_dir() == ip.IMAGE_DIR  # conftest clears GOG_IMAGE_DIR
+    from services import settings
+    assert ip.image_dir() == settings.ROOT / "assets" / "images"  # conftest: no GOG_IMAGE_DIR, empty layout
     monkeypatch.setenv("GOG_IMAGE_DIR", str(tmp_path))
     assert ip.image_dir() == tmp_path
     assert ip.image_dir(tmp_path / "arg") == tmp_path / "arg"
@@ -99,7 +101,7 @@ def test_image_id_does_not_depend_on_the_os(tmp_path, monkeypatch):
     """Same dataset, same ids everywhere: no os.path.normcase (which folds case on Windows only)."""
     path = tmp_path / "Sub" / "Scene.png"
     expected = ip.image_id(path, root=tmp_path)
-    monkeypatch.setattr(ip.os.path, "normcase", lambda p: p.upper())  # would change a normcase-based id
+    monkeypatch.setattr(os.path, "normcase", lambda p: p.upper())  # would change a normcase-based id
     assert ip.image_id(path, root=tmp_path) == expected
     digest = ip.hashlib.sha1(b"Sub/Scene.png").hexdigest()[:8]  # exact POSIX relative path
     assert expected == f"scene-{digest}"
@@ -110,6 +112,17 @@ def test_case_only_difference_still_gets_distinct_ids(tmp_path):
     the hash keeps them apart (the decided no-silent-collision behaviour)."""
     upper, lower = ip.image_id(tmp_path / "X.png", root=tmp_path), ip.image_id(tmp_path / "x.png", root=tmp_path)
     assert upper != lower and upper.startswith("x-") and lower.startswith("x-")
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("sentinel_12.png", "Sentinel-1 SAR sample from the local dataset"),
+    ("Sentinel_7.PNG", "Sentinel-1 SAR sample from the local dataset"),
+    ("palsar_1088.png", "ALOS PALSAR SAR sample from the local dataset"),
+    ("sub/palsar_0.jpg", "ALOS PALSAR SAR sample from the local dataset"),
+    ("scene_0.png", None), ("sentinel12.png", None), ("s1_sentinel_3.png", None), ("palsar.png", None),
+])
+def test_image_source_only_from_documented_prefixes(name, expected):
+    assert ip.image_source(name) == expected
 
 
 def test_image_id_is_relative_to_the_image_folder(tmp_path):
