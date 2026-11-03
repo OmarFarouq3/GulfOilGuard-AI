@@ -119,6 +119,13 @@ class DriftTargetConfig:
     # A patch with less oil than this when a vessel gets there is treated as gone
     # (stranded, evaporated or dispersed), so no vessel is sent to empty water.
     gone_below_m3: float = 0.5
+    # Weathered oil takes up sea water and becomes an emulsion, so a skimmer recovers more
+    # than the pure oil: oil / (1 - water fraction). With this on, that emulsion is what
+    # fills the tank and what the skimmer pumps (cleanup time); oil recovered is still
+    # counted as pure oil. The water fraction is the slick average per hour from the drift
+    # module's meta.json (summary_by_hour mean_water_fraction), the same for every patch.
+    # Without it in meta.json, tanks are counted as pure oil and the plan says so.
+    count_emulsion: bool = True
 
     # --- re-planning for moving oil ---
     # OR-Tools plans to fixed points. So we guess when each patch will be reached, plan to
