@@ -8,11 +8,13 @@ The purpose was to check image-mask alignment, review the model's predictions, a
 
 I also performed an additional alignment check by overlaying the ground-truth masks on their corresponding original SAR images.
 
+Additional prediction galleries and evaluation metrics were provided from the U-Net validation evaluation. These results are referenced below to document relevant prediction differences and potential issues for further investigation.
+
 ## 2. Prediction Review Results
 
-The following table summarizes the five prediction examples and their evaluation scores.
+The following table summarizes the five initial prediction examples and their evaluation scores.
 
-The Dice and IoU scores were taken from the prediction examples. These metrics were not independently recalculated during this review.
+The Dice and IoU scores were taken from the provided prediction examples. These metrics were not independently recalculated during this review.
 
 | Image | Dice | IoU | Observation |
 |---|---|---|---|
@@ -37,7 +39,7 @@ In contrast, `sentinel_126.png` achieved a Dice score of **0.384** and an IoU of
 
 ## 3. Observations
 
-The strongest overlap among the reviewed examples was observed in `palsar_461.png`, with a Dice score of 0.932.
+The strongest overlap among the five initially reviewed examples was observed in `palsar_461.png`, with a Dice score of 0.932.
 
 The weakest result was observed in `sentinel_126.png`, with a Dice score of 0.384. Its predicted mask contained additional white regions not present in the ground-truth mask, indicating false-positive detections.
 
@@ -77,15 +79,86 @@ In particular, `sentinel_49.png` contained a large labeled region covering most 
 
 Overall, no obvious geometric alignment problems were identified in the five original image-mask pairs. However, the overlay review alone cannot confirm that every annotation is perfectly aligned or correctly labeled.
 
+## 5. Additional Prediction Review
 
-## 5. Conclusion
+### Overview
 
-The five reviewed prediction examples showed no obvious image-mask alignment problems in the provided comparisons.
+Additional best, median, and worst prediction galleries were provided as part of the U-Net validation evaluation, together with per-image metrics.
 
-Most predictions demonstrated reasonable overlap with the ground-truth masks, while `sentinel_126.png` showed noticeable false positives.
+The results below are taken from these evaluation outputs. They are included to highlight prediction differences and potential issues for further investigation. 
+
+The evaluation covered 1,615 validation images using a prediction threshold of 0.5.
+
+### Overall Evaluation Results
+
+The following metrics were reported in the evaluation results.
+
+| Metric | Score |
+|---|---|
+| Dice | 0.8689 |
+| IoU | 0.7682 |
+| Precision | 0.8459 |
+| Recall | 0.8932 |
+
+These represent the overall pixel-level (micro-averaged) validation metrics.
+
+### Best Prediction Examples
+
+The best prediction gallery included `sentinel_455.png`, `sentinel_460.png`, `sentinel_591.png`, and `sentinel_798.png`.
+
+All four examples achieved Dice scores of 1.000, indicating perfect agreement between predicted and ground-truth masks.
+
+However, all four examples contained fully positive ground-truth masks, with 65,536 labeled oil-spill pixels each. This means every pixel in the 256 × 256 images was labeled as oil spill.
+
+Although these predictions achieved perfect scores, they do not demonstrate the model's ability to distinguish complex oil-spill boundaries from background regions.
+
+### Median Prediction Examples
+
+| Image | Dice | Observation |
+|---|---|---|
+| palsar_480.png | 0.845 | Differences between predicted and ground-truth boundaries, including false-positive and false-negative regions. |
+| palsar_259.png | 0.845 | Differences around irregular and branching labeled regions. |
+| palsar_15.png | 0.845 | Additional predicted regions were visible around some boundaries. |
+| palsar_637.png | 0.846 | Differences in the shapes and boundaries of smaller labeled regions. |
+
+These observations describe differences visible in the provided prediction galleries. They do not establish an image-mask alignment or preprocessing error.
+
+### Worst Prediction Examples
+
+The following values were obtained from the provided `per_image_metrics.csv` file.
+
+| Image | Dice | Ground-Truth Oil Pixels | Observation |
+|---|---|---|---|
+| palsar_469.png | 0.000 | 583 | No overlap with the labeled oil-spill pixels. |
+| palsar_659.png | 0.000 | 160 | No overlap with the small labeled region. |
+| sentinel_353.png | 0.000 | 1 | The single labeled oil-spill pixel was not detected. |
+| sentinel_528.png | 0.961 | 49,466 | High overlap despite appearing in the worst prediction gallery. |
+
+The first three examples had Dice and recall scores of 0.000, indicating that none of their ground-truth oil-spill pixels were detected.
+
+Although `sentinel_528.png` appears in the worst prediction gallery, its Dice score is 0.961. The gallery selection criteria would need clarification to explain this difference.
+
+### Relevant Observations
+
+**1. Small Labeled Regions**
+
+Several examples with small ground-truth oil-spill regions had zero overlap between the predictions and reference masks. This suggests a possible weakness in detecting small oil spills.
+
+**2. Boundary Differences**
+
+The median prediction examples showed differences between predicted and reference boundaries, particularly around irregular shapes.
+
+**3. False-Positive Regions**
+
+Some examples contained predicted oil-spill pixels outside the ground-truth regions.
+
+
+## 6. Conclusion
+
+The five initially reviewed prediction examples showed no obvious image-mask alignment problems. Most predictions demonstrated reasonable overlap with the ground-truth masks, while `sentinel_126.png` showed noticeable false positives.
 
 The additional overlay check showed that all five original SAR images and ground-truth masks had matching dimensions of 256 × 256 pixels, with no obvious geometric alignment issues observed.
 
-Some segmentation boundaries were difficult to assess because of the noisy appearance of SAR images, and the large labeled region in `sentinel_49.png` may benefit from further inspection.
+The additional evaluation outputs provided further examples of prediction differences, including missed small labeled regions, boundary differences, and false-positive detections. These observations may help guide future model improvements.
 
-No definite data-quality or preprocessing errors were identified during this review.
+No definite data-quality or preprocessing errors were identified during this review. 
