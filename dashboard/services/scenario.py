@@ -5,13 +5,16 @@ What is real and what is simulated:
   (``mask_source="model"``), else the demo scene (``"simulated"``). The dataset images are
   not geolocated, so the mask has no position: the outline on the map is the demo slick moved
   to the spill (``outline_simulated``), without a confidence (meaningless for a placeholder).
-- Drift: ``simulate_drift`` is not implemented, so the existing drift results (outputs/drift,
-  else the demo scenario) are translated rigidly so that their origin sits on the spill.
+- Drift: a real OpenDrift forecast (outputs/drift with ``DriftData.model_run``) is valid only
+  for its own release point, so it is shown as is for the spill at that point and never moved;
+  any other spill gets the demo scenario moved there (``selected_drift``). Other drift files
+  (e.g. written by make_sample_outputs.py) are translated rigidly so their origin sits on the spill.
 - Routing: the existing plan (outputs/routing, else the demo plan) moved by the same offset as
   the drift, so routes still meet the oil. Vessel bases move too (they are simulated);
   distances, times and volumes stay those of the source plan.
 
-Everything built here is labelled synthetic, so its stage shows "Simulated scenario".
+Everything built here is labelled synthetic, so its stage shows "Simulated scenario"; the real
+forecast at its own release point shows "Real forecast, simulated release".
 """
 
 from __future__ import annotations
@@ -121,8 +124,34 @@ def anchor_drift(drift: DriftData, site: SpillSite, offset: Offset) -> DriftData
     )
 
 
+RELEASE_MATCH_KM = 1.0  # a spill this close to the forecast's release point is the one it was made for
+
+
+def real_forecast(demo: bool) -> DriftData | None:
+    """outputs/drift when it is a real OpenDrift run (and the demo is off), else None."""
+    loaded = None if demo else load_drift()
+    return loaded if loaded and loaded.has_content and loaded.model_run else None
+
+
+def forecast_applies(drift: DriftData, site: SpillSite) -> bool:
+    """The spill sits at the forecast's release point (meta.json initial_location)."""
+    shift = shift_km(drift, site)
+    return shift is not None and shift <= RELEASE_MATCH_KM
+
+
 def selected_drift(site: SpillSite, demo: bool) -> DriftData:
-    drift = source_drift(demo)
+    """The real forecast for the spill it was made for (not moved); otherwise a scenario moved to the spill.
+
+    A real forecast never moves to another spill: the wind and currents there differ. That spill
+    gets the demo scenario instead (components.flow explains why).
+    """
+    real = real_forecast(demo)
+    if real is not None:
+        if forecast_applies(real, site):
+            return dataclasses.replace(real, anchored_to=site.spill_id)
+        drift = mock_data.drift()
+    else:
+        drift = source_drift(demo)
     return anchor_drift(drift, site, drift_offset(drift, site))
 
 

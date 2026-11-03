@@ -11,7 +11,7 @@ import streamlit as st
 from components import charts, ui
 from components.data import dev_mode
 from components.labels import KM
-from services import image_picker, inference, report_loader, scenario, selection
+from services import image_picker, inference, mock_data, report_loader, scenario, selection
 from services.files import read_image
 from services.imaging import preview_png
 from services.models import SpillSite
@@ -209,20 +209,33 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
     _incident(site)
     if _locked("predict"):
         return
-    source = scenario.source_drift(demo)
-    moved = scenario.shift_km(source, site)
-    origin = "the demo drift scenario" if source.is_mock else "the latest drift results"
-    note = (f"Simulated drift scenario, positioned at the selected spill: {origin}, moved "
-            f"{moved:,.0f} {KM} so that its release point sits on this spill." if moved is not None else
-            f"Simulated drift scenario, positioned at the selected spill ({origin}).")
+    real = scenario.real_forecast(demo)
+    if real is not None and scenario.forecast_applies(real, site):
+        note = ("Real OpenDrift forecast, made for this release point. The release point and time are test "
+                "inputs, not a detection.")
+        real_parts = ["Drift paths, oil footprint and particles (OpenDrift run)", "Wind and current inputs"]
+        simulated_parts = ["Release point and time (test inputs, not a detection)"]
+    else:
+        source = mock_data.drift() if real is not None else scenario.source_drift(demo)
+        moved = scenario.shift_km(source, site)
+        origin = "the demo drift scenario" if source.is_mock else "the latest drift results"
+        note = (f"Simulated drift scenario, positioned at the selected spill: {origin}, moved "
+                f"{moved:,.0f} {KM} so that its release point sits on this spill." if moved is not None else
+                f"Simulated drift scenario, positioned at the selected spill ({origin}).")
+        if real is not None:
+            release = scenario.drift_origin(real)
+            note = (f"The real forecast was made for a release at {ui.coordinates(*release)} and doesn't apply "
+                    f"to this spill, so it isn't shown. {note}")
+        real_parts = []
+        simulated_parts = ["Drift paths, oil footprint and particles (moved scenario)",
+                           "Wind and current inputs (those of the source scenario)"]
     if not selection.predict_done():
         st.html(f'<p class="gog-flow-note">{ui.esc(note)} The drift model itself is not run for this incident yet.</p>')
         st.button("Run drift forecast", type="primary", icon=":material/play_arrow:", key="flow_run_predict",
                   on_click=selection.complete_predict)
         return
-    st.html(f'<div class="gog-sim-note">{ui.esc(note)}</div>')
-    _provenance([], ["Drift paths, oil footprint and particles (moved scenario)",
-                     "Wind and current inputs (those of the source scenario)"])
+    st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')
+    _provenance(real_parts, simulated_parts)
     _next("respond")
 
 

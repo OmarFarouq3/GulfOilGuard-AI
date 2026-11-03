@@ -87,6 +87,7 @@ class DriftData:
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
     anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
+    model_run: bool = False  # meta.json names a real OpenDrift run (drift_loader.is_model_run)
 
     @property
     def has_content(self) -> bool:

@@ -156,6 +156,7 @@ What `detection/report.py` writes by default (`--output-dir outputs/report`). Al
 | `hours` | *extension* | required: hours since release (`0`, `6`, `12`, `24`; other values work) |
 | `timestamp` | `TimedPosition.timestamp` | optional, UTC; must equal release time + `hours` when a release time is known |
 | `kind` | *extension* | optional: `"particles"` or `"envelope"` |
+| `status` | *extension* | optional, OpenDrift element status. Only `"active"` particles are drawn and counted as oil afloat; any other status (`"stranded"`, `"evaporated"`, `"dispersed"`, ...) is drawn as grey "No longer afloat" dots with its own legend entry. Without `status`, every particle counts as afloat |
 
 `meta.json`:
 
@@ -168,9 +169,14 @@ What `detection/report.py` writes by default (`--output-dir outputs/report`). Al
 | `start_time` | (same type as `EnvironmentalData.start_time`) | optional, UTC; release time when `positions` is absent |
 | `wind_speed_m_per_s`, `current_speed_m_per_s` | *extension* (schema unit suffix) | nonnegative |
 | `wind_from_deg`, `current_to_deg` | *extension* | 0-360 |
-| `model`, `wind_source`, `current_source`, `oil_type`, `n_particles` | *extension* | descriptive |
+| `model`, `wind_source`, `current_source`, `oil_type`, `n_particles` | *extension* | descriptive; `model` also decides the label (below) |
+| `release_volume_m3`, `note`, `assumptions` | *extension* | optional, shown under "Run details" with the fields above (`assumptions`: `sea_water_temperature_c`, `sea_water_salinity_psu`, `horizontal_diffusivity_m2_per_s`, `vertical_mixing`, `release`) |
 
 The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with points only they show a dash.
+
+**Label.** A `meta.json` whose `model` names an OpenDrift run (starts with `OpenDrift` and does not say "simulated" or "illustrative", e.g. `"OpenDrift 1.14.11 OpenOil"`) marks the files as real model output. Real model output labelled `"synthetic": true` (because its release point is a test input) shows **Real forecast, simulated release**; without `"synthetic": true` it shows **Live data**. **Simulated scenario** is kept for the demo and any other synthetic drift file (the demo's model is "OpenDrift OpenOil (simulated, illustrative)").
+
+**Release point.** A real forecast applies only to its own release point (`initial_location`). With a spill selected, Predict shows it only when the spill is within 1 km of that point (`scenario.RELEASE_MATCH_KM`), unmoved; any other spill gets the demo scenario moved to it, with a note that the real forecast doesn't apply there. The forecast time is a slider over every step, with buttons for 0, 6, 12 and 24 h; "Show earlier steps" draws only those key times.
 
 ### Routing module → `outputs/routing/`
 
@@ -211,7 +217,7 @@ Clicking a spill assigns a **random** `.png`/`.jpg` from `assets/images/` (recur
 
 ### Selected-spill flow (Detect → Predict → Respond)
 
-With a spill selected, each page follows it and unlocks in order. **Detect** runs the U-Net on the assigned image in a subprocess (`python -m detection.predict_cli`, so Streamlit never imports torch) and writes `outputs/detection/<image_id>_{image,mask,overlay}.png` plus a `<image_id>_run.json` cache manifest. Where the checkpoint and the interpreter are is resolved as described in [Real detection](#real-detection-optional); the timeout is `DETECTION_TIMEOUT_S` in `config.py`. Without a checkpoint the page falls back to the simulated detection; without PyTorch it explains which variables to set and offers the simulated detection. Error details (tracebacks, paths) appear only with `?dev=1`. Results are re-checked on every run: a spill that is no longer offered, a demo-mode toggle or a change in where drift / routing come from resets the steps, and a detection whose files were deleted has to be run again. **Predict** and **Respond** reuse the existing drift and routing results (or the demo scenario), moved so the drift's release point sits on the selected spill (`services/scenario.py`), and are always labelled simulated.
+With a spill selected, each page follows it and unlocks in order. **Detect** runs the U-Net on the assigned image in a subprocess (`python -m detection.predict_cli`, so Streamlit never imports torch) and writes `outputs/detection/<image_id>_{image,mask,overlay}.png` plus a `<image_id>_run.json` cache manifest. Where the checkpoint and the interpreter are is resolved as described in [Real detection](#real-detection-optional); the timeout is `DETECTION_TIMEOUT_S` in `config.py`. Without a checkpoint the page falls back to the simulated detection; without PyTorch it explains which variables to set and offers the simulated detection. Error details (tracebacks, paths) appear only with `?dev=1`. Results are re-checked on every run: a spill that is no longer offered, a demo-mode toggle or a change in where drift / routing come from resets the steps, and a detection whose files were deleted has to be run again. **Predict** shows a real OpenDrift forecast only for the spill at its release point, unmoved and labelled **Real forecast, simulated release**; for any other spill it uses the demo scenario (or other drift results that are not a model run), moved so the release point sits on the spill and labelled simulated. **Respond** reuses the existing routing results (or the demo plan), moved by the same offset as the drift results, and is always labelled simulated (`services/scenario.py`).
 
 ## Code layout
 

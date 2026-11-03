@@ -89,6 +89,7 @@ DETECTION_CHECKPOINT = REPO_ROOT / "runs" / "unet_refined_sar" / "best.pth"
 DETECTION_TIMEOUT_S = 300  # first torch import + model load on CPU can be slow
 
 DRIFT_HORIZONS_HOURS = (6, 12, 24)
+DRIFT_KEY_HOURS = (0, 6, 12, 24)  # quick-jump times on Predict; earlier steps on the map use only these
 DETECTION_METRICS = ("dice", "iou", "precision", "recall")
 
 # --- Map defaults --------------------------------------------------------------

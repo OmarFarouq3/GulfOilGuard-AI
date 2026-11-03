@@ -82,7 +82,7 @@ header[data-testid="stHeader"],
   border-color: var(--gog-border-strong);
   box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.06);
 }
-/* Status dot after each step label: live (sea green), simulated (violet), mixed (half/half), empty (slate) */
+/* Status dot after each step label: live (sea green), simulated (violet), mixed and forecast (half/half), empty (slate) */
 [class*="st-key-gog-step-"] [data-testid="stPageLink"] a::after {
   content: ""; width: 8px; height: 8px; border-radius: 50%; margin-left: 0.55rem; flex: none;
   background: var(--gog-empty);
@@ -93,7 +93,8 @@ header[data-testid="stHeader"],
 [class*="st-key-gog-step-"][class*="-simulated"] [data-testid="stPageLink"] a::after {
   background: var(--gog-violet); box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18), 0 0 10px var(--gog-violet);
 }
-[class*="st-key-gog-step-"][class*="-mixed"] [data-testid="stPageLink"] a::after {
+[class*="st-key-gog-step-"][class*="-mixed"] [data-testid="stPageLink"] a::after,
+[class*="st-key-gog-step-"][class*="-forecast"] [data-testid="stPageLink"] a::after {
   background: linear-gradient(90deg, var(--gog-green) 50%, var(--gog-violet) 50%);
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.15), 0 0 10px var(--gog-green);
 }
@@ -163,9 +164,10 @@ header[data-testid="stHeader"],
 .gog-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
 .gog-chip-live { color: var(--gog-green); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.08); }
 .gog-chip-sim { color: var(--gog-violet); border-color: rgba(167, 139, 250, 0.4); background: rgba(167, 139, 250, 0.09); }
-.gog-chip-mixed { color: var(--gog-green); border-color: rgba(167, 139, 250, 0.45);
+.gog-chip-mixed, .gog-chip-forecast { color: var(--gog-green); border-color: rgba(167, 139, 250, 0.45);
   background: linear-gradient(90deg, rgba(52, 211, 153, 0.09), rgba(167, 139, 250, 0.09)); }
-.gog-chip-mixed .gog-dot { background: linear-gradient(90deg, var(--gog-green) 50%, var(--gog-violet) 50%); }
+.gog-chip-mixed .gog-dot, .gog-chip-forecast .gog-dot {
+  background: linear-gradient(90deg, var(--gog-green) 50%, var(--gog-violet) 50%); }
 .gog-chip-empty { color: var(--gog-muted); border-color: rgba(143, 169, 184, 0.3); background: rgba(143, 169, 184, 0.06); }
 .gog-chip-empty .gog-dot { box-shadow: none; }
 
