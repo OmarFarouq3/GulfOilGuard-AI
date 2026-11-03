@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import config
@@ -113,21 +114,26 @@ def build_routing(routes: Any, summary: Any, targets: Any) -> RoutingData:
     return data
 
 
-def load_routing() -> RoutingData | None:
-    """Return routing outputs, or None if no routing files exist."""
+def load_routing(files: dict[str, Path] | None = None) -> RoutingData | None:
+    """Return routing outputs, or None if no routing files exist.
+
+    ``files`` is a config.ROUTING_FILES-style dict (e.g. ``config.site_files(id)["routing"]``);
+    None reads outputs/routing.
+    """
+    files = files or config.ROUTING_FILES
     data = RoutingData()
 
-    collection, warning = read_geojson(config.ROUTING_FILES["routes"])
+    collection, warning = read_geojson(files["routes"])
     if warning:
         data.warnings.append(warning)
     parse_routes(collection, data)
 
-    summary, warning = read_json_object(config.ROUTING_FILES["summary"])
+    summary, warning = read_json_object(files["summary"])
     if warning:
         data.warnings.append(warning)
     parse_summary(summary, data)
 
-    collection, warning = read_geojson(config.ROUTING_FILES["targets"])
+    collection, warning = read_geojson(files["targets"])
     if warning:
         data.warnings.append(warning)
     parse_targets(collection, data)

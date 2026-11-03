@@ -5,8 +5,9 @@ from __future__ import annotations
 import streamlit as st
 
 from components import illustrations, incident, ui
-from components.data import all_stages, combined_status, demo_mode, spills_stage
+from components.data import all_stages, combined_status, demo_mode, selected_site, spills_stage
 from components.labels import HOURS, KM2
+from services import scenario
 from services.files import as_float
 from services.geo import polygon_area_km2
 
@@ -46,6 +47,12 @@ response_time = respond.response_time_hours if respond else None
 if results_status == "simulated":
     st.html(f'<div class="gog-kpi-status">{ui.chip("simulated")}'
             "<span>These numbers come from a simulated scenario, not from observations.</span></div>")
+if scenario.sites_mode(demo_mode()):  # one set of results per site: say which one these numbers are for
+    site = selected_site()
+    scope = (f"These numbers are for site {site.spill_id} ({ui.coordinates(site.location.latitude, site.location.longitude)}); "
+             "they fill in as you run its steps." if site else
+             "Each site has its own forecast and plan: pick a site on the map to see its numbers.")
+    st.html(f'<p class="gog-flow-note gog-kpi-scope">{ui.esc(scope)}</p>')
 ui.stat_tiles([
     ("Slick detected", ui.fmt(slick_area), KM2, "Area of oil found in the latest scene"),
     (f"Spread at 24 {HOURS}", ui.fmt(spread_24), KM2, "Predicted oil footprint one day later"),

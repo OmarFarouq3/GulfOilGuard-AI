@@ -78,6 +78,24 @@ ROUTING_FILES = {
     "targets": ROUTING_DIR / "targets.geojson",  # optional
 }
 
+# Per-site results: outputs/sites/<site id>/{drift,routing}/ in the same formats as above, one
+# folder per spill marker (folder name = marker id). When this folder has site folders, the
+# selected marker's folder is read instead of outputs/drift and outputs/routing.
+SITES_DIR = OUTPUTS_DIR / "sites"
+SITE_VALIDATION_FILE = "validation.json"  # optional, written by the team's per-site check
+
+
+def site_files(site_id: str) -> dict[str, dict[str, Path]]:
+    """DRIFT_FILES / ROUTING_FILES-style paths for one site folder, plus its validation report."""
+    base = SITES_DIR / site_id
+    return {
+        "drift": {"drift": base / "drift" / "drift.geojson", "meta": base / "drift" / "meta.json"},
+        "routing": {"routes": base / "routing" / "routes.geojson", "summary": base / "routing" / "summary.json",
+                    "targets": base / "routing" / "targets.geojson",
+                    "comparison": base / "routing" / "comparison.json"},  # optional; not read by the pages yet
+        "site": {"validation": base / SITE_VALIDATION_FILE},
+    }
+
 # Spill sites offered on the Overview map (optional; otherwise the simulated catalogue)
 SPILLS_FILE = OUTPUTS_DIR / "spills.geojson"
 

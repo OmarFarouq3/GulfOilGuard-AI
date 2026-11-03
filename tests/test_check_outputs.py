@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from check_outputs import check_outputs, main
+from check_outputs import check_outputs, check_sites, main
 from contract_checks import GULF_REGION
 
 RELEASE = "2026-10-20T06:00:00Z"
@@ -228,6 +228,102 @@ class CheckOutputsTests(unittest.TestCase):
         files = valid_outputs()
         files["routing/summary.json"]["unserved_target_ids"] = ["T2"]
         self.assertTrue(any("not served (T2)" in n for n in self.notes(files)))
+
+
+def site_outputs(*site_ids: str, simulation_ids: dict | None = None) -> dict:
+    """valid_outputs() as per-site folders sites/<id>/{drift,routing}/; routing carries the drift's scenario_id."""
+    files, base = {}, valid_outputs()
+    for site_id in site_ids:
+        sim = (simulation_ids or {}).get(site_id, f"synthetic-run-{site_id}")
+        for name, content in base.items():
+            if name.startswith(("drift/", "routing/")):
+                files[f"sites/{site_id}/{name}"] = json.loads(json.dumps(content))
+        files[f"sites/{site_id}/drift/meta.json"]["simulation_id"] = sim
+        files[f"sites/{site_id}/routing/summary.json"]["scenario_id"] = f"{sim}@dispatch6h"
+        files[f"sites/{site_id}/routing/comparison.json"] = {"scenario_id": f"{sim}@dispatch6h", "synthetic": True}
+    return files
+
+
+class CheckSitesTests(unittest.TestCase):
+    def run_sites(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(content), encoding="utf-8")
+            return check_sites(root, GULF_REGION)
+
+    def problems(self, files):
+        return [f"{f.section}: {f.text}" for f in self.run_sites(files) if f.level == "problem"]
+
+    def test_valid_sites_have_no_problems_and_are_reported_per_site(self):
+        findings = self.run_sites(site_outputs("S1", "S2"))
+        self.assertEqual([f.text for f in findings if f.level == "problem"], [])
+        sections = {f.section for f in findings}
+        self.assertTrue({"S1 drift", "S1 routing", "S1 files", "S2 drift", "S2 routing", "S2 files"} <= sections)
+
+    def test_no_site_folders_is_a_problem(self):
+        self.assertTrue(any("no site folders" in p for p in self.problems({})))
+
+    def test_each_site_runs_the_existing_checks(self):
+        files = site_outputs("S1", "S2")
+        files["sites/S2/routing/summary.json"]["status"] = "done"  # not an OptimizationOutput status
+        found = self.problems(files)
+        self.assertTrue(any(p.startswith("S2 routing") for p in found), found)
+        self.assertFalse(any(p.startswith("S1") for p in found), found)
+
+    def test_plan_made_for_another_forecast_is_a_problem(self):
+        files = site_outputs("S1")
+        files["sites/S1/routing/comparison.json"]["scenario_id"] = "synthetic-run-S2@dispatch6h"
+        found = self.problems(files)
+        self.assertTrue(any("comparison.json: scenario_id" in p and "another forecast" in p for p in found), found)
+
+    def test_scenario_id_may_extend_the_simulation_id(self):
+        files = site_outputs("S1")
+        files["sites/S1/routing/comparison.json"]["scenario_id"] = "synthetic-run-S1"  # exact match also fine
+        self.assertEqual(self.problems(files), [])
+
+    def test_a_similar_prefix_is_not_a_match(self):
+        files = site_outputs("S1")
+        files["sites/S1/routing/summary.json"]["scenario_id"] = "synthetic-run-S10@dispatch6h"
+        self.assertTrue(any("summary.json: scenario_id" in p for p in self.problems(files)))
+
+    def test_marker_within_1_km_of_the_release_point(self):
+        files = site_outputs("S1")
+        files["spills.geojson"] = _collection(_feature("Point", [55.655, 25.85], spill_id="S1"))  # ~0.5 km east
+        self.assertEqual(self.problems(files), [])
+
+    def test_marker_more_than_1_km_away_is_a_problem(self):
+        files = site_outputs("S1")
+        files["spills.geojson"] = _collection(_feature("Point", [55.70, 25.85], spill_id="S1"))  # ~5 km east
+        self.assertTrue(any("km from marker 'S1'" in p for p in self.problems(files)))
+
+    def test_site_without_a_marker_is_a_problem(self):
+        files = site_outputs("S1")
+        files["spills.geojson"] = _collection(_feature("Point", [55.65, 25.85], spill_id="S9"))
+        self.assertTrue(any("no marker 'S1'" in p for p in self.problems(files)))
+
+    def test_site_without_initial_location_is_a_problem(self):
+        files = site_outputs("S1")
+        del files["sites/S1/drift/meta.json"]["initial_location"]
+        self.assertTrue(any("no valid initial_location" in p for p in self.problems(files)))
+
+    def test_main_with_sites(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()) as printed:
+            for name, content in site_outputs("S1").items():
+                path = Path(tmp) / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(content), encoding="utf-8")
+            self.assertEqual(main([tmp, "--sites"]), 0)
+            self.assertIn("S1 DRIFT: OK", printed.getvalue())
+            self.assertEqual(main([tmp]), 0)  # without --sites the single folders are checked (absent: notes)
+
+    def test_real_openoil_run_is_announced_with_its_label(self):
+        files = site_outputs("S1")
+        files["sites/S1/drift/meta.json"]["model"] = "OpenDrift 1.14.11 OpenOil"
+        notes = [f.text for f in self.run_sites(files) if f.section == "S1 drift"]
+        self.assertTrue(any("Real forecast, simulated release" in n for n in notes), notes)
 
 
 if __name__ == "__main__":

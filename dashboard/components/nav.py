@@ -10,15 +10,15 @@ import streamlit as st
 
 import config
 from components import illustrations
-from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode
+from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode, spills_stage
 from components.labels import STAGE_STATUS
-from services import image_picker, report_loader, selection, settings
+from services import image_picker, report_loader, scenario, selection, settings
 from services.detection_loader import load_detection, load_galleries
 from services.drift_loader import load_drift
-from services.files import format_mtime
+from services.files import format_mtime, read_json_object
 from services.routing_loader import load_routing
 from services.selection import available_images
-from services.spill_loader import load_spills
+from services.spill_loader import load_spills, site_ids
 
 STATUS_HELP = {status: help_text for status, (_css, _label, help_text) in STAGE_STATUS.items()}
 STEPS = (("detect", "01", "Detect"), ("predict", "02", "Predict"), ("respond", "03", "Respond"))
@@ -83,6 +83,51 @@ def shown_path(path) -> str:
     return str(path) if dev_mode() else settings.display(path)
 
 
+def _validation(site_id: str) -> tuple[str, bool]:
+    """('S1: validation 52 OK, 7 WARN, 0 FAIL', any failed) from the site's validation.json (the team's check)."""
+    report, warning = read_json_object(config.site_files(site_id)["site"]["validation"])
+    counts = report.get("counts") if report else None
+    if warning or not isinstance(counts, dict):
+        return f"{site_id}: validation.json {'unreadable' if warning else 'missing'}", False
+    line = f"{site_id}: validation " + ", ".join(f"{counts.get(level, 0)} {level}" for level in ("OK", "WARN", "FAIL"))
+    return line, bool(counts.get("FAIL"))
+
+
+def site_diagnostics() -> list[str]:
+    """Site folders (outputs/sites/<id>/): file status and validation; returns their loader warnings."""
+    ids = site_ids()
+    markers = spills_stage().data
+    warnings: list[str] = []
+    if not ids:
+        return warnings
+    st.caption(f"Site folders ({shown_path(config.SITES_DIR)}): the selected marker's folder is read")
+    rows = []
+    for site_id in ids:
+        for group in ("drift", "routing", "site"):
+            for path in config.site_files(site_id)[group].values():
+                rows.append({"Site": site_id, "File": path.relative_to(config.SITES_DIR / site_id).as_posix(),
+                             "Modified": format_mtime(path) or "missing"})
+    st.dataframe(rows, hide_index=True, width="stretch")
+    validation = {site_id: _validation(site_id) for site_id in ids}
+    st.code("\n".join(line for line, _failed in validation.values()), language=None, wrap_lines=True)
+    for site_id in ids:
+        marker = markers.get(site_id)
+        if marker is None:
+            warnings.append(f"Site `{site_id}`: no marker on the map has this id, so its results are never shown.")
+            drift = load_drift(config.site_files(site_id)["drift"])
+        else:
+            drift = scenario.site_drift(marker)  # includes the release point vs marker check
+        routing = load_routing(config.site_files(site_id)["routing"])
+        for data in (drift, routing):
+            if data is not None:
+                warnings.extend(data.warnings)
+        if validation[site_id][1]:
+            warnings.append(f"Site `{site_id}`: its validation.json reports failed checks.")
+    warnings += [f"Marker `{s.spill_id}` has no site folder: Predict and Respond show no data for it."
+                 for s in markers.sites if s.spill_id not in ids and not markers.is_mock]
+    return warnings
+
+
 def diagnostics() -> None:
     """Technical details for developers: data folder, file status, loader warnings and notes."""
     st.caption("Data folder")
@@ -96,6 +141,7 @@ def diagnostics() -> None:
     rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
                  "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
     st.dataframe(rows, hide_index=True, width="stretch")
+    site_warnings = site_diagnostics()
 
     st.caption(f"Radar image folder ({len(available_images())} readable images)")
     st.code(shown_path(image_picker.image_dir()), language=None, wrap_lines=True)
@@ -112,6 +158,7 @@ def diagnostics() -> None:
         data = loader()
         if data is not None:
             warnings.extend(data.warnings + getattr(data, "notes", []))
+    warnings += site_warnings
     st.caption("Loader warnings")
     if warnings:
         for message in warnings:

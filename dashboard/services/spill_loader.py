@@ -4,7 +4,9 @@
   unique, letters/digits/``_``/``-`` only), ``name`` (optional, defaults to the id),
   ``synthetic``. Not in shared/schemas.py; the position is validated as a ``GeoCoordinate``.
 
-Without this file the dashboard offers the simulated catalogue in ``mock_data``.
+Without this file, one marker per site folder ``outputs/sites/<id>/`` (``load_site_spills``):
+id = folder name, position = ``drift/meta.json`` ``initial_location`` (the release point the
+site's forecast was made for). Without either, the simulated catalogue in ``mock_data``.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from typing import Any
 
 import config
 from services import schema
-from services.files import read_geojson, validate_geojson
+from services.files import read_geojson, read_json_object, validate_geojson
 from services.models import SpillData, SpillSite
 
 SPILL_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
@@ -54,6 +56,38 @@ def build_spills(collection: Any) -> SpillData:
     valid, warning = validate_geojson(collection, "spills")
     data.warnings += [warning] if warning else []
     parse_spills(valid, data)
+    return data
+
+
+def site_ids() -> list[str]:
+    """Site folders under outputs/sites/ whose names can be marker ids, sorted. [] without the folder."""
+    if not config.SITES_DIR.is_dir():
+        return []
+    return sorted(p.name for p in config.SITES_DIR.iterdir() if p.is_dir() and SPILL_ID_PATTERN.fullmatch(p.name))
+
+
+def load_site_spills() -> SpillData | None:
+    """One marker per site folder, at its drift/meta.json initial_location; None without site folders.
+
+    A folder whose meta.json is missing or has no valid initial_location gets no marker (warning).
+    """
+    ids = site_ids()
+    if not ids:
+        return None
+    data = SpillData()
+    for site_id in ids:
+        meta, warning = read_json_object(config.site_files(site_id)["drift"]["meta"])
+        if warning:
+            data.warnings.append(warning)
+            continue
+        try:
+            location = schema.geo_object((meta or {}).get("initial_location"), "initial_location")
+        except schema.SchemaError as exc:
+            data.warnings.append(f"Site `{site_id}`: drift/meta.json {exc}; no marker for this site.")
+            continue
+        synthetic = (meta or {}).get("synthetic") is True
+        data.synthetic |= synthetic
+        data.sites.append(SpillSite(site_id, f"Site {site_id}", location, synthetic))
     return data
 
 

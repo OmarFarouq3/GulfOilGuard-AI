@@ -205,6 +205,28 @@ The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with poin
 
 `targets.geojson` feature properties: `target_id` (`ResponseTarget.target_id`, required, unique), `oil_volume_m3` (`ResponseTarget.oil_volume_m3`, required, nonnegative), optional `source_hours` (*extension*: the drift step the targets came from, used to pick the oil layer under the routes). Every `assigned_target_ids` entry should exist in `targets.geojson`.
 
+### Per-site results → `outputs/sites/<id>/` (optional)
+
+One folder per spill marker, in the same formats as above. The folder name is the marker id.
+
+```text
+outputs/sites/<id>/drift/      drift.geojson, meta.json          (as outputs/drift/)
+outputs/sites/<id>/routing/    routes.geojson, summary.json, targets.geojson, comparison.json, baseline/
+outputs/sites/<id>/validation.json   optional: the team's per-site check ("counts": {"OK", "WARN", "FAIL"})
+```
+
+When `outputs/sites/` holds at least one site folder (and the demo is off), Predict and Respond read the selected marker's own folder, unmoved, instead of `outputs/drift/` and `outputs/routing/`:
+
+- **Markers.** From `outputs/spills.geojson` if it exists (its `spill_id` must equal the folder name), otherwise one marker per site folder at `drift/meta.json` `initial_location`, otherwise the simulated `GOG-SIM-01`..`04` catalogue (always used in demo mode).
+- **Missing site rule.** A marker without a site folder (or without drift / routing files in it) shows **No data yet** on Predict and Respond with a short note. It never shows another site's results, and never the demo mixed in with real sites.
+- **Release point.** A site whose `initial_location` is more than 1 km from its marker (`scenario.RELEASE_MATCH_KM`) keeps a Diagnostics warning and is not shown as a real forecast.
+- **Labels.** A real OpenDrift run at its own release point shows **Real forecast, simulated release**, as for `outputs/drift/`. Respond still shows **Simulated scenario** for the plan.
+- **No selection.** Predict, Respond and the Overview headline numbers show nothing until a marker is picked (there is no single dataset); then they follow that site, and Overview says which site the numbers are for.
+- **Diagnostics** lists every site folder with its file status and a validation line per site, and warns about markers without a folder, sites without a marker and failed validation checks.
+- Without `outputs/sites/` the single-folder behaviour above is unchanged.
+
+Check a per-site delivery with `python tests/check_outputs.py outputs --sites --gulf`: the drift and routing checks per site, plus whether `comparison.json` / `summary.json` `scenario_id` belongs to the site's drift run (`<simulation_id>` or `<simulation_id>@...`) and whether `initial_location` is within 1 km of the site's marker.
+
 ### Spill sites → `outputs/spills.geojson` (optional)
 
 The incidents offered on the Overview map. One `Point` feature per incident with `spill_id` (required, unique, letters/digits/`_`/`-`), `name` (optional) and `synthetic`. Not in `shared/schemas.py`; the position is validated as a `GeoCoordinate`. Without this file (or in demo mode) the dashboard offers four simulated sites around `MAP_CENTER` (`mock_data.MOCK_SPILL_SITES`).
@@ -245,7 +267,7 @@ dashboard/
     detection_loader.py   -> DetectionData | None
     drift_loader.py       -> DriftData | None
     routing_loader.py     -> RoutingData | None
-    spill_loader.py       -> SpillData | None (Overview map incidents)
+    spill_loader.py       -> SpillData | None (Overview map incidents: spills.geojson or site folders)
     image_picker.py       lists / randomly picks radar images, split from folder names (no Streamlit)
     report_loader.py      per-image scores (split + file name), report split, checkpoint SHA-256 check
     settings.py           checkpoint / detection Python / image folder: env > .env > standard layout

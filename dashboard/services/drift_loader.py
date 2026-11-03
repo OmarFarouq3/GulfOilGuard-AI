@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import config
@@ -131,16 +132,21 @@ def build_drift(collection: Any, meta: Any) -> DriftData:
     return data
 
 
-def load_drift() -> DriftData | None:
-    """Return drift outputs grouped by forecast hour, or None if no drift files exist."""
+def load_drift(files: dict[str, Path] | None = None) -> DriftData | None:
+    """Return drift outputs grouped by forecast hour, or None if no drift files exist.
+
+    ``files`` is a config.DRIFT_FILES-style dict (e.g. ``config.site_files(id)["drift"]``);
+    None reads outputs/drift.
+    """
+    files = files or config.DRIFT_FILES
     data = DriftData()
 
-    collection, warning = read_geojson(config.DRIFT_FILES["drift"])
+    collection, warning = read_geojson(files["drift"])
     if warning:
         data.warnings.append(warning)
     parse_features(collection, data)
 
-    meta, warning = read_json_object(config.DRIFT_FILES["meta"])
+    meta, warning = read_json_object(files["meta"])
     if warning:
         data.warnings.append(warning)
     parse_meta(meta, data)

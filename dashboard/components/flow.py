@@ -9,7 +9,7 @@ from __future__ import annotations
 import streamlit as st
 
 from components import charts, ui
-from components.data import dev_mode
+from components.data import demo_mode, dev_mode
 from components.labels import KM
 from services import image_picker, inference, mock_data, report_loader, scenario, selection
 from services.files import read_image
@@ -209,8 +209,10 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
     _incident(site)
     if _locked("predict"):
         return
-    real = scenario.real_forecast(demo)
-    if real is not None and scenario.forecast_applies(real, site):
+    real = None if scenario.sites_mode(demo) else scenario.real_forecast(demo)
+    if scenario.sites_mode(demo):
+        note, real_parts, simulated_parts = _site_drift_note(site)
+    elif real is not None and scenario.forecast_applies(real, site):
         note = ("Real OpenDrift forecast, made for this release point. The release point and time are test "
                 "inputs, not a detection.")
         real_parts = ["Drift paths, oil footprint and particles (OpenDrift run)", "Wind and current inputs"]
@@ -230,13 +232,30 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
         simulated_parts = ["Drift paths, oil footprint and particles (moved scenario)",
                            "Wind and current inputs (those of the source scenario)"]
     if not selection.predict_done():
-        st.html(f'<p class="gog-flow-note">{ui.esc(note)} The drift model itself is not run for this incident yet.</p>')
+        later = "" if scenario.sites_mode(demo) else " The drift model itself is not run for this incident yet."
+        st.html(f'<p class="gog-flow-note">{ui.esc(note + later)}</p>')
         st.button("Run drift forecast", type="primary", icon=":material/play_arrow:", key="flow_run_predict",
                   on_click=selection.complete_predict)
         return
     st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')
-    _provenance(real_parts, simulated_parts)
+    if real_parts or simulated_parts:
+        _provenance(real_parts, simulated_parts)
     _next("respond")
+
+
+def _site_drift_note(site: SpillSite) -> tuple[str, list[str], list[str]]:
+    """Note and Real / Simulated lists for a spill in the per-site layout (outputs/sites/<id>/)."""
+    data = scenario.site_drift(site)
+    if data is None:
+        return f"There is no drift forecast for site {site.spill_id} yet.", [], []
+    if data.model_run:
+        return (f"Real OpenDrift forecast for site {site.spill_id}, made for its release point. The release "
+                "point and time are test inputs, not a detection.",
+                ["Drift paths, oil footprint and particles (OpenDrift run)", "Wind and current inputs"],
+                ["Release point and time (test inputs, not a detection)"])
+    return (f"The drift results for site {site.spill_id} are not shown as a real forecast: they are not an "
+            "OpenDrift run made for this release point.", [],
+            ["Drift paths, oil footprint and particles", "Wind and current inputs"])
 
 
 def respond_controls(site: SpillSite) -> None:
@@ -246,11 +265,24 @@ def respond_controls(site: SpillSite) -> None:
         return
     note = ("Simulated response plan, positioned at the selected spill: the existing plan moved with the "
             "drift scenario. Bases, routes, times and volumes are those of the source plan.")
+    real_parts: list[str] = []
+    simulated_parts = ["Vessel bases, routes and visiting order (moved plan)",
+                       "Distances, response time and oil recovery (unchanged from the source plan)"]
+    if scenario.sites_mode(demo_mode()):  # the spill's own site folder, not moved
+        if scenario.site_routing(site) is None:
+            note, simulated_parts = f"There is no response plan for site {site.spill_id} yet.", []
+        else:
+            note = (f"Response plan for site {site.spill_id}: the optimiser's plan for this site's drift "
+                    "forecast, not moved. It starts from a test release point, not a detection.")
+            real_parts = ["Vessel routes and visiting order (optimiser plan for this site)"]
+            simulated_parts = ["Release point and time behind the forecast (test inputs)",
+                               "Fleet, cleanup rate and other assumptions listed in the plan"]
     if not selection.respond_done():
-        st.html(f'<p class="gog-flow-note">{ui.esc(note)} The optimiser itself is not run for this incident yet.</p>')
+        later = "" if scenario.sites_mode(demo_mode()) else " The optimiser itself is not run for this incident yet."
+        st.html(f'<p class="gog-flow-note">{ui.esc(note + later)}</p>')
         st.button("Plan the response", type="primary", icon=":material/play_arrow:", key="flow_run_respond",
                   on_click=selection.complete_respond)
         return
-    st.html(f'<div class="gog-sim-note">{ui.esc(note)}</div>')
-    _provenance([], ["Vessel bases, routes and visiting order (moved plan)",
-                     "Distances, response time and oil recovery (unchanged from the source plan)"])
+    st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')
+    if real_parts or simulated_parts:
+        _provenance(real_parts, simulated_parts)

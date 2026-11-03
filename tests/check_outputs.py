@@ -4,11 +4,14 @@ Usage, from the repository root:
     python tests/check_outputs.py                 # checks ./outputs
     python tests/check_outputs.py sample_outputs  # or any folder with the same layout
     python tests/check_outputs.py outputs --gulf  # also require points in the Gulf region
+    python tests/check_outputs.py outputs --sites # per-site folders: outputs/sites/<id>/{drift,routing}/
 
 The folder layout and file fields are the ones in dashboard/README.md ("Data contract"):
     <outputs>/detection/  metrics.json, mask.png or <image_id>_mask.png, spill.geojson (optional)
     <outputs>/drift/      drift.geojson, meta.json (optional)
     <outputs>/routing/    routes.geojson, summary.json, targets.geojson (optional)
+    <outputs>/sites/<id>/drift/, <outputs>/sites/<id>/routing/   the same files, one folder per
+                          spill marker (folder name = marker id); checked with --sites
 
 Each file is turned into the shared dataclasses and checked with tests/contract_checks.py.
 Links between teams are also checked: route targets exist, targets come from a forecast
@@ -17,6 +20,12 @@ hour that the drift output contains, and drift timestamps match release time + h
 Findings have two levels:
     problem  breaks the shared contract, or the dashboard would show nothing or a wrong value
     note     works, but worth knowing before the demo (missing optional file, extension, ...)
+--sites runs the drift and routing checks for every site folder, and checks that each site's
+files belong together: comparison.json / summary.json `scenario_id` is the drift's
+`simulation_id` (optionally followed by "@...", e.g. "@dispatch6h"), and the drift's
+initial_location is within 1 km of the site's marker in spills.geojson (without that file the
+dashboard puts the marker at initial_location itself).
+
 --gulf applies the optional regional check from contract_checks. GeoJSON stores
 [longitude, latitude], so a swapped pair is still a valid point somewhere on Earth; only
 the regional check catches it.
@@ -166,6 +175,13 @@ def _check_positions(geometry: dict, where: str, out: _Collector) -> None:
             return
 
 
+def _model_run(meta) -> bool:
+    """meta.json names a real OpenDrift run (the dashboard's drift_loader.is_model_run)."""
+    model = meta.get("model") if isinstance(meta, dict) else None
+    return (isinstance(model, str) and model.strip().startswith("OpenDrift")
+            and not any(word in model.lower() for word in ("simulated", "illustrative")))
+
+
 def _synthetic(*objects) -> bool:
     return any(isinstance(o, dict) and o.get("synthetic") is True for o in objects)
 
@@ -308,7 +324,8 @@ def check_drift_dir(folder: Path, region: Region | None = None) -> tuple[list[Fi
                     break
 
     if _synthetic(meta, *(f["properties"] for f in features)):
-        out.note("labelled synthetic: the page will show 'Simulated scenario'")
+        label = "Real forecast, simulated release" if _model_run(meta) else "Simulated scenario"
+        out.note(f"labelled synthetic: the page will show '{label}'")
     elif features:
         out.note("not labelled synthetic: add \"synthetic\": true to meta.json while the release point "
                  "is not a georeferenced detection")
@@ -495,17 +512,101 @@ def check_outputs(root: Path, region: Region | None = None) -> list[Finding]:
     return findings
 
 
+SITE_MATCH_KM = 1.0  # the dashboard's scenario.RELEASE_MATCH_KM
+
+
+def _km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Great-circle distance between two (latitude, longitude) points."""
+    (lat1, lon1), (lat2, lon2) = a, b
+    h = (math.sin(math.radians(lat2 - lat1) / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 2 * 6371.0088 * math.asin(math.sqrt(h))
+
+
+def _site_markers(root: Path, out: _Collector) -> dict[str, tuple[float, float]] | None:
+    """spill_id -> (lat, lon) from <root>/spills.geojson; None if there is no such file."""
+    path = root / "spills.geojson"
+    if not path.is_file():
+        return None
+    features = _read_features(path, out) or []
+    markers = {}
+    for f in features:
+        props, geometry = f.get("properties") or {}, f.get("geometry") or {}
+        coords = geometry.get("coordinates")
+        if geometry.get("type") == "Point" and isinstance(coords, list) and len(coords) >= 2 and props.get("spill_id"):
+            markers[str(props["spill_id"])] = (coords[1], coords[0])
+    return markers
+
+
+def _check_site_links(site: Path, markers: dict[str, tuple[float, float]] | None) -> list[Finding]:
+    """The site's drift and routing belong together, and to the site's marker."""
+    out = _Collector(f"{site.name} files")
+    meta_file = site / "drift" / "meta.json"
+    meta = _read_json(meta_file, out) if meta_file.is_file() else None
+    simulation_id = meta.get("simulation_id") if isinstance(meta, dict) else None
+    for name in ("comparison.json", "summary.json"):
+        path = site / "routing" / name
+        content = _read_json(path, out) if path.is_file() else None
+        scenario_id = content.get("scenario_id") if isinstance(content, dict) else None
+        if not path.is_file() or scenario_id is None or simulation_id is None:
+            out.note(f"routing/{name}: no scenario_id to compare with the drift's simulation_id")
+        elif scenario_id != simulation_id and not str(scenario_id).startswith(f"{simulation_id}@"):
+            out.problem(f"routing/{name}: scenario_id {scenario_id!r} is not the drift's simulation_id "
+                        f"{simulation_id!r}: the plan was made for another forecast")
+        else:
+            out.note(f"routing/{name}: scenario_id {scenario_id!r} belongs to the drift run {simulation_id!r}")
+    location = meta.get("initial_location") if isinstance(meta, dict) else None
+    if not (isinstance(location, dict) and _is_number(location.get("latitude")) and _is_number(location.get("longitude"))):
+        out.problem("drift/meta.json: no valid initial_location, so the site gets no marker on the map")
+    elif markers is None:
+        out.note("no spills.geojson: the dashboard puts this site's marker at its initial_location")
+    elif site.name not in markers:
+        out.problem(f"spills.geojson has no marker {site.name!r}: this site's results are never shown")
+    else:
+        distance = _km((location["latitude"], location["longitude"]), markers[site.name])
+        if distance > SITE_MATCH_KM:
+            out.problem(f"initial_location is {distance:.1f} km from marker {site.name!r} (more than "
+                        f"{SITE_MATCH_KM:g} km): the dashboard will not show it as a real forecast")
+        else:
+            out.note(f"initial_location is {distance * 1000:.0f} m from marker {site.name!r}")
+    return out.findings
+
+
+def check_sites(root: Path, region: Region | None = None) -> list[Finding]:
+    """The drift and routing checks for every <root>/sites/<id>/, plus the links within each site."""
+    sites_dir = Path(root) / "sites"
+    out = _Collector("sites")
+    folders = sorted(p for p in sites_dir.iterdir() if p.is_dir()) if sites_dir.is_dir() else []
+    if not folders:
+        out.problem(f"no site folders in {sites_dir}")
+        return out.findings
+    markers = _site_markers(Path(root), out)
+    findings = list(out.findings)
+    for site in folders:
+        drift_findings, drift_hours = check_drift_dir(site / "drift", region)
+        routing_findings = check_routing_dir(site / "routing", drift_hours, region)
+        findings += [Finding(f"{site.name} {f.section}", f.level, f.text) for f in drift_findings + routing_findings]
+        findings += _check_site_links(site, markers)
+    return findings
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     region = GULF_REGION if "--gulf" in args else None
-    folders = [a for a in args if a != "--gulf"]
+    per_site = "--sites" in args
+    folders = [a for a in args if a not in ("--gulf", "--sites")]
     root = Path(folders[0]) if folders else REPO_ROOT / "outputs"
     if not root.is_dir():
         print(f"Folder not found: {root}")
         return 1
-    findings = check_outputs(root, region)
-    print(f"Checking {root}" + (f" (region: {region.name})" if region else "") + "\n")
-    for section in ("detection", "drift", "routing"):
+    if per_site:
+        findings = check_detection_dir(root / "detection", region) + check_sites(root, region)
+    else:
+        findings = check_outputs(root, region)
+    print(f"Checking {root}" + (f" (region: {region.name})" if region else "")
+          + (", per site" if per_site else "") + "\n")
+    sections = list(dict.fromkeys(f.section for f in findings)) if per_site else ["detection", "drift", "routing"]
+    for section in sections:
         items = [f for f in findings if f.section == section]
         problems = [f for f in items if f.level == "problem"]
         print(f"{section.upper()}: {'OK' if not problems else f'{len(problems)} problem(s)'}")

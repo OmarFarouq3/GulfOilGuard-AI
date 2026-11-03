@@ -12,7 +12,9 @@ Status per stage (wording in components/labels.py STAGE_STATUS):
 With a spill selected on Overview (services.selection), each stage follows that spill
 instead: its data is built by services.scenario and appears only once the step is done
 (Detect -> Predict -> Respond). That data is synthetic, so the status is "simulated", except
-the real drift forecast at the spill it was made for (services.scenario.selected_drift).
+the real drift forecast at the spill it was made for (services.scenario.selected_drift). With
+per-site folders (outputs/sites/<id>/) Predict and Respond read the selected spill's own folder,
+and show nothing until a spill is selected.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from services.detection_loader import load_detection
 from services.drift_loader import load_drift
 from services.models import DetectionData, DriftData, RoutingData, SpillData, SpillSite
 from services.routing_loader import load_routing
-from services.spill_loader import load_spills
+from services.spill_loader import load_site_spills, load_spills
 
 DEMO_STATE_KEY = "demo_mode"
 Status = Literal["live", "simulated", "mixed", "forecast", "empty"]
@@ -76,6 +78,8 @@ def dev_mode() -> bool:
 def data_source() -> tuple:
     """What the selected-spill results are built from: demo flag + drift / routing origin."""
     demo = demo_mode()
+    if scenario.sites_mode(demo):  # each spill reads its own site folder
+        return (demo, "sites", "sites")
     return (demo, "demo" if scenario.source_drift(demo).is_mock else "outputs",
             "demo" if scenario.source_routing(demo).is_mock else "outputs")
 
@@ -117,6 +121,8 @@ def drift_stage() -> Stage:
     site = selected_site()
     if site:
         return _stage("predict", scenario.selected_drift(site, demo_mode()) if selection.predict_done() else None)
+    if scenario.sites_mode(demo_mode()):
+        return _stage("predict", None)  # per-site results: only for a selected spill, never one site for all
     data: DriftData | None = mock_data.drift() if demo_mode() else load_drift()
     return _stage("predict", data)
 
@@ -125,17 +131,24 @@ def routing_stage() -> Stage:
     site = selected_site()
     if site:
         return _stage("respond", scenario.selected_routing(site, demo_mode()) if selection.respond_done() else None)
+    if scenario.sites_mode(demo_mode()):
+        return _stage("respond", None)
     data: RoutingData | None = mock_data.routing() if demo_mode() else load_routing()
     return _stage("respond", data)
 
 
 def spills_stage() -> Stage:
-    """Spill sites for the Overview map: outputs/spills.geojson, else the simulated catalogue.
+    """Spill sites for the Overview map: outputs/spills.geojson, else one marker per site folder
+    (outputs/sites/<id>/), else the simulated catalogue (always in demo mode).
 
     Unlike the three stages there is always something to pick, so an unusable file falls back
-    to the catalogue (its warnings still show under Diagnostics).
+    to the next source (its warnings still show under Diagnostics).
     """
-    loaded = None if demo_mode() else load_spills()
+    loaded = None
+    if not demo_mode():
+        loaded = load_spills()
+        if not (loaded and loaded.has_content):
+            loaded = load_site_spills()
     data: SpillData = loaded if loaded and loaded.has_content else mock_data.spills()
     return _stage("spills", data)
 

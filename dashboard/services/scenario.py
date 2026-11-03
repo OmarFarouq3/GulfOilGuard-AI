@@ -15,12 +15,19 @@ What is real and what is simulated:
 
 Everything built here is labelled synthetic, so its stage shows "Simulated scenario"; the real
 forecast at its own release point shows "Real forecast, simulated release".
+
+Per-site layout (``sites_mode``: outputs/sites/ has site folders, demo off): drift and routing
+come from the selected spill's own folder ``outputs/sites/<spill_id>/``, never moved. A spill
+without a folder has no data (None, "No data yet"): never another site's results, never the demo
+mixed in with real sites. A forecast whose release point is more than RELEASE_MATCH_KM from its
+marker keeps a warning and is not presented as a real forecast.
 """
 
 from __future__ import annotations
 
 import dataclasses
 
+import config
 from services import mock_data
 from services.detection_loader import load_scene, parse_spill
 from services.drift_loader import load_drift
@@ -29,6 +36,7 @@ from services.inference import DetectionRun
 from services.models import DetectionData, DriftData, RouteEntry, RoutingData, SpillSite
 from services.routing_loader import load_routing
 from services.schema import GeoCoordinate
+from services.spill_loader import site_ids
 
 Offset = tuple[float, float]  # (dlat, dlon)
 SIMULATED_OUTLINE = "Simulated outline, not derived from the image"  # tooltip text of the placeholder
@@ -139,12 +147,42 @@ def forecast_applies(drift: DriftData, site: SpillSite) -> bool:
     return shift is not None and shift <= RELEASE_MATCH_KM
 
 
-def selected_drift(site: SpillSite, demo: bool) -> DriftData:
+def sites_mode(demo: bool) -> bool:
+    """Per-site results: outputs/sites/ has at least one site folder, and the demo is off."""
+    return not demo and bool(site_ids())
+
+
+def site_drift(site: SpillSite) -> DriftData | None:
+    """The drift files of this spill's site folder, unmoved; None if it has none."""
+    data = load_drift(config.site_files(site.spill_id)["drift"])
+    if data is None or not data.has_content:
+        return None
+    shift = shift_km(data, site)
+    if shift is None or shift > RELEASE_MATCH_KM:  # not the release point this marker stands for
+        where = "has no release point" if shift is None else f"was made for a release {shift:,.1f} km away"
+        data = dataclasses.replace(data, model_run=False, synthetic=True, warnings=[
+            *data.warnings, f"Site `{site.spill_id}`: the forecast {where} from the marker (more than "
+                            f"{RELEASE_MATCH_KM:g} km), so it is not shown as a real forecast."])
+    return dataclasses.replace(data, anchored_to=site.spill_id)
+
+
+def site_routing(site: SpillSite) -> RoutingData | None:
+    """The routing files of this spill's site folder, unmoved; None if it has none."""
+    data = load_routing(config.site_files(site.spill_id)["routing"])
+    if data is None or not data.has_content:
+        return None
+    return dataclasses.replace(data, anchored_to=site.spill_id)
+
+
+def selected_drift(site: SpillSite, demo: bool) -> DriftData | None:
     """The real forecast for the spill it was made for (not moved); otherwise a scenario moved to the spill.
 
     A real forecast never moves to another spill: the wind and currents there differ. That spill
-    gets the demo scenario instead (components.flow explains why).
+    gets the demo scenario instead (components.flow explains why). In the per-site layout the
+    spill's own folder is read instead (``site_drift``).
     """
+    if sites_mode(demo):
+        return site_drift(site)
     real = real_forecast(demo)
     if real is not None:
         if forecast_applies(real, site):
@@ -180,6 +218,11 @@ def anchor_routing(routing: RoutingData, site: SpillSite, offset: Offset) -> Rou
     )
 
 
-def selected_routing(site: SpillSite, demo: bool) -> RoutingData:
-    """The plan moved by the drift scenario's offset, so it stays on the predicted oil."""
+def selected_routing(site: SpillSite, demo: bool) -> RoutingData | None:
+    """The plan moved by the drift scenario's offset, so it stays on the predicted oil.
+
+    In the per-site layout, the spill's own routing folder instead, unmoved (``site_routing``).
+    """
+    if sites_mode(demo):
+        return site_routing(site)
     return anchor_routing(source_routing(demo), site, drift_offset(source_drift(demo), site))
