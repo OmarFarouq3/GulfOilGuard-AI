@@ -12,6 +12,7 @@ from services.files import as_float
 from services.geo import polygon_area_km2
 
 stages = all_stages()
+sites = scenario.sites_mode(demo_mode())
 detect, predict, respond = stages["detect"].data, stages["predict"].data, stages["respond"].data
 
 # The headline numbers mix all three stages: simulated if any input behind them is.
@@ -35,6 +36,13 @@ if detect and detect.spill:
     given = [as_float(p) for p in props]
     slick_area = sum(given) if all(v is not None for v in given) else polygon_area_km2(detect.spill["features"])
 
+# In the per-site layout the detected slick is only the demo outline placed at the site (the radar
+# images are not georeferenced), so its area is the same for every site. Show the site's own oil
+# footprint at release (its forecast's first step) instead, labelled as what it is.
+release_area = None
+if sites and predict and predict.steps:
+    release_area = polygon_area_km2(predict.steps[min(predict.hours)]) or None
+
 spread_24 = None
 if predict and predict.steps:
     last = 24 if 24 in predict.steps else max(predict.hours)
@@ -47,13 +55,15 @@ response_time = respond.response_time_hours if respond else None
 if results_status == "simulated":
     st.html(f'<div class="gog-kpi-status">{ui.chip("simulated")}'
             "<span>These numbers come from a simulated scenario, not from observations.</span></div>")
-if scenario.sites_mode(demo_mode()):  # one set of results per site: say which one these numbers are for
+if sites:  # one set of results per site: say which one these numbers are for
     site = selected_site()
     scope = (f"These numbers are for site {site.spill_id} ({ui.coordinates(site.location.latitude, site.location.longitude)}); "
              "they fill in as you run its steps." if site else
              "Each site has its own forecast and plan: pick a site on the map to see its numbers.")
     st.html(f'<p class="gog-flow-note gog-kpi-scope">{ui.esc(scope)}</p>')
 ui.stat_tiles([
+    ("Release footprint, simulated", ui.fmt(release_area), KM2,
+     "Oil footprint at release in this site's forecast; a test release, not a detected slick") if sites else
     ("Slick detected", ui.fmt(slick_area), KM2, "Area of oil found in the latest scene"),
     (f"Spread at 24 {HOURS}", ui.fmt(spread_24), KM2, "Predicted oil footprint one day later"),
     ("Vessels deployed", ui.fmt(vessels, 0), "", "Response vessels with an assigned route"),

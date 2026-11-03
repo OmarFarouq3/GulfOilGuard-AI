@@ -13,7 +13,7 @@ import config
 from components import flow, maps, ui
 from components.data import demo_mode, drift_stage, selected_site
 from components.labels import HOURS, KM, KM2, M3, M_PER_S
-from services import schema
+from services import schema, selection
 from services.drift_loader import afloat
 from services.files import as_float, iter_positions
 from services.geo import centroid, haversine_km, polygon_area_km2
@@ -59,6 +59,7 @@ def trajectory_point(hours: float) -> tuple[float, float] | None:
 
 
 STEP_KEY = "drift_step"
+SAVED_STEP_KEY = "drift_step_saved"  # not a widget key: survives leaving the page
 NOT_AFLOAT_COLOR = "#8fa9b8"  # muted slate: never an oil colour
 NOT_AFLOAT_LABEL = "No longer afloat (stranded, evaporated, ...)"
 DETAIL_LABELS = {"model": "Drift model", "oil_type": "Oil type", "release_volume_m3": f"Oil released ({M3})",
@@ -106,6 +107,8 @@ def step_center(features: list[dict]) -> tuple[float, float] | None:
 
 
 if data is None:
+    if site and selection.predict_done():
+        flow.next_step("respond")  # no forecast to show: the link follows the note
     if site is None:
         ui.empty_state(
             "predict",
@@ -118,8 +121,12 @@ else:
     hours = data.hours
     # One forecast time at a time: a slider through every step (the real run has 25 hourly
     # steps), plus buttons for the key times. The selected step lives in session_state.
+    # Streamlit forgets a widget's value when its page is left, so the step is also kept in
+    # SAVED_STEP_KEY and restored when the user comes back.
     if st.session_state.get(STEP_KEY) not in hours:
-        st.session_state[STEP_KEY] = next((h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])
+        saved = st.session_state.get(SAVED_STEP_KEY)
+        st.session_state[STEP_KEY] = saved if saved in hours else next(
+            (h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])
     key_hours = [h for h in config.DRIFT_KEY_HOURS if h in hours]
     if key_hours and len(hours) > len(key_hours):
         with st.container(horizontal=True, key="gog-drift-jump"):
@@ -127,18 +134,24 @@ else:
                 st.button(step_label(h), key=f"drift_jump_{h:g}", type="tertiary",
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
     selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY)
+    st.session_state[SAVED_STEP_KEY] = selected
 
     features = data.steps[selected]
     oil = [f for f in features if afloat(f)]  # oil still on the water
     gone = [f for f in features if not afloat(f)]  # stranded, evaporated, ... (OpenDrift status)
     start = trajectory_point(hours[0]) or step_center([f for f in data.steps[hours[0]] if afloat(f)])
     here = trajectory_point(selected) or step_center(oil)
-    distance = haversine_km(start[1], start[0], here[1], here[0]) if start and here and selected != hours[0] else None
+    if selected == hours[0]:
+        distance = 0.0 if start else None  # nothing has drifted yet
+    else:
+        distance = haversine_km(start[1], start[0], here[1], here[0]) if start and here else None
     area = polygon_area_km2(oil) or None
     particles, not_afloat = particle_count(oil), particle_count(gone)
     timestamps = sorted({str(f["properties"]["timestamp"]) for f in features if f["properties"].get("timestamp")})
     ui.stat_tiles([
-        ("Drift distance", ui.fmt(distance), KM, f"Centre of the slick, {step_label(hours[0]).lower()} → {step_label(selected)}"),
+        ("Drift distance", ui.fmt(distance), KM,
+         "At the release point: no drift yet" if selected == hours[0]
+         else f"Centre of the slick, {step_label(hours[0]).lower()} → {step_label(selected)}"),
         ("Oil footprint", ui.fmt(area), KM2, "Area covered by the predicted oil"),
         ("Particles afloat", ui.fmt(float(particles), 0) if particles else None, "",
          f"Oil parcels still on the water; {not_afloat:,} no longer afloat" if not_afloat
@@ -181,6 +194,8 @@ else:
         + [("#e2eef3", "Path of the slick's centre", "dash")]
         + ([(NOT_AFLOAT_COLOR, NOT_AFLOAT_LABEL, "dot")] if gone else [])
     )
+    if site and selection.predict_done():
+        flow.next_step("respond")
 
     # --- Inputs ----------------------------------------------------------------
     ui.section("What drives the forecast", "Weather and ocean conditions used by the simulation.")

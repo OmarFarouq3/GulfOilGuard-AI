@@ -153,5 +153,10 @@ def spills_stage() -> Stage:
     return _stage("spills", data)
 
 
+def site_forecast(site: SpillSite) -> Stage:
+    """A site's own forecast and its label (per-site layout), whether or not its Predict step was run."""
+    return _stage("predict", scenario.site_drift(site))
+
+
 def all_stages() -> dict[str, Stage]:
     return {"detect": detection_stage(), "predict": drift_stage(), "respond": routing_stage()}

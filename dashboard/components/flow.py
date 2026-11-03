@@ -75,6 +75,11 @@ def _locked(step: str) -> bool:
     return True
 
 
+def next_step(step: str) -> None:
+    """'Continue to ...' link; Predict places it below its forecast controls and map."""
+    _next(step)
+
+
 def _next(step: str) -> None:
     st.page_link(PAGES[step], label=f"Continue to {STEP_NAMES[step][3:]}", icon=":material/arrow_forward:",
                  icon_position="right")
@@ -240,7 +245,6 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
     st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')
     if real_parts or simulated_parts:
         _provenance(real_parts, simulated_parts)
-    _next("respond")
 
 
 def _site_drift_note(site: SpillSite) -> tuple[str, list[str], list[str]]:

@@ -74,7 +74,7 @@ DETAIL_KEYS = ("model", "split", "n_images", "threshold", "checkpoint", "epoch",
 # Keys the evaluation scripts write that are used elsewhere or deliberately not shown: not "unknown".
 OTHER_KNOWN_KEYS = {*config.DETECTION_METRICS, *NESTED_SCORE_KEYS, "per_class", "pairs", "synthetic", "counts",
                     "image_size", "n_with_oil", "n_empty_reference", "macro_images_with_oil", "threshold_sweep",
-                    "checkpoint_sha256"}
+                    "checkpoint_sha256", "checkpoint_file"}  # checked against the running checkpoint instead
 
 
 def _evaluation_info(raw: dict) -> dict[str, Any]:

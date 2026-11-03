@@ -290,3 +290,11 @@ def test_fully_valid_metrics_json_still_wins(detection_dir, report_dir):
     write(report_dir, "summary.json", FULL_SUMMARY)
     data = load_detection()
     assert data.metrics == SCORES and data.warnings == []
+
+
+
+def test_checkpoint_file_is_a_known_field_not_an_unknown_key():
+    """finalize_report.py writes checkpoint_file next to checkpoint_sha256: no Diagnostics note for it."""
+    data = parsed({**SCORES, "checkpoint_sha256": "a" * 64, "checkpoint_file": "best.pth", "data_dir": "x"})
+    assert data.notes == ["`metrics.json`: not shown to viewers: `data_dir`."]
+    assert "checkpoint_file" not in data.metrics_info

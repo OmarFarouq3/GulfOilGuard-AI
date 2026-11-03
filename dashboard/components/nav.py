@@ -78,6 +78,10 @@ def options_panel() -> None:
             diagnostics()
 
 
+# Optional detection files: the single default scene (runs write <image_id>_*) and the summary fallback.
+OPTIONAL_DETECTION = ("image", "mask", "overlay", "spill", "summary")
+
+
 def shown_path(path) -> str:
     """Repo-relative (outside the repo: file name only); the absolute path only with ?dev=1."""
     return str(path) if dev_mode() else settings.display(path)
@@ -133,13 +137,23 @@ def diagnostics() -> None:
     st.caption("Data folder")
     st.code(shown_path(config.OUTPUTS_DIR), language=None, wrap_lines=True)
     rows = []
+    # Per-site layout: drift and routing come from the site folders and markers from them too, so the
+    # single folders and spills.geojson are not expected (listed only if present), nor are the
+    # optional single-scene detection files.
+    sites = scenario.sites_mode(demo_mode())
     for module, files in (("detection", config.DETECTION_FILES), ("report", config.REPORT_FILES),
                           ("drift", config.DRIFT_FILES), ("routing", config.ROUTING_FILES)):
-        for path in files.values():
-            rows.append({"Module": module, "File": f"{path.parent.name}/{path.name}",
-                         "Modified": format_mtime(path) or "missing"})
-    rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
-                 "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
+        for key, path in files.items():
+            stamp = format_mtime(path)
+            if sites and not stamp and (module in ("drift", "routing")
+                                        or (module == "detection" and key in OPTIONAL_DETECTION)):
+                continue
+            if sites and stamp and module in ("drift", "routing"):
+                stamp += " (not used: per-site layout)"
+            rows.append({"Module": module, "File": f"{path.parent.name}/{path.name}", "Modified": stamp or "missing"})
+    if not sites or format_mtime(config.SPILLS_FILE):
+        rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
+                     "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
     st.dataframe(rows, hide_index=True, width="stretch")
     site_warnings = site_diagnostics()
 

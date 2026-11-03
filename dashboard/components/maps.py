@@ -35,7 +35,8 @@ MAP_CSS = """
 
 def base_map() -> folium.Map:
     """Dark ocean basemap centred on the Gulf demo area, with labels and a satellite option."""
-    m = folium.Map(location=config.MAP_CENTER, zoom_start=config.MAP_ZOOM, tiles=None, control_scale=True)
+    m = folium.Map(location=config.MAP_CENTER, zoom_start=config.MAP_ZOOM, tiles=None, control_scale=True,
+                   scrollWheelZoom=False)  # the mouse wheel scrolls the page; +/- and dragging still work
     folium.TileLayer(ESRI.format("Canvas/World_Dark_Gray_Base"), attr=ESRI_ATTR, name="Ocean",
                      max_zoom=16, opacity=0.62).add_to(m)  # navy map background shows through the sea
     folium.TileLayer(ESRI.format("World_Imagery"), attr="Esri World Imagery", name="Satellite",

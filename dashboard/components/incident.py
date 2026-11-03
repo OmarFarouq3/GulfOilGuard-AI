@@ -9,8 +9,8 @@ import streamlit as st
 
 import config
 from components import flow, maps, ui
-from components.data import Stage
-from services import image_picker, selection
+from components.data import Stage, demo_mode, site_forecast
+from services import image_picker, scenario, selection
 from services.files import read_image
 from services.imaging import preview_png
 from services.models import SpillSite
@@ -34,7 +34,10 @@ def picker(stage: Stage) -> None:
                   for s in sites]
         clicked = maps.render(m, points, key="overview_map", height=480,
                               returned_objects=selection.MAP_CLICK_OBJECTS)
-        site_label = "Simulated spill site" if stage.status == "simulated" else "Reported spill"
+        if scenario.sites_mode(demo_mode()):  # each marker is a forecast site with a test release point
+            site_label = "Forecast site (simulated release point)"
+        else:
+            site_label = "Simulated spill site" if stage.status == "simulated" else "Reported spill"
         ui.legend([(config.OIL_OBSERVED, site_label, "dot"), (config.TEAL, "Selected spill", "dot")])
         if selection.handle_map_click(clicked, sites):
             st.rerun()  # redraw the highlighted marker and the panel
@@ -47,10 +50,20 @@ def picker(stage: Stage) -> None:
 
 
 def _selected(site: SpillSite, simulated: bool) -> None:
-    st.html(f'<div class="gog-incident-head"><h4>{ui.esc(site.name)}</h4>'
-            f'{ui.chip("simulated") if simulated else ""}</div>')
-    ui.details_table({"Incident": site.spill_id,
-                      "Position": ui.coordinates(site.location.latitude, site.location.longitude)})
+    details = {"Incident": site.spill_id, "Position": ui.coordinates(site.location.latitude, site.location.longitude)}
+    chip = ui.chip("simulated") if simulated else ""
+    if scenario.sites_mode(demo_mode()):  # label it as Predict will (components.data._stage), from the site's files
+        forecast = site_forecast(site)
+        chip = ui.chip(forecast.status) if forecast.status != "empty" else ""
+        trajectory = forecast.data.trajectory if forecast.data else None
+        if trajectory:
+            location = trajectory.initial_location
+            details["Simulation"] = trajectory.simulation_id
+            details["Release point"] = ui.coordinates(location.latitude, location.longitude)
+        else:
+            details["Forecast"] = "None for this site yet"
+    st.html(f'<div class="gog-incident-head"><h4>{ui.esc(site.name)}</h4>{chip}</div>')
+    ui.details_table(details)
     flow.progress()
 
     current = selection.current()
