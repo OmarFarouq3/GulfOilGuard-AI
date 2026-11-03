@@ -256,7 +256,10 @@ def check_fleet(vessels, release: GeoCoordinate | None, r: Report) -> list[dict]
     rows = []
     for v in vessels:
         depot, dist = min(((name, _km(v.location, c)) for name, c in GULF_DEPOTS.items()), key=lambda x: x[1])
-        r.check(g, dist < 1.0, f"{v.vessel_id} is based at {depot} ({dist * 1000:.0f} m from the depot point)")
+        # Not a broken rule: a fleet file made before GULF_DEPOTS last changed is still a valid plan input.
+        r.check(g, dist < 0.1, f"{v.vessel_id} is based at {depot} ({dist * 1000:.0f} m from its point in GULF_DEPOTS"
+                + (")" if dist < 0.1 else "; the fleet file is older than GULF_DEPOTS, re-run scenario.py)"),
+                level_if_not="WARN")
         knots = v.speed_m_per_s * KNOTS_PER_M_PER_S
         r.check(g, knots <= 25, f"{v.vessel_id}: {knots:.1f} kn transit, {v.capacity_m3:g} m3 tank, "
                 f"{v.available_hours:g} h shift", level_if_not="WARN")

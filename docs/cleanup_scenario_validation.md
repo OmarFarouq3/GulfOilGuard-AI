@@ -13,15 +13,16 @@ Everything here is **SYNTHETIC**: the release (300 m³ Generic Medium Crude at 2
 | `optimization/fixtures/gulf_standard.json` | Nihal | 3 vessels: 2 at Port Saqr, 1 at Hamriyah |
 | `optimization/fixtures/gulf_drift_t12.json` | Nihal | the earlier synthetic T+12h fixture, for comparison |
 
-The data files are shared through the team SharePoint folder and are not in Git. To re-run every check:
+The data files are shared through the team OneDrive (Team C folder) and are not in Git. Haris's run used the fleet with the old depot points (`Team C/Fleet/gulf_standard_old_depots.json` on OneDrive), so pass that fleet to re-run every check:
 
 ```bash
-python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-dir outputs/haris --json outputs/validation_real.json
+python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-dir outputs/haris \
+    --fleet gulf_standard_old_depots.json --json validation.json > validation_report.txt
 ```
 
 `validate_cleanup.py` needs no OR-Tools. It rebuilds the patches from the raw drift file and checks the plan against them. It accepts both the layout `run_drift_plan` writes (plan in the folder, `baseline/` inside it) and the hand-shared one (`Optimized/`, `Baseline/`).
 
-**Result: 52 OK, 7 WARN, 0 FAIL.** No rule is broken. The warnings are assumptions, listed under "Issues" below.
+**Result: 52 OK, 7 WARN, 0 FAIL.** No rule is broken. The warnings are assumptions, listed under "Issues" below. Re-run after the depot move (issue 2), the same files give 49 OK, 10 WARN, 0 FAIL. The 3 extra warnings only say that the fleet file Haris used is older than the current `GULF_DEPOTS`.
 
 ## 1. Drift input
 
@@ -122,4 +123,4 @@ What the difference means:
 - Targets, volumes, grouping, fleet, capacity (as pure oil), working hours, cleanup time and return to port are all **verified against the real files**.
 - Open with Haris: issue 1 (emulsion vs tank) and issue 3 (night operations), before the plan is presented as realistic.
 - Issue 2: the depot points are moved to the harbour entrances on this branch. Next, Haris runs `sea_check` on the land file, re-runs `run_drift_plan` with the updated `gulf_standard.json`, and `validate_cleanup.py` is rerun on his new outputs. The numbers in sections 3 and 4 come from the run with the old depot points.
-- Passed to Maria: `outputs/validation_real.json` holds every check and number.
+- Shared on OneDrive in `Team C/Validation/`: `validation_report.txt` (the printed report), `validation.json` (every check and number) and this write-up. The fleet files are in `Team C/Fleet/`.

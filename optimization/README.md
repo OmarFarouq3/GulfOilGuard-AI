@@ -66,6 +66,9 @@ must provide or can read.
 * **`run_demo.py`**:
   * One-command CLI pipeline to solve a scenario, run baseline evaluation, and export the plan.
 
+* **`validate_cleanup.py` (Nihal)**:
+  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank (as pure oil and as emulsion), working hours, cleanup time, return to port, unserved targets and the baseline comparison. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
+
 ---
 
 ## 2. Quickstart & Usage
@@ -74,7 +77,7 @@ must provide or can read.
 
 Every command runs from the **repository root**. Needs Python 3.10 or newer.
 
-**Step 1: environment (once).** `optimization/requirements.txt` is enough for routing; the root `requirements.txt` (torch, OpenDrift) is not needed.
+**Step 1: environment (once).** `optimization/requirements.txt` is enough for routing; the root `requirements.txt` (torch, OpenDrift) is not needed. OR-Tools has no package for Python 3.15 yet, so use Python 3.10 to 3.13 for the venv (on macOS with Homebrew: `brew install python@3.13`, then `python3.13 -m venv .venv`).
 
 ```bash
 python3 -m venv .venv
@@ -207,6 +210,49 @@ python3 -m unittest tests/test_scenario.py
 python -m pytest tests/test_optimization_phase1.py tests/test_optimization_phase2.py tests/test_optimization_phase3.py tests/test_optimization_phase4.py tests/test_optimization_phase5.py tests/test_optimization_phase6.py
 ```
 
+### F. Validate a Cleanup Plan, and Re-run After a Change (Nihal)
+
+`validate_cleanup.py` needs only the files: the drift run, the routing outputs and the fleet. No OR-Tools.
+
+```bash
+# the folders run_drift_plan writes (plan in outputs/routing/, baseline in outputs/routing/baseline/)
+python -m optimization.validate_cleanup --json outputs/validation.json | tee outputs/validation.txt
+
+# files shared by hand, e.g. from the OneDrive Team C folder (Optimized/, Baseline/, comparison.json)
+python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-dir outputs/haris \
+    --json outputs/validation.json | tee outputs/validation.txt
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `--drift-dir` | `outputs/drift` | folder with `drift.geojson` and `meta.json` |
+| `--routing-dir` | `outputs/routing` | the plan (`routes.geojson`, `targets.geojson`, `summary.json`) or `Optimized/`, plus optional `comparison.json` and `baseline/` or `Baseline/` |
+| `--fleet` | `optimization/fixtures/gulf_standard.json` | the vessels **the plan was made with**. A plan made before the fleet changed needs that older file (on OneDrive: `Team C/Fleet/gulf_standard_old_depots.json`), otherwise its routes do not start at the vessels' ports and the check fails |
+| `--synthetic-fixture` | `optimization/fixtures/gulf_drift_t12.json` | summarised in the JSON for the synthetic vs real comparison |
+| `--json` | none | also write every check and number to this file |
+
+**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state (for example the tank as emulsion, a patch wider than 1.5 km, an unserved target, a missing `comparison.json`). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice). The command exits with code 1 if anything fails.
+
+**Change the depots or the fleet.** Edit `GULF_DEPOTS` or the scenario functions in `scenario.py`, then regenerate all four fixtures and check that every vessel is on water (needs the land file from step 0.2):
+
+```bash
+python -m optimization.scenario
+python -m optimization.sea_check --scenario optimization/fixtures/gulf_standard.json --plot outputs/fleet_check.png
+```
+
+`sea_check` must not report any vessel as `on land ... moved`. If it does, move that depot further out along its harbour approach.
+
+**Re-run everything after a new drift run or new coordinates** (for example a new release point or time, or new depots). Each step reads what the one before wrote:
+
+| Step | Who | Command | Writes |
+| --- | --- | --- | --- |
+| 1. Drift | Maqqavi | `python -m drift.run_gulf_demo --lat <lat> --lon <lon> --start <UTC time>Z` | `outputs/drift/drift.geojson`, `meta.json` |
+| 2. Fleet (only if depots or vessels changed) | Nihal | `python -m optimization.scenario` | `optimization/fixtures/*.json` |
+| 3. Routing | Haris | `python -m optimization.run_drift_plan` | `outputs/routing/` (plan, `baseline/`, `comparison.json`) |
+| 4. Validation | Nihal | `python -m optimization.validate_cleanup --json outputs/validation.json \| tee outputs/validation.txt` | `outputs/validation.json`, `outputs/validation.txt` |
+
+The drift run needs OpenDrift and Joud's data files (see `drift/README.md`). Steps 2 to 4 only need `optimization/requirements.txt`. Then share the new `outputs/` files in the team OneDrive, because `outputs/` is not committed.
+
 ---
 
 ## 3. Interfaces with Other Teams (contracts)
@@ -283,7 +329,7 @@ Nothing extra is needed. Routing only relies on `drift/DATA_SOURCES.md` for the 
 | Field | Unit | Note |
 | --- | --- | --- |
 | `vessel_id` | | unique |
-| `location` `{latitude, longitude}` | degrees | the port or staging point. **The vessel also returns here at the end** (taken as its home port), so use the port, not a point at sea. A point on land is moved to the nearest water if that is within 15 km |
+| `location` `{latitude, longitude}` | degrees | the port or staging point. **The vessel also returns here at the end** (taken as its home port). Use the harbour entrance, in water, not a point on the quay: Port Saqr 25.9810 N, 56.0482 E and Hamriyah 25.4773 N, 55.4798 E (`GULF_DEPOTS`, from OpenStreetMap). A point on land is moved to the nearest water if that is within 15 km, and the plan's message says so |
 | `speed_m_per_s` | m/s | transit speed |
 | `capacity_m3` | m³ | recovered-oil tank |
 | `available_hours` | h | shift, counted from dispatch: sailing out + cleanup + sailing back to `location` must fit |
