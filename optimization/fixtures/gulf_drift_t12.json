@@ -1,0 +1,107 @@
+{
+  "scenario_name": "gulf_drift_t12",
+  "vessels": [
+    {
+      "vessel_id": "RAK-FRV-FALCON",
+      "location": {
+        "latitude": 25.975,
+        "longitude": 56.055
+      },
+      "speed_m_per_s": 11.32,
+      "capacity_m3": 60.0,
+      "available_hours": 10.0
+    },
+    {
+      "vessel_id": "RAK-OSRV-SAQR",
+      "location": {
+        "latitude": 25.975,
+        "longitude": 56.055
+      },
+      "speed_m_per_s": 7.72,
+      "capacity_m3": 250.0,
+      "available_hours": 16.0
+    },
+    {
+      "vessel_id": "HAMRIYAH-OSRV-RESERVE",
+      "location": {
+        "latitude": 25.465,
+        "longitude": 55.485
+      },
+      "speed_m_per_s": 7.2,
+      "capacity_m3": 300.0,
+      "available_hours": 20.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "TGT-DRIFT-GULF-O-01",
+      "location": {
+        "latitude": 25.86205,
+        "longitude": 55.75292
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-02",
+      "location": {
+        "latitude": 25.86409,
+        "longitude": 55.75677
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-03",
+      "location": {
+        "latitude": 25.86304,
+        "longitude": 55.76244
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-04",
+      "location": {
+        "latitude": 25.85809,
+        "longitude": 55.75732
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-05",
+      "location": {
+        "latitude": 25.85463,
+        "longitude": 55.75959
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-06",
+      "location": {
+        "latitude": 25.84953,
+        "longitude": 55.75842
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-07",
+      "location": {
+        "latitude": 25.85414,
+        "longitude": 55.75292
+      },
+      "oil_volume_m3": 24.61
+    },
+    {
+      "target_id": "TGT-DRIFT-GULF-O-08",
+      "location": {
+        "latitude": 25.8521,
+        "longitude": 55.74908
+      },
+      "oil_volume_m3": 24.61
+    }
+  ],
+  "summary": {
+    "num_vessels": 3,
+    "total_fleet_capacity_m3": 610.0,
+    "num_targets": 8,
+    "total_oil_volume_m3": 196.88
+  }
+}

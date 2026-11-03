@@ -95,3 +95,54 @@ class RoutingConfig:
 
 
 DEFAULT_CONFIG = RoutingConfig()
+
+
+@dataclass(frozen=True)
+class DriftTargetConfig:
+    """How a drift forecast becomes MOVING cleanup targets. Used by drift_targets.py and
+    moving_targets.py."""
+
+    # When the vessels leave port, in hours since the release. The patches are cut out of
+    # the oil at this hour, then followed through every later forecast step.
+    # ASSUMPTION: 6 h for detection (satellite pass) plus mobilisation is a judgement call.
+    # It must be one of the drift steps; try 0 and 12 too.
+    dispatch_hours: float = 6.0
+    # Particles are grouped into square cells of this size; one cell = one target.
+    # 0.03 degrees is about 3 km: roughly the patch one skimming vessel works.
+    cell_deg: float = 0.03
+    # The largest cells become targets. Oil in the remaining small cells is reported as
+    # "not targeted", never silently dropped. More targets = a slower solve.
+    max_targets: int = 15
+    # Total oil released, used when the drift files do not say (meta.json release_volume_m3).
+    # ASSUMPTION: a placeholder for the synthetic Generic Medium Crude release, not a measurement.
+    release_volume_m3: float = 300.0
+    # A patch with less oil than this when a vessel gets there is treated as gone
+    # (stranded, evaporated or dispersed), so no vessel is sent to empty water.
+    gone_below_m3: float = 0.5
+
+    # --- re-planning for moving oil ---
+    # OR-Tools plans to fixed points. So we guess when each patch will be reached, plan to
+    # where the patch is THEN, sail the plan against the moving oil to get the real meeting
+    # places, and plan again until the solver aimed within replan_tolerance_km of every one.
+    # 2 km is about one sea-grid cell (2.2 km): the solver's distances are no finer than that.
+    # A tighter value rarely settles: from round 2 on, the rounds swap between plans that
+    # differ by minutes and a few km (tested on the stand-in). The best sailed round is kept.
+    max_replans: int = 4
+    replan_tolerance_km: float = 2.0
+
+    def __post_init__(self) -> None:
+        if self.dispatch_hours < 0:
+            raise ValueError("dispatch_hours must be 0 or more")
+        if self.max_replans < 1:
+            raise ValueError("max_replans must be at least 1")
+        if self.replan_tolerance_km < 0:
+            raise ValueError("replan_tolerance_km must be 0 or more")
+        if self.cell_deg <= 0:
+            raise ValueError("cell_deg must be above 0")
+        if self.max_targets < 1:
+            raise ValueError("max_targets must be at least 1")
+        if self.release_volume_m3 <= 0:
+            raise ValueError("release_volume_m3 must be above 0")
+
+
+DEFAULT_DRIFT_CONFIG = DriftTargetConfig()

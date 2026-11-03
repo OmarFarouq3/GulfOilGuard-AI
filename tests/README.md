@@ -6,17 +6,21 @@ Planned coverage: mask pairing/class encoding; metrics with empty and known mask
 
 `test_model.py` checks the implemented U-Net using synthetic tensors: shape preservation, custom channels, gradient flow and weight updates, checkpoint round trips, and invalid inputs. It requires PyTorch but does not import the dataset loader or read satellite files. Run discovered tests from the repository root with `python -m unittest discover -s tests -v`.
 
-For an additional learning check, run `python -m detection.smoke_test`. It fits two synthetic rectangles with the default U-Net on CPU. This is a model sanity check, not a measure of real oil-spill performance. Other component tests remain planned.
+For an additional learning check, run `python -m detection.smoke_test`. It fits two synthetic rectangles with the default U-Net on CPU. This is a model sanity check, not a measure of real oil-spill performance.
 
 `test_training.py` adds synthetic PNG checks for paired transforms, mask threshold boundaries, missing/misaligned pairs, known and empty segmentation metrics, and a full train/save/resume/evaluate/predict cycle. These checks require NumPy and Pillow as well as PyTorch. All training fixtures are created in temporary directories; no downloaded imagery is used by unit tests.
 
-## Dashboard tests (pytest)
+## Contracts and integration
 
-`tests/dashboard/` covers the Overview click -> random image -> Detect / Predict / Respond flow: image listing and ids, selection state and map-click parsing, scenario translation, the detection subprocess adapter (stubbed), the pages through Streamlit's `AppTest`, and an import guard (no torch / opendrift / ortools / `detection` under `dashboard/`). They use pytest (`pip install -r requirements-dev.txt`) and generate their images in temporary folders, so they never read the git-ignored `assets/images` or write to `outputs/`.
+`contract_checks.py` holds one `check_*` function per shared dataclass in `shared/schemas.py`; each returns a list of problems (empty means it follows the contract). Global WGS84 validation always runs; pass `region=GULF_REGION` to also require points in the Gulf. `test_contracts.py` covers these checks.
+
+`scenarios/` holds synthetic demo scenarios, loaded into the shared dataclasses by `scenario_loader.py` and checked by `test_scenarios.py`.
+
+`check_outputs.py` checks the result files under `outputs/` against the shared contract and the dashboard's file contract (`dashboard/README.md`), including the links between teams. Run it before opening a PR that changes an exporter:
 
 ```powershell
-python -m pytest tests/dashboard        # dashboard only
-python -m pytest tests                  # everything (torch / scipy / ortools tests need those packages)
+python tests/check_outputs.py outputs --gulf
 ```
 
-`test_inference_e2e.py` runs the real U-Net on a real image and is skipped unless the checkpoint (`GOG_CHECKPOINT` or `runs/unet_refined_sar/best.pth`), images in `assets/images` (or `GOG_IMAGE_DIR`) and an interpreter with torch (`GOG_DETECTION_PYTHON`) are available. `unittest discover` does not collect `tests/dashboard/` (no `__init__.py`).
+`test_check_outputs.py` tests it with small synthetic files in temporary folders. See `docs/integration_plan.md` for the handoffs and open compatibility issues.
+

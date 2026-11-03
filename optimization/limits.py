@@ -1,7 +1,7 @@
 """The working-time rules, in one place, shared by the solver, the baseline and the checks.
 
-A vessel's work time on a route = sailing time + cleanup time at every target.
-It must fit inside the vessel's `available_hours`.
+A vessel's work time on a route = sailing time (out, between targets AND back to the port
+it started from) + cleanup time at every target. It must fit inside `available_hours`.
 
 OR-Tools needs whole minutes, so every leg and every cleanup is rounded UP and the
 available hours are rounded DOWN. That makes the rule slightly strict, so a plan that
@@ -51,8 +51,8 @@ def unserved_reason(
         return "larger than every vessel tank"
     cleanup = service_minutes(target.oil_volume_m3, config)
     if all(
-        leg_minutes(km, v.speed_m_per_s) + cleanup > minutes_down(v.available_hours)
+        2 * leg_minutes(km, v.speed_m_per_s) + cleanup > minutes_down(v.available_hours)
         for v, km in zip(vessels, km_from_each_vessel)
     ):
-        return "no vessel has enough hours to reach it and clean it"
+        return "no vessel has enough hours to reach it, clean it and sail back to port"
     return "vessels were full or out of hours after serving other targets"

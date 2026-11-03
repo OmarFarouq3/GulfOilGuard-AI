@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
 
-from shared.schemas import DriftOutput, GeoCoordinate, ResponseTarget, Vessel
+from shared.schemas import DriftOutput, GeoCoordinate, ResponseTarget, TimedPosition, Vessel
 
 # Conversion helpers
 KNOTS_TO_M_PER_S = 0.514444
@@ -389,6 +389,96 @@ def trajectory_to_targets(
     return tuple(targets)
 
 
+def create_synthetic_gulf_drift(
+    simulation_id: str = "GULF-OPENOIL-24H",
+    start_coord: GeoCoordinate = GeoCoordinate(latitude=25.85, longitude=55.65),
+    start_time: datetime = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc),
+    checkpoints_hours: Sequence[int] = (0, 6, 12, 24),
+    particles_per_cloud: int = 12,
+) -> DriftOutput:
+    """Generate a 24-hour Gulf oil-drift simulation aligned with Team B OpenDrift results.
+
+    Uses Maqqavi's simulation findings from the feature/drift-simulation branch (release at
+    25.85° N, 55.65° E, 300 m3 Generic Medium Crude, 2026-10-23 12:00 UTC), reflecting net
+    tidal and wind drift and OpenDrift particle spread at 0, 6, 12, and 24 hours.
+    """
+    # OpenDrift displacement from release point (east_km, north_km) and cloud width (km)
+    hourly_centers = {
+        0: (0.0, 0.0, 0.5),
+        6: (7.7, 0.5, 0.8),
+        12: (10.3, 0.9, 1.1),
+        24: (12.0, 0.6, 1.7),
+    }
+    cos_lat = math.cos(math.radians(start_coord.latitude))
+    positions: list[TimedPosition] = []
+
+    for h in checkpoints_hours:
+        t = start_time + timedelta(hours=h)
+        if h in hourly_centers:
+            center_east_km, center_north_km, spread_km = hourly_centers[h]
+        else:
+            # Interpolate if another hour is requested
+            center_east_km = 0.5 * h
+            center_north_km = 0.03 * h
+            spread_km = 0.5 + 0.05 * h
+
+        center_lat = start_coord.latitude + center_north_km / 111.2
+        center_lon = start_coord.longitude + center_east_km / (111.2 * cos_lat)
+
+        n_pts = 1 if h == 0 else particles_per_cloud
+
+        for i in range(n_pts):
+            if n_pts == 1:
+                p_lat, p_lon = center_lat, center_lon
+            else:
+                # Radial dispersion pattern around slick center
+                angle = 2.0 * math.pi * i / n_pts
+                r = spread_km * (0.4 + 0.6 * ((i % 3) / 2.0))
+                p_north = r * math.cos(angle)
+                p_east = r * math.sin(angle)
+                p_lat = center_lat + p_north / 111.2
+                p_lon = center_lon + p_east / (111.2 * cos_lat)
+
+            positions.append(
+                TimedPosition(
+                    timestamp=t,
+                    coordinate=GeoCoordinate(latitude=round(p_lat, 5), longitude=round(p_lon, 5)),
+                )
+            )
+
+    return DriftOutput(
+        simulation_id=simulation_id,
+        initial_location=start_coord,
+        positions=tuple(positions),
+        duration_hours=float(max(checkpoints_hours)),
+    )
+
+
+def create_gulf_drift_scenario(
+    forecast_hour: float = 12.0,
+    total_volume_m3: float = 196.9,
+    max_targets: int = 8,
+) -> tuple[tuple[Vessel, ...], tuple[ResponseTarget, ...]]:
+    """Derive a realistic cleanup scenario from the Gulf 24-hour drift simulation.
+
+    Selects oil patches at the chosen forecast checkpoint (default: T+12h, 196.9 m3 afloat
+    per OpenDrift weathering budget) to ensure targets represent separate patches at a single
+    time slice, paired with the operational RAK/Hamriyah fleet.
+    """
+    drift = create_synthetic_gulf_drift()
+    start_time = drift.positions[0].timestamp
+    target_time = start_time + timedelta(hours=forecast_hour)
+
+    targets = trajectory_to_targets(
+        drift=drift,
+        total_volume_m3=total_volume_m3,
+        max_targets=max_targets,
+        forecast_time=target_time,
+    )
+    vessels = create_rak_standard_scenario()[0]
+    return vessels, targets
+
+
 # --- JSON Serialization Helpers ---
 
 
@@ -461,6 +551,7 @@ if __name__ == "__main__":
         ("smoke_test", create_smoke_test_scenario),
         ("gulf_standard", create_rak_standard_scenario),
         ("constrained_triage", create_constrained_triage_scenario),
+        ("gulf_drift_t12", create_gulf_drift_scenario),
     ]
 
     print(f"Exporting scenario fixtures to {fixtures_dir} (Ras Al Khaimah focused)...")

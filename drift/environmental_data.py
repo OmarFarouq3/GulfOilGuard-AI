@@ -17,8 +17,8 @@ import xarray as xr
 
 from shared.schemas import EnvironmentalData
 
-DEFAULT_RAW_WIND = Path("data/era5_wind_gulf_2026-10-19_26.nc")
-DEFAULT_RAW_CURRENT = Path("data/cmems_currents_gulf_2026-10-19_26.nc")
+DEFAULT_RAW_WIND = Path("data/raw/era5_wind_gulf_2026-10-19_26.nc")
+DEFAULT_RAW_CURRENT = Path("data/raw/cmems_currents_gulf_2026-10-19_26.nc")
 
 SPEED_UNITS = "m s-1"
 
@@ -49,7 +49,7 @@ def _check_coverage(ds: xr.Dataset, label: str, bounds, start, end) -> None:
     if start < times[0] or end > times[-1]:
         raise ValueError(f"{label}: data covers {times[0]} to {times[-1]}, not {start} to {end}.")
     window = ds["time"].sel(time=slice(start, end)).values
-    gaps = np.diff(window).astype("timedelta64[h]")
+    gaps = np.diff(window)
     if not (gaps == np.timedelta64(1, "h")).all():
         raise ValueError(f"{label}: time steps are not hourly without gaps.")
 
