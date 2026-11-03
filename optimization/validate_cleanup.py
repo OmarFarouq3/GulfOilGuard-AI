@@ -34,7 +34,7 @@ import argparse
 import json
 from dataclasses import replace
 from datetime import datetime, timedelta
-from math import cos, hypot, radians
+from math import cos, hypot, isnan, radians
 from pathlib import Path
 
 from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, REPO_ROOT
@@ -427,6 +427,11 @@ def _recalculated(plan: dict) -> dict:
             "distance_km_per_target": km / len(covered) if covered else float("nan"), "_covered": covered}
 
 
+def _not_applicable(x) -> bool:
+    """A metric with no value: null in the file, or NaN (distance per target of a plan that serves nothing)."""
+    return x is None or (isinstance(x, float) and isnan(x))
+
+
 def check_comparison(comparison: dict, optimized: dict, baseline: dict | None, r: Report) -> dict:
     """Recalculate every metric in comparison.json from the plan files; none is taken on trust."""
     g = "E comparison"
@@ -461,26 +466,36 @@ def check_comparison(comparison: dict, optimized: dict, baseline: dict | None, r
         "travel_hours": ("sailing time, all vessels", "h"), "longest_route_hours": ("longest single route", "h"),
         "targets_covered": ("targets covered", ""), "distance_km_per_target": ("distance per target", "km"),
     }
-    mismatched = []
+    mismatched, not_applicable = [], []
     for key in m:
         if key not in mine:
             mismatched.append(f"{key} (not recalculated)")
             continue
         a, b = m[key], mine[key]
+        if _not_applicable(a) or _not_applicable(b):
+            if _not_applicable(a) and _not_applicable(b):
+                not_applicable.append(key)  # both say there is no value: they agree
+            else:
+                mismatched.append(f"{key}: file {'n/a' if _not_applicable(a) else f'{a:.3f}'}, recalculated "
+                                  f"{'n/a' if _not_applicable(b) else f'{b:.3f}'}")
+            continue
         tol = 0.05 if key.endswith("_percent") else max(0.01, 0.001 * abs(b))
         if not (a == b or abs(a - b) <= tol):
             mismatched.append(f"{key}: file {a:.3f}, recalculated {b:.3f}")
     r.check(g, not mismatched, f"all {len(m)} metrics in comparison.json recalculated from the route and target "
-            "files and equal" + ("" if not mismatched else f": {'; '.join(mismatched)}"))
+            "files and equal" + ("" if not mismatched else f": {'; '.join(mismatched)}")
+            + ("" if not not_applicable else f" ({', '.join(not_applicable)} not applicable in both)"))
     for key, (label, unit) in labels.items():
         if key == "total_oil_m3":
             r.ok(g, f"{label}: {mine[key]:.1f} {unit} (recalculated)")
             continue
         o, b = mine[f"optimized_{key}"], mine[f"baseline_{key}"]
         extra = f", {change(o, b):+.1f} %" if key in ("oil_recovered_m3", "response_hours", "distance_km", "travel_hours") else ""
-        num = "{:g}" if key == "targets_covered" else "{:.2f}"
-        r.ok(g, f"{label}: optimized {num.format(o)} vs baseline {num.format(b)}{' ' + unit if unit else ''}{extra} "
-             "(recalculated)")
+        def shown(x):
+            if _not_applicable(x):
+                return "n/a (no targets covered)"
+            return ("{:g}" if key == "targets_covered" else "{:.2f}").format(x) + (f" {unit}" if unit else "")
+        r.ok(g, f"{label}: optimized {shown(o)} vs baseline {shown(b)}{extra} (recalculated)")
     r.ok(g, "same targets covered by both plans" if mine["same_targets_covered"] else
          "the plans cover different targets, so read coverage before distance and time")
     return {"reported": m, "recalculated": mine}
