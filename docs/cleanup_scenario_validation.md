@@ -133,20 +133,24 @@ Haris's commit `e247eed` counts what a vessel takes on as emulsion, `oil / (1 - 
 - **`tank_basis: emulsion`:** patches are rebuilt with emulsion counted. Each target's `emulsion_m3`, each vessel's `emulsion_collected_m3`, the tank (FAIL if over) and the cleanup time (emulsion / 30 m³/h) are rechecked.
 - **No `tank_basis`** (a plan made before the change, such as the run in sections 3 and 4): checked as pure oil, with the emulsion load as a WARN, as before. That run still gives 0 FAIL.
 
-**Preview on the real drift, new code and harbour-entrance depots: 77 OK, 3 WARN, 0 FAIL.** This is my local re-run with **straight-line distances**, because I don't have the land file. Haris's sea-grid run will replace these numbers.
+**Haris's sea-grid run** (3 Nov, new code, harbour-entrance depots, `run_drift_plan --fleet outputs/fleet/gulf_standard.json`). The numbers below are from his printed output. The validation files of that run are being produced by Maqqavi with the updated `validate_cleanup.py`.
 
 | | Optimized | Baseline |
 | --- | --- | --- |
 | Water fraction | 46 % at dispatch, about 50 to 57 % when met (1 m³ oil ≈ 2 m³ in the tank) | same |
 | Targets | 7: T01 (145 m³) is now split into two 72 m³ parts, because as emulsion it would overfill the 300 m³ tank | same |
-| SAQR (250 m³) | T01-2, T02: 237.8 m³ emulsion (95 %) | T05, T03, T02, T04: 112.9 m³ (45 %) |
-| Hamriyah (300 m³) | T03, T05, T01-1, T04: 175.4 m³ (58 %) | T01-1: 146.9 m³ (49 %) |
-| FALCON (60 m³) | idle | idle |
-| Unserved | T06 (0.4 m³, below the threshold) | T01-2 (72 m³) and T06 |
-| Oil recovered | 199.4 m³ | 128.0 m³ |
-| Last vessel back in port | 10.36 h after dispatch | 8.70 h |
+| FALCON (60 m³) | idle | T05, T03, T04: 24.4 m³ emulsion, 83.2 km |
+| SAQR (250 m³) | T01-2, T02: 238.8 m³ emulsion (96 %), 75.2 km | T02, T01-1: 240.1 m³, 76.3 km |
+| Hamriyah (300 m³) | T03, T05, T01-1, T04: 176.2 m³ (59 %), 113.5 km | T01-2: 147.6 m³, 105.3 km |
+| Unserved | T06 (0.4 m³, below the threshold) | T06 |
+| Oil recovered | 199 m³ | 200 m³ |
+| Response time (last vessel back in port) | 10.67 h | 10.75 h |
+| Distance, all vessels | 188.7 km | 264.8 km |
+| Sailing time, all vessels | 7.09 h | 8.85 h |
 
 What changed:
-- The emulsion plan is now feasible: no tank is over. FALCON stays idle, and Hamriyah now does real work. This matches the expectation in issue 1.
-- **The optimizer now clearly beats the baseline on oil:** 199 vs 128 m³. Nearest-first fills both big tanks with the wrong mix and leaves half of T01 behind. It takes longer (10.4 vs 8.7 h) because it cleans more oil. So the comparison should lead with oil recovered, not response time. This replaces the "optimizer equals baseline" result in section 4 once Haris's sea-grid run confirms it.
+- The emulsion plan is feasible: no tank is over. Hamriyah now does real work. This matches the expectation in issue 1.
+- **Optimized vs baseline:** the same oil (199 vs 200 m³) and the same response time (10.67 vs 10.75 h), but **28.7 % less distance and 19.9 % less sailing time**, with FALCON kept in port. The baseline sends all three vessels, including FALCON on an 83 km round trip for about 12 m³ of oil. For the presentation, the gain is efficiency and a vessel kept free, not more oil recovered. This replaces the "optimizer equals baseline" result in section 4.
+- My earlier local preview with straight-line distances showed the baseline recovering only 128 m³. That came from the straight-line distances and does not hold on the sea grid.
 - Cleanup time is now about twice as long (the skimmer pumps the emulsion), which makes the night-time assumption (issue 3) cover more hours.
+- **Port Saqr's harbour entrance (25.981 N, 56.048 E) is still land on the 2.2 km routing grid:** both Port Saqr vessels are moved 2.1 km to the nearest water. Hamriyah's entrance is on water. Next: move Port Saqr's point out along the approach (about 25.985 N, 56.025 E) once Haris confirms it with `sea_check` on the land file (issue 2).
