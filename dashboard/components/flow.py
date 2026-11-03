@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components import ui
+from components import charts, ui
 from components.data import dev_mode
 from components.labels import KM
-from services import image_picker, inference, scenario, selection
+from services import image_picker, inference, report_loader, scenario, selection
 from services.files import read_image
 from services.imaging import preview_png
 from services.models import SpillSite
@@ -98,9 +98,11 @@ def detect_controls(site: SpillSite) -> None:
                        if info.get("oil_fraction") is not None else None]
             st.html(f'<span class="gog-chip gog-chip-live"><span class="gog-dot"></span>{ui.esc(run.message)}</span>'
                     f'<p class="gog-flow-note">{ui.esc(" · ".join(d for d in details if d))}</p>')
+            scored = _image_score(current)
             _provenance(
                 ["Radar image: a sample from the local dataset",
-                 "Oil mask and overlay: U-Net prediction on that image"],
+                 "Oil mask and overlay: U-Net prediction on that image",
+                 *(["Score against the reference mask (validation report)"] if scored else [])],
                 ["Incident location (the image is not geolocated)",
                  "Slick outline and area on the map: a placeholder at the selected spill"],
             )
@@ -141,6 +143,40 @@ def detect_controls(site: SpillSite) -> None:
                 result = inference.run_detection(current.image_path, current.image_id)
             selection.record_detection(result)
             st.rerun()
+
+
+SCORE_CAPTIONS = {
+    "val": "How this image scored against its reference mask (validation report). The validation split was "
+           "also used to choose the checkpoint, so this is not an independent test.",
+    "test": "How this image scored against its reference mask (test report).",
+}
+
+
+def _image_score(current: selection.Selection) -> bool:
+    """The selected image's row of Team A's per-image report; True if its scores are shown.
+
+    A row matches on the image's split folder AND its file name: train/ and val/ reuse names.
+    """
+    split = image_picker.image_split(current.image_path)
+    row = None if split == "train" else report_loader.per_image_report().lookup(split, current.image_path.name)
+    if split == "train":
+        missing = "No reference score: this image was part of the model's training data."
+    elif row is None:
+        missing = "No reference score for this image."
+    elif row.empty_reference:  # Dice / IoU are then degenerate (0 or 1)
+        missing = "No oil in the reference mask."
+    else:
+        missing = None
+    if missing:
+        ui.section("Score for this image")
+        ui.inline_empty(missing)
+        return False
+    ui.section("Score for this image", SCORE_CAPTIONS[split])
+    scores = row.scores()
+    ui.stat_tiles([(charts.METRIC_LABELS[k], f"{scores[k]:.2f}", "", charts.METRIC_HINTS[k]) for k in scores]
+                  + [("Reference oil", f"{row.ref_oil_fraction * 100:.1f}", "%",
+                      "Share of the image that is oil in the reference mask")])
+    return True
 
 
 def _failure(run: inference.DetectionRun, follow_up: str = "") -> None:

@@ -11,6 +11,8 @@ import config
 from components import charts, flow, maps, ui
 from components.data import detection_stage, selected_site
 from components.labels import slick_tooltip
+from services import inference, report_loader
+from services.detection_loader import load_galleries
 
 stage = detection_stage()
 data = stage.data
@@ -20,6 +22,32 @@ ui.page_heading(
     "A U-Net model reads SAR imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
     stage,
 )
+# Team A's report describes the real model: never shown next to the demo scene or illustrative scores.
+real_report = data is not None and not data.is_mock and data.metrics_info.get("synthetic") is not True
+
+
+def checkpoint_note() -> None:
+    """Whether the scores were computed on the checkpoint this dashboard runs (checkpoint_sha256)."""
+    check = report_loader.check_checkpoint(inference.checkpoint_path())
+    if check.state == "mismatch":
+        st.html(f'<div class="gog-notice">{ui.esc(check.message)}</div>')
+    else:
+        st.html(f'<p class="gog-flow-note">{ui.esc(check.message)}</p>')
+
+
+def galleries() -> None:
+    """report.py's best / median / worst validation images, when the files exist."""
+    shown, _warnings = load_galleries()  # unreadable files are listed under Diagnostics
+    if not shown:
+        return
+    with st.expander("Best, median and worst validation images", icon=":material/photo_library:"):
+        st.caption("Each row shows one image: input, reference, prediction, errors (green correct, red false "
+                   "alarm, blue missed). The validation split was also used to choose the checkpoint, so these "
+                   "images are not an independent test.")
+        for column, (caption, content) in zip(st.columns(len(shown)), shown):
+            column.image(content, caption=caption, width="stretch", alt=f"{caption} validation images")
+
+
 site = selected_site()
 if site:
     flow.detect_controls(site)
@@ -57,16 +85,13 @@ else:
     if data.metrics:
         ui.section("How accurate is the model?", "Scores from 0 to 1, computed on the validation split. That "
                    "split was also used to choose the checkpoint, so these are not an independent test.")
-        hints = {
-            "dice": "Overlap between detected and true oil",
-            "iou": "Shared area over combined area",
-            "precision": "Flagged pixels that really are oil",
-            "recall": "Real oil pixels that were found",
-        }
         ui.stat_tiles([
-            (charts.METRIC_LABELS[k], f"{data.metrics[k]:.2f}" if k in data.metrics else None, "", hints[k])
+            (charts.METRIC_LABELS[k], f"{data.metrics[k]:.2f}" if k in data.metrics else None, "",
+             charts.METRIC_HINTS[k])
             for k in config.DETECTION_METRICS
         ])
+        if real_report:
+            checkpoint_note()
         left, right = st.columns([3, 2], gap="large")
         with left:
             figure = charts.per_class_bar(data.per_class) if data.per_class else charts.metrics_bar(data.metrics)
@@ -78,7 +103,8 @@ else:
                       "n_with_oil": "Images with oil", "n_empty_reference": "Images without oil"}
             details = {labels.get(k, k.replace("_", " ").capitalize()): v
                        for k, v in data.metrics_info.items()
-                       if k not in ("synthetic", "limitations") and not isinstance(v, (dict, list))}
+                       if k not in ("synthetic", "limitations", "checkpoint_sha256")
+                       and not isinstance(v, (dict, list))}
             ui.section("Evaluation details")
             if details:
                 ui.details_table(details)
@@ -89,6 +115,8 @@ else:
     else:
         ui.section("How accurate is the model?")
         ui.inline_empty("Accuracy scores will appear here once the model has been evaluated.")
+    if real_report:
+        galleries()
 
     # --- Map -------------------------------------------------------------------
     if data.outline_simulated:

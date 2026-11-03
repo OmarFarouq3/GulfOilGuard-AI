@@ -130,3 +130,46 @@ def test_image_id_is_relative_to_the_image_folder(tmp_path):
     assert ip.image_id(tmp_path / "one" / "x.png", root=tmp_path / "one") == \
         ip.image_id(tmp_path / "two" / "x.png", root=tmp_path / "two")
     assert re.fullmatch(r"x-[0-9a-f]{8}", ip.image_id(tmp_path / "x.png", root=tmp_path / "elsewhere"))
+
+
+# --- Split from folder names ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("relative, split", [
+    ("val/palsar_0.png", "val"),
+    ("train/palsar_0.png", "train"),
+    ("test/x.png", "test"),
+    ("Val/x.png", "val"),                       # folder names are compared case-insensitively
+    ("val/sub/x.png", "val"),                   # nearest split folder above the image
+    ("train/val/x.png", "val"),
+    ("val/train/x.png", "train"),
+    ("x.png", None),                            # directly in the image folder "images"
+    ("validation/x.png", None),                 # only the exact names count
+    ("training_data/x.png", None),
+])
+def test_split_from_the_folders_under_the_image_folder(tmp_path, relative, split):
+    root = tmp_path / "images"
+    assert ip.image_split(root / relative, root=root) == split
+
+
+def test_image_folder_itself_named_val(tmp_path, monkeypatch):
+    """GOG_IMAGE_DIR pointing straight at a folder called val."""
+    root = tmp_path / "assets" / "images" / "val"
+    image = make_image(root / "palsar_0.png")
+    monkeypatch.setenv("GOG_IMAGE_DIR", str(root))
+    assert ip.image_split(image) == "val"
+    assert ip.image_split(make_image(root / "nested" / "x.png")) == "val"
+
+
+def test_folders_above_the_image_folder_do_not_count(tmp_path):
+    root = tmp_path / "val" / "images"  # "val" is above the image folder: unknown
+    assert ip.image_split(root / "x.png", root=root) is None
+
+
+def test_image_outside_the_image_folder_is_unknown(tmp_path):
+    assert ip.image_split(tmp_path / "val" / "x.png", root=tmp_path / "images") is None
+
+
+def test_split_from_folders_is_pure():
+    assert ip.split_from_folders(["data", "TRAIN", "x"]) == "train"
+    assert ip.split_from_folders([]) is None

@@ -152,3 +152,45 @@ def test_every_status_has_wording():
 def test_mixed_counts_as_simulated_for_the_headline_numbers():
     stages = {"detect": Stage("detect", object(), "mixed", False), "predict": Stage("predict", None, "empty", False)}
     assert combined_status(stages) == "simulated"
+
+
+# --- summary.json in outputs/report/ (report.py's default folder) ------------------------------------
+
+
+@pytest.fixture
+def report_dir():
+    config.REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    yield config.REPORT_DIR
+    for path in config.REPORT_DIR.glob("*"):
+        path.unlink()
+
+
+def test_files_summary_json_in_the_report_folder_is_used(detection_dir, report_dir):
+    write(report_dir, "summary.json", REPORT_PY)
+    assert load_detection().metrics == REPORT_PY["micro"]
+
+
+def test_files_metrics_json_wins_over_the_report_summary(detection_dir, report_dir):
+    write(detection_dir, "metrics.json", {**SCORES, "split": "val"})
+    write(report_dir, "summary.json", REPORT_PY)
+    data = load_detection()
+    assert data.metrics == SCORES and data.metrics_info["split"] == "val"
+
+
+def test_files_detection_summary_wins_over_the_report_summary(detection_dir, report_dir):
+    write(detection_dir, "summary.json", {**REPORT_PY, "micro": SCORES})
+    write(report_dir, "summary.json", REPORT_PY)
+    assert load_detection().metrics == SCORES
+
+
+def test_galleries_skip_unreadable_files_with_a_warning(report_dir):
+    from dashboard_testkit import make_image
+
+    from services.detection_loader import load_galleries
+    assert load_galleries() == ([], [])
+    make_image(report_dir / "gallery_best.png")
+    (report_dir / "gallery_median.png").write_bytes(b"not a png")
+    make_image(report_dir / "gallery_worst.png", seed=1)
+    shown, warnings = load_galleries()
+    assert [caption for caption, _png in shown] == ["Best", "Worst"]
+    assert len(warnings) == 1 and "gallery_median.png" in warnings[0]

@@ -299,7 +299,7 @@ secrets/
 *.pem
 
 # Local radar image dataset (repo root only; dashboard/assets/ stays tracked)
-/assets-proto/
+/assets/
 
 # assets/ is tracked, including the sample radar images in assets/images/
 # (re-included here because the generic "images/" rule above matches any folder named images).

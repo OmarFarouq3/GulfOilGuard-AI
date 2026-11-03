@@ -466,3 +466,223 @@ def test_checkpoint_message_full_paths_only_with_dev(images):
         assert "Checked, in order:" in notice and "no-model.pth" in notice and missing not in notice
         details = [c.value for e in at.expander if e.label == "Technical details" for c in e.code]
         assert bool(details) == dev and (missing in details[0] if dev else True)
+
+
+# --- Team A's report: per-image scores, checkpoint check, galleries ------------------------------
+
+SCORE_SECTION = "Score for this image"
+SCORE_CAPTION = ("How this image scored against its reference mask (validation report). The validation split "
+                 "was also used to choose the checkpoint, so this is not an independent test.")
+SCORE_PROVENANCE = "Score against the reference mask (validation report)"
+TRAINING_DATA = "No reference score: this image was part of the model&#x27;s training data."
+NO_SCORE = "No reference score for this image."
+NO_REFERENCE_OIL = "No oil in the reference mask."
+GALLERY_LABEL = "Best, median and worst validation images"
+MISMATCH = "These scores were computed on a different checkpoint than the one running."
+UNREPORTED = "The report doesn&#x27;t say which checkpoint was scored."
+REPORT_METRICS = {"model": "U-Net", "split": "val", "n_images": 3, "threshold": 0.5,
+                  "dice": 0.8689, "iou": 0.7682, "precision": 0.8459, "recall": 0.8932}
+PER_IMAGE_CSV = ("file,ref_oil_pixels,dice,iou,precision,recall\n"
+                 "palsar_0.png,13039,0.7725,0.6294,0.7422,0.8054\n"
+                 "palsar_5.png,0,0.0,0.0,0.0,0.0\n"
+                 "sentinel_1.png,300,0.4,0.3,0.5,0.6\n")
+
+
+@pytest.fixture
+def report():
+    """outputs/report/ for one test; the loader caches are cleared so no other test's files leak in."""
+    from services import report_loader
+    for cached in (report_loader._per_image_cached, report_loader._json_cached, report_loader._sha256_cached):
+        cached.cache_clear()
+    directory = inference.config.REPORT_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    yield directory
+    for path in [*directory.glob("*"), *inference.config.DETECTION_DIR.glob("*")]:
+        path.unlink()
+
+
+@pytest.fixture
+def split_images(tmp_path, monkeypatch):
+    """The dataset layout: train/ and val/ share file names; one more image in a folder with no split."""
+    from dashboard_testkit import make_image
+    root = tmp_path / "images"
+    paths = {name: make_image(root / name, seed=i) for i, name in enumerate(
+        ["val/palsar_0.png", "train/palsar_0.png", "val/palsar_5.png", "val/palsar_9.png", "misc/palsar_0.png"])}
+    monkeypatch.setenv("GOG_IMAGE_DIR", str(root))
+    monkeypatch.setenv("GOG_CHECKPOINT", str(tmp_path / "no-model.pth"))
+    return paths
+
+
+def score_block(at: AppTest) -> str:
+    """The per-image section only: from its heading up to the Real / Simulated box."""
+    bodies = [h.proto.body for h in at.get("html")]
+    start = next(i for i, b in enumerate(bodies) if SCORE_SECTION in b)
+    end = next(i for i, b in enumerate(bodies) if 'class="gog-prov"' in b)
+    return "\n".join(bodies[start:end])
+
+
+def provenance(at: AppTest) -> str:
+    return " ".join(html_bodies(at, "gog-prov"))
+
+
+def run_with_report(image, csv: str = PER_IMAGE_CSV, metrics: dict | None = None) -> AppTest:
+    write_metrics(REPORT_METRICS if metrics is None else metrics)
+    (inference.config.REPORT_DIR / "per_image_metrics.csv").write_text(csv, encoding="utf-8")
+    at = new_app()
+    run_stubbed_detection(at, image)
+    return at
+
+
+def test_val_image_in_the_report_shows_its_scores(split_images, stub_detection, report):
+    at = run_with_report(split_images["val/palsar_0.png"])
+    block = score_block(at)
+    assert SCORE_CAPTION in block
+    for value in ("0.77", "0.63", "0.74", "0.81", "19.9", "Reference oil", "Dice", "IoU", "Precision", "Recall"):
+        assert value in block
+    assert SCORE_PROVENANCE in provenance(at)
+
+
+def test_empty_reference_mask_shows_no_scores(split_images, stub_detection, report):
+    at = run_with_report(split_images["val/palsar_5.png"])
+    block = score_block(at)
+    assert NO_REFERENCE_OIL in block and "Reference oil" not in block and "0.00" not in block
+    assert SCORE_PROVENANCE not in provenance(at)
+
+
+def test_train_image_never_gets_the_val_row(split_images, stub_detection, report):
+    """Regression: palsar_0.png is in train/ and val/ with different content; the report covers val only."""
+    at = run_with_report(split_images["train/palsar_0.png"])
+    block = score_block(at)
+    assert TRAINING_DATA in block and "0.77" not in block and SCORE_PROVENANCE not in provenance(at)
+
+
+def test_regression_same_name_in_train_and_val_with_different_rows(split_images, stub_detection, report):
+    csv = ("file,split,ref_oil_pixels,dice,iou,precision,recall\n"
+           "palsar_0.png,train,500,0.1111,0.1,0.2,0.3\n"
+           "palsar_0.png,val,13039,0.7725,0.6294,0.7422,0.8054\n")
+    val = score_block(run_with_report(split_images["val/palsar_0.png"], csv))
+    assert "0.77" in val and "0.11" not in val
+    train = score_block(run_with_report(split_images["train/palsar_0.png"], csv))
+    assert TRAINING_DATA in train and "0.11" not in train and "0.77" not in train
+
+
+@pytest.mark.parametrize("image", ["val/palsar_9.png", "misc/palsar_0.png"])
+def test_not_in_the_report_or_unknown_split_is_never_guessed(split_images, stub_detection, report, image):
+    """palsar_9 is not in the CSV; misc/palsar_0.png has a name in the CSV but no split folder."""
+    block = score_block(run_with_report(split_images[image]))
+    assert NO_SCORE in block and "0.77" not in block
+
+
+def test_rows_without_any_split_match_nothing(split_images, stub_detection, report):
+    metrics = {k: v for k, v in REPORT_METRICS.items() if k != "split"}
+    block = score_block(run_with_report(split_images["val/palsar_0.png"], metrics=metrics))
+    assert NO_SCORE in block and "0.77" not in block
+
+
+def test_no_report_at_all(split_images, stub_detection, report):
+    at = new_app()
+    run_stubbed_detection(at, split_images["val/palsar_0.png"])
+    assert NO_SCORE in score_block(at)
+
+
+def test_simulated_fallback_shows_no_image_score(split_images, report):
+    write_metrics(REPORT_METRICS)
+    (report / "per_image_metrics.csv").write_text(PER_IMAGE_CSV, encoding="utf-8")
+    at = new_app()
+    select(at, "GOG-SIM-01", split_images["val/palsar_0.png"])
+    open_page(at, DETECT)
+    button(at, "flow_run_detection").click()  # no checkpoint: the simulated detection
+    text = page_text(checked(at.run()))
+    assert SIMULATED_CHIP in heading(at)
+    assert SCORE_SECTION not in text and SCORE_PROVENANCE not in text and GALLERY_LABEL not in text
+
+
+# Checkpoint verification
+
+
+@pytest.fixture
+def running_checkpoint(tmp_path, monkeypatch):
+    import hashlib
+    path = tmp_path / "unet_best.pth"
+    path.write_bytes(b"model weights")
+    monkeypatch.setenv("GOG_CHECKPOINT", str(path))
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_checkpoint_hash_match(split_images, stub_detection, report, running_checkpoint):
+    at = run_with_report(split_images["val/palsar_0.png"],
+                         metrics={**REPORT_METRICS, "checkpoint_sha256": running_checkpoint})
+    assert any("Scores were computed on this checkpoint." in b for b in html_bodies(at, "gog-flow-note"))
+    text = page_text(at)
+    assert MISMATCH not in text and running_checkpoint not in text  # the hash is no detail for viewers
+
+
+def test_checkpoint_hash_mismatch_is_a_visible_warning(split_images, stub_detection, report, running_checkpoint):
+    at = run_with_report(split_images["val/palsar_0.png"], metrics={**REPORT_METRICS, "checkpoint_sha256": "a" * 64})
+    assert any(MISMATCH in body for body in html_bodies(at, "gog-notice"))
+    assert any(MISMATCH in m.value for m in at.markdown), "also listed under Diagnostics"
+
+
+def test_checkpoint_hash_missing_is_a_quiet_note(split_images, stub_detection, report, running_checkpoint):
+    at = run_with_report(split_images["val/palsar_0.png"])
+    assert any(UNREPORTED in b for b in html_bodies(at, "gog-flow-note"))
+    assert not any("checkpoint" in b for b in html_bodies(at, "gog-notice"))
+
+
+# Galleries
+
+
+def write_galleries(directory, names=("best", "median", "worst")) -> None:
+    from dashboard_testkit import make_image
+    for i, name in enumerate(names):
+        make_image(directory / f"gallery_{name}.png", seed=i)
+
+
+def gallery_expander(at: AppTest):
+    return next((e for e in at.expander if e.label == GALLERY_LABEL), None)
+
+
+def gallery_captions(at: AppTest) -> list[str]:
+    return [img.caption for element in gallery_expander(at).get("image") for img in element.proto.imgs]
+
+
+def test_galleries_shown_when_the_files_exist(split_images, stub_detection, report):
+    write_galleries(report)
+    at = run_with_report(split_images["val/palsar_0.png"])
+    assert gallery_captions(at) == ["Best", "Median", "Worst"]
+    note = " ".join(c.value for c in gallery_expander(at).caption)
+    assert "green correct, red false alarm, blue missed" in note and "not an independent test" in note
+
+
+def test_galleries_hidden_without_files(split_images, stub_detection, report):
+    assert gallery_expander(run_with_report(split_images["val/palsar_0.png"])) is None
+
+
+def test_unreadable_gallery_is_skipped_and_listed_in_diagnostics(split_images, stub_detection, report):
+    write_galleries(report, ("best", "worst"))
+    (report / "gallery_median.png").write_bytes(b"not a png")
+    at = run_with_report(split_images["val/palsar_0.png"])
+    assert gallery_captions(at) == ["Best", "Worst"]
+    assert any("gallery_median.png" in m.value for m in at.markdown)
+
+
+def test_galleries_hidden_next_to_the_demo_scene(images, report):
+    write_galleries(report)
+    write_metrics(REPORT_METRICS)
+    at = checked(new_app(demo=True).run())
+    assert gallery_expander(open_page(at, DETECT)) is None
+
+
+def test_galleries_shown_without_a_selection(images, report):
+    write_galleries(report)
+    write_metrics(REPORT_METRICS)
+    at = checked(new_app().run())
+    assert gallery_captions(open_page(at, DETECT)) == ["Best", "Median", "Worst"]
+
+
+def test_diagnostics_list_the_report_files(images, report):
+    at = open_page(checked(new_app().run()), DETECT)
+    files = [name for frame in at.dataframe for name in frame.value["File"]]
+    for name in ("report/summary.json", "report/per_image_metrics.csv", "report/gallery_best.png",
+                 "report/gallery_median.png", "report/gallery_worst.png", "detection/summary.json"):
+        assert name in files

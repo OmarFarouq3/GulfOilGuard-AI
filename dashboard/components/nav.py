@@ -12,8 +12,8 @@ import config
 from components import illustrations
 from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode
 from components.labels import STAGE_STATUS
-from services import image_picker, selection, settings
-from services.detection_loader import load_detection
+from services import image_picker, report_loader, selection, settings
+from services.detection_loader import load_detection, load_galleries
 from services.drift_loader import load_drift
 from services.files import format_mtime
 from services.routing_loader import load_routing
@@ -83,10 +83,11 @@ def diagnostics() -> None:
     st.caption("Data folder")
     st.code(str(config.OUTPUTS_DIR), language=None, wrap_lines=True)
     rows = []
-    for module, files in (("detection", config.DETECTION_FILES), ("drift", config.DRIFT_FILES),
-                          ("routing", config.ROUTING_FILES)):
+    for module, files in (("detection", config.DETECTION_FILES), ("report", config.REPORT_FILES),
+                          ("drift", config.DRIFT_FILES), ("routing", config.ROUTING_FILES)):
         for path in files.values():
-            rows.append({"Module": module, "File": path.name, "Modified": format_mtime(path) or "missing"})
+            rows.append({"Module": module, "File": f"{path.parent.name}/{path.name}",
+                         "Modified": format_mtime(path) or "missing"})
     rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
                  "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
     st.dataframe(rows, hide_index=True, width="stretch")
@@ -99,6 +100,8 @@ def diagnostics() -> None:
             f"python:     {python.path}  [{python.source}]", language=None, wrap_lines=True)
 
     warnings = list(settings.env_file()[1])
+    warnings += report_loader.per_image_report().warnings + load_galleries()[1]
+    warnings += report_loader.check_checkpoint(checkpoint.path).warnings
     for loader in (load_detection, load_drift, load_routing, load_spills):
         data = loader()
         if data is not None:

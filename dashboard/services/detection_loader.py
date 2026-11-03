@@ -7,7 +7,7 @@ Files (all optional individually):
   shared/schemas.py; same keys as ``SegmentationMetrics`` in detection/evaluate.py), either at
   the top level or nested under ``"metrics"`` as ``detection/evaluate.py --output-dir`` writes it
 - ``summary.json`` (used when metrics.json has no scores): ``detection/report.py`` output, with
-  the global (micro) scores nested under ``"micro"``
+  the global (micro) scores nested under ``"micro"``; also looked for in ``outputs/report/``
 - ``spill.geojson``: oil polygons in WGS84 lon/lat. Each feature is one ``DetectionOutput``:
   ``image_id`` (required), ``confidence`` in [0, 1] (optional); ``area_km2`` is an extension.
 """
@@ -159,15 +159,32 @@ def _read_scene(image_id: str, files: dict[str, Path], data: DetectionData) -> D
 
 
 def _read_metrics(data: DetectionData) -> None:
-    """metrics.json first; summary.json (report.py) only when metrics.json gives no scores."""
-    for key in ("metrics", "summary"):
-        path = config.DETECTION_FILES[key]
+    """metrics.json first; summary.json (report.py) only when metrics.json gives no scores.
+
+    summary.json is looked for in outputs/detection/, then in outputs/report/ (report.py's default).
+    """
+    for path in config.EVALUATION_FILES:
         raw, warning = read_json_object(path)
         if warning:
             data.warnings.append(warning)
         parse_metrics(raw, data, path.name)
         if data.metrics:
             return
+
+
+GALLERIES = (("gallery_best", "Best"), ("gallery_median", "Median"), ("gallery_worst", "Worst"))
+
+
+def load_galleries() -> tuple[list[tuple[str, bytes]], list[str]]:
+    """report.py's best / median / worst galleries as (caption, png); unreadable ones are skipped."""
+    shown, warnings = [], []
+    for key, caption in GALLERIES:
+        content, warning = read_image(config.REPORT_FILES[key])
+        if warning:
+            warnings.append(f"{warning} It is left out of the galleries.")
+        elif content:
+            shown.append((caption, content))
+    return shown, warnings
 
 
 def load_scene(image_id: str) -> DetectionData | None:

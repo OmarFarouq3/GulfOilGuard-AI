@@ -99,6 +99,7 @@ All files live under `outputs/` at the repo root (in `.gitignore`; generated loc
 | --- | --- | --- |
 | `mask.png` | yes | Predicted binary mask (`DetectionOutput.mask_path`); white (>127) = oil. |
 | `metrics.json` | yes | Held-out scores in [0, 1] (*extension*, see below). |
+| `summary.json` | optional | `detection/report.py`'s summary; its `micro` scores are used when `metrics.json` has none. Also looked for in `outputs/report/`. |
 | `overlay.png` | optional | Mask drawn over the scene. If missing, the dashboard builds one from `image.png` + `mask.png`. |
 | `image.png` | optional | The SAR input scene shown next to the mask. |
 | `spill.geojson` | optional* | One `Polygon`/`MultiPolygon` feature per detected slick. *Needed for the map and for drift integration. |
@@ -122,6 +123,22 @@ Multiple scenes: name files `<image_id>_image.png`, `<image_id>_mask.png`, `<ima
 ```
 
 `metrics.json` is an *extension*: `shared/schemas.py` has no metrics type. Its four keys match `SegmentationMetrics` in `detection/evaluate.py`. `per_class` and the descriptive keys are optional.
+
+Either shape is accepted: the four scores at the top level (above), nested under `"metrics"` as `detection/evaluate.py --output-dir` writes it, or under `"micro"` as in `report.py`'s `summary.json`. Optional `"checkpoint_sha256"` (in `metrics.json` or `summary.json`) is compared with the SHA-256 of the checkpoint the dashboard runs: the Detect page then says "Scores were computed on this checkpoint", or warns "These scores were computed on a different checkpoint than the one running" (also under Diagnostics). Without it the page notes that the report doesn't say which checkpoint was scored. The hash is computed once per checkpoint file (cached on path, modification time and size).
+
+### Evaluation report → `outputs/report/`
+
+What `detection/report.py` writes by default (`--output-dir outputs/report`). All optional; the dashboard only reads them.
+
+| File | Used for |
+| --- | --- |
+| `summary.json` | Scores for "How accurate is the model?" when `outputs/detection/` has neither `metrics.json` nor `summary.json` (order: `detection/metrics.json` > `detection/summary.json` > `report/summary.json`). |
+| `per_image_metrics.csv` | "Score for this image" on Detect, after a real model run: Dice, IoU, Precision, Recall and the reference oil share (`ref_oil_pixels / 65,536`) of the selected image. Columns `file, ref_oil_pixels, dice, iou, precision, recall`, optionally `split`. |
+| `gallery_best.png`, `gallery_median.png`, `gallery_worst.png` | The expander "Best, median and worst validation images" under "How accurate is the model?". An unreadable file is left out and listed under Diagnostics. |
+
+**Splits.** The Refined Deep-SAR SOS `train/` and `val/` folders reuse the same file names (`palsar_0.png` exists in both, with different content), so a file name alone is ambiguous. A CSV row matches the selected image only when **both** the split and the file name agree. The image's split is the nearest folder named `train`, `val` or `test` between the image and the image folder (inclusive, so `GOG_IMAGE_DIR=assets/images/val` counts as `val`). A row's split is its `split` column, else a folder in `file` (`val/palsar_0.png`), else the report's `"split"` from `metrics.json` / `summary.json`; with none of these the rows match nothing. Images in `train/` show "No reference score: this image was part of the model's training data"; images without a matching row show "No reference score for this image"; a row with no reference oil shows "No oil in the reference mask" instead of its degenerate 0 / 1 scores. Nothing is matched by name alone.
+
+**Caveat.** `report.py` scores the validation split, which was also used to choose the checkpoint, so these scores (overall and per image) are not an independent test. For demos, set `GOG_IMAGE_DIR=assets/images/val` (environment or `.env`): only validation images can show a per-image score, and none of them were used to fit the weights.
 
 ### Drift module → `outputs/drift/`
 
@@ -221,7 +238,8 @@ dashboard/
     drift_loader.py       -> DriftData | None
     routing_loader.py     -> RoutingData | None
     spill_loader.py       -> SpillData | None (Overview map incidents)
-    image_picker.py       lists / randomly picks radar images (no Streamlit; unit-testable)
+    image_picker.py       lists / randomly picks radar images, split from folder names (no Streamlit)
+    report_loader.py      per-image scores (split + file name), report split, checkpoint SHA-256 check
     settings.py           checkpoint / detection Python / image folder: env > .env > standard layout
     selection.py          selected spill + image in session_state, map-click parsing
     mock_data.py          demo scenario (synthetic)

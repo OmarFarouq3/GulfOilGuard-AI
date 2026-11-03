@@ -92,6 +92,31 @@ def image_source(path: str | Path) -> str | None:
     return f"{sensor} SAR sample from the local dataset" if sensor else None
 
 
+# Dataset split folders. train/ and val/ reuse the same file names, so a name alone is ambiguous.
+SPLITS = ("train", "val", "test")
+
+
+def split_from_folders(folders: Sequence[str]) -> str | None:
+    """The nearest (last) folder named train / val / test, case-insensitively; None if there is none."""
+    return next((name.lower() for name in reversed(folders) if name.lower() in SPLITS), None)
+
+
+def image_split(path: str | Path, root: str | Path | None = None) -> str | None:
+    """Split of an image from its folders: ``.../images/val/x.png`` -> ``"val"``; None when unknown.
+
+    Only the folders from the image's own folder up to and including the image folder ``root``
+    (default ``image_dir()``) count, so GOG_IMAGE_DIR may point straight at ``.../val``. Folders
+    above the image folder, and images outside it, give None: the split is never guessed.
+    """
+    path = Path(path)
+    base = Path(root) if root is not None else image_dir()
+    try:
+        inside = path.resolve().parent.relative_to(base.resolve()).parts
+    except ValueError:
+        return None
+    return split_from_folders([base.resolve().name, *inside])
+
+
 def image_id(path: str | Path, root: str | Path | None = None) -> str:
     """Stable id ``<stem>-<hash>`` limited to [A-Za-z0-9_-] (key for outputs/detection/<id>_*).
 

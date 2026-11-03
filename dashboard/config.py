@@ -52,6 +52,18 @@ DETECTION_FILES = {
     "spill": DETECTION_DIR / "spill.geojson",
 }
 
+# Evaluation report (detection/report.py writes here by default; read by services/report_loader.py)
+REPORT_DIR = OUTPUTS_DIR / "report"
+REPORT_FILES = {
+    "summary": REPORT_DIR / "summary.json",  # same format as DETECTION_FILES["summary"], last fallback
+    "per_image": REPORT_DIR / "per_image_metrics.csv",  # scores per image of the evaluated split
+    "gallery_best": REPORT_DIR / "gallery_best.png",
+    "gallery_median": REPORT_DIR / "gallery_median.png",
+    "gallery_worst": REPORT_DIR / "gallery_worst.png",
+}
+# The order in which evaluation files are read for scores, the report's split and checkpoint_sha256.
+EVALUATION_FILES = (DETECTION_FILES["metrics"], DETECTION_FILES["summary"], REPORT_FILES["summary"])
+
 # Drift module
 DRIFT_DIR = OUTPUTS_DIR / "drift"
 DRIFT_FILES = {

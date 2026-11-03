@@ -7,6 +7,12 @@ import plotly.graph_objects as go
 import config
 
 METRIC_LABELS = {"dice": "Dice", "iou": "IoU", "precision": "Precision", "recall": "Recall"}
+METRIC_HINTS = {
+    "dice": "Overlap between detected and true oil",
+    "iou": "Shared area over combined area",
+    "precision": "Flagged pixels that really are oil",
+    "recall": "Real oil pixels that were found",
+}
 # Colour follows the entity: oil is always amber, everything else is cool.
 CLASS_COLORS = {"oil": config.AMBER, "background": "#3b6e86"}
 OTHER_CLASS_COLORS = ("#22d3ee", "#a78bfa", "#34d399", "#60a5fa")
