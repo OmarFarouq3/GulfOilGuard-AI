@@ -23,10 +23,12 @@ EARTH_RADIUS_KM = 6371.0088
 
 # Representative Regional Ports & Marine Staging Depots across the Arabian Gulf (WGS84)
 GULF_DEPOTS = {
-    # Northern Emirates / RAK demonstration bases
-    "port_saqr_rak": GeoCoordinate(latitude=25.9750, longitude=56.0550),      # Primary RAK deepwater port
+    # Northern Emirates / RAK demonstration bases. Vessels start and end here, so the two
+    # demo bases are their harbour entrances (gap between the breakwaters, from OpenStreetMap),
+    # not points on the quayside roads, which the routing sea grid treats as land.
+    "port_saqr_rak": GeoCoordinate(latitude=25.9810, longitude=56.0482),      # Primary RAK deepwater port (entrance)
     "rak_maritime_city": GeoCoordinate(latitude=25.9050, longitude=55.9900),  # RAK maritime facility
-    "hamriyah_sharjah": GeoCoordinate(latitude=25.4650, longitude=55.4850),   # Regional backup base
+    "hamriyah_sharjah": GeoCoordinate(latitude=25.4773, longitude=55.4798),   # Regional backup base (entrance)
     # Wider Arabian Gulf staging bases
     "jebel_ali_dubai": GeoCoordinate(latitude=25.0110, longitude=55.0610),
     "mina_zayed_abu_dhabi": GeoCoordinate(latitude=24.5260, longitude=54.3750),
