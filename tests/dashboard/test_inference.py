@@ -133,24 +133,60 @@ def test_cache_needs_all_output_files(files, monkeypatch):
 
 
 @pytest.mark.parametrize("fake, message", [
-    (FakeRun(returncode=4, stderr="Traceback ...\nValueError: bad"), "exit code 4"),
+    (FakeRun(returncode=4, stderr="Traceback ...\nValueError: bad"), "The model file could not be loaded"),
+    (FakeRun(returncode=1, stderr="boom"), "Detection could not be completed"),
     (FakeRun(stdout="no result line\n"), "no result"),
     (FakeRun(write=False), "missing"),
-    (FakeRun(raises=OSError("not executable")), "could not be started"),
 ])
 def test_failures_become_short_statuses(files, monkeypatch, fake, message):
     monkeypatch.setattr(inference.subprocess, "run", fake)
     result = run(files)
     assert result.state == "failed" and not result.ok
     assert message in result.message and "\n" not in result.message
+    assert "exit code" not in result.message and "Traceback" not in result.message  # those only under ?dev=1
     assert not inference.manifest_path("scene-abc", files[2]).exists()  # failures are never cached
+
+
+def test_unloadable_checkpoint_names_the_setting_and_keeps_the_exit_code_for_dev(files, monkeypatch):
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(returncode=4, stderr="UnpicklingError: bad"))
+    result = run(files)
+    assert result.message == ("The model file could not be loaded. Check that GOG_CHECKPOINT points at a "
+                              "trained U-Net checkpoint (.pth).")
+    assert result.detail.startswith("exit code 4") and "UnpicklingError" in result.detail
+
+
+@pytest.mark.parametrize("content", [b"", b"not an image at all", b"\x89PNG\r\n\x1a\n truncated"])
+def test_unreadable_image_gets_its_own_message_and_no_subprocess(files, monkeypatch, content):
+    fake = FakeRun()
+    monkeypatch.setattr(inference.subprocess, "run", fake)
+    files[0].write_bytes(content)
+    result = run(files)
+    assert result.state == "image_unreadable" and not result.ok and fake.calls == []
+    assert result.message.startswith("This image could not be read") and "model file" not in result.message
+
+
+@pytest.mark.parametrize("make", ["missing", "not executable"])
+def test_interpreter_that_will_not_start_names_the_setting_and_what_was_checked(files, monkeypatch, tmp_path, make):
+    python = tmp_path / "py" / "python.exe"
+    if make == "not executable":
+        python.parent.mkdir()
+        python.write_text("not a program", encoding="utf-8")
+    monkeypatch.setattr(inference.subprocess, "run", FakeRun(raises=OSError("cannot run")))
+    monkeypatch.setenv("GOG_DETECTION_PYTHON", str(python))
+    result = inference.run_detection(files[0], "scene-abc", checkpoint=files[1], out_dir=files[2])
+    assert result.state == "setup_needed" and not result.ok
+    assert "could not be started" in result.message and "GOG_DETECTION_PYTHON" in result.message
+    assert "Checked, in order: GOG_DETECTION_PYTHON environment variable python.exe:" in result.message
+    assert str(tmp_path) not in result.message  # full paths only in the ?dev=1 detail
+    assert str(python) in result.detail and "cannot run" in result.detail
 
 
 def test_failure_detail_keeps_the_tail_of_stderr(files, monkeypatch):
     stderr = "\n".join(f"line {i}" for i in range(100))
     monkeypatch.setattr(inference.subprocess, "run", FakeRun(returncode=4, stderr=stderr))
     detail = run(files).detail.splitlines()
-    assert len(detail) == inference.DETAIL_LINES and detail[-1] == "line 99"
+    assert detail[0] == "exit code 4"
+    assert len(detail) == inference.DETAIL_LINES + 1 and detail[-1] == "line 99"
 
 
 def test_timeout_becomes_a_status(files, monkeypatch):
@@ -317,5 +353,5 @@ def test_real_subprocess_with_undecodable_bytes_does_not_crash(files, monkeypatc
     )
     monkeypatch.setattr(inference, "_command", lambda python, *a: [python, str(script)])
     result = run(files)
-    assert result.state == "failed" and "exit code 4" in result.message
-    assert "bad" in result.detail and "�" in result.detail
+    assert result.state == "failed" and "could not be loaded" in result.message
+    assert "exit code 4" in result.detail and "bad" in result.detail and "�" in result.detail

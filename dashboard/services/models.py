@@ -66,6 +66,7 @@ class DetectionData:
     spill: dict | None = None  # GeoJSON polygons for the map (schema has points only)
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # Diagnostics only; unlike warnings, not a viewer-facing issue
     is_mock: bool = False
     # Selected-spill flow (not in schema): where the mask came from, and whether the outline on
     # the map is a simulated placeholder (a real mask from a non-geolocated image has no position).

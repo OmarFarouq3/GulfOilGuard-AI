@@ -15,8 +15,9 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import streamlit as st
@@ -49,6 +50,28 @@ def display_path(path: Path) -> str:
         except ValueError:
             continue
     return str(path)
+
+
+_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def looks_like_path(token: str) -> bool:
+    r"""``C:\x``, ``\\server\x``, ``/home/x``, ``~/x``, ``./x``, ``a/b/c`` or ``dir/file.ext``; not ``train/val``."""
+    if "\\" in token or _DRIVE.match(token) or token.startswith(("/", "~", "./", "../")):
+        return True
+    return token.count("/") >= 2 or ("/" in token and "." in token.rsplit("/", 1)[-1])
+
+
+# A Windows drive or UNC path whose folders may contain spaces ("C:\Users\x\Hack for Earth\best.pth"):
+# folders up to the last separator, then a file name without spaces.
+_WINDOWS_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|\\\\)(?:[^\\/\n]*[\\/])*[^\s\\/]*")
+
+
+def hide_paths(value: str) -> str:
+    """Reduce every path in ``value`` to its file name; other words stay as they are."""
+    value = _WINDOWS_PATH.sub(lambda m: PureWindowsPath(m.group(0)).name or m.group(0), value)
+    return " ".join(PureWindowsPath(word).name or word if looks_like_path(word) else word
+                    for word in value.split(" "))
 
 
 # --- JSON ----------------------------------------------------------------------

@@ -57,6 +57,14 @@ class ImageScore:
         """No oil in the reference mask: the scores are then degenerate (0 or 1)."""
         return self.ref_oil_pixels == 0
 
+    @property
+    def precision_undefined(self) -> bool:
+        """Nothing was predicted on an image with reference oil, so precision is 0/0 (reported as 0).
+
+        Only provable from the row itself: recall 0 and precision 0 with reference oil present.
+        """
+        return self.ref_oil_pixels > 0 and self.recall == 0 and self.precision == 0
+
     def scores(self) -> dict[str, float]:
         return {k: getattr(self, k) for k in SCORE_COLUMNS}
 
@@ -133,7 +141,7 @@ def parse_per_image(text: str, default_split: str | None = None, name: str = "pe
             report.warnings.append(f"`{name}` has no {', '.join(f'`{c}`' for c in missing)} column; "
                                    "per-image scores are not shown.")
             return report
-        problems, total, seen = [], 0, {}
+        problems, repeats, total, seen, conflicting = [], [], 0, {}, set()
         for number, raw in enumerate(reader, start=2):  # line 1 is the header
             total += 1
             try:
@@ -142,19 +150,27 @@ def parse_per_image(text: str, default_split: str | None = None, name: str = "pe
                 problems.append(f"line {number}: {exc}")
                 continue
             key = (row.split, row.file)
-            if key in seen:
-                problems.append(f"line {number}: {row.file} appears twice for split {row.split}; "
-                                f"both rows dropped (line {seen[key]})")
-                report.rows.pop(key, None)
-                continue
-            seen[key] = number
-            report.rows[key] = row
+            if key in conflicting:
+                problems.append(f"line {number}: {row.file} has conflicting rows for split {row.split}")
+            elif key in seen and report.rows[key] == row:  # an exact repeat: same values, keep one
+                repeats.append(f"line {number} repeats line {seen[key]}")
+            elif key in seen:
+                problems.append(f"line {number}: {row.file} appears twice for split {row.split} with different "
+                                f"values; both rows dropped (line {seen[key]})")
+                report.rows.pop(key)
+                conflicting.add(key)
+            else:
+                seen[key] = number
+                report.rows[key] = row
     except csv.Error as exc:
         report.warnings.append(f"`{name}` is not a valid CSV file ({exc}).")
         return report
     if problems:
         shown = "; ".join(problems[:SHOWN_PROBLEMS]) + (" ..." if len(problems) > SHOWN_PROBLEMS else "")
         report.warnings.append(f"`{name}`: skipped {len(problems)} of {total} rows ({shown}).")
+    if repeats:
+        shown = "; ".join(repeats[:SHOWN_PROBLEMS]) + (" ..." if len(repeats) > SHOWN_PROBLEMS else "")
+        report.warnings.append(f"`{name}`: {len(repeats)} exact duplicate row(s), one copy kept ({shown}).")
     if report.rows and all(split is None for split, _file in report.rows):
         report.warnings.append(f"`{name}`: no split is known for its rows (no `split` column, no folder in "
                                "`file`, no `\"split\"` in metrics.json or summary.json), so they match no image.")

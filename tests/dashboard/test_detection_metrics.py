@@ -194,3 +194,99 @@ def test_galleries_skip_unreadable_files_with_a_warning(report_dir):
     shown, warnings = load_galleries()
     assert [caption for caption, _png in shown] == ["Best", "Worst"]
     assert len(warnings) == 1 and "gallery_median.png" in warnings[0]
+
+
+# --- Details allowlist and path hiding (detection test pass item 1) -----------------------------------
+
+
+def test_only_allowlisted_details_reach_the_viewer():
+    raw = {**SCORES, "model": "U-Net", "split": "val", "n_images": 1615, "threshold": 0.5, "epoch": 12,
+           "aggregation": "micro", "created": "2026-11-03", "limitations": "Val chose the checkpoint.",
+           "checkpoint": "C:/Users/someone/models/best.pth", "data_dir": "C:/Users/someone/sar_data",
+           "notes": "secret", "per_epoch": [0.1], "image_size": 256, "n_with_oil": 900, "counts": {"tp": 1},
+           "checkpoint_sha256": "a" * 64, "synthetic": False}
+    data = parsed(raw)
+    assert data.metrics_info == {"model": "U-Net", "split": "val", "n_images": 1615, "threshold": 0.5, "epoch": 12,
+                                 "aggregation": "micro", "created": "2026-11-03",
+                                 "limitations": "Val chose the checkpoint.", "checkpoint": "best.pth"}
+    assert data.warnings == []  # unknown keys are no viewer-facing issue ...
+    assert data.notes == ["`metrics.json`: not shown to viewers: `data_dir`, `notes`, `per_epoch`."]  # ... names only
+    assert "sar_data" not in str(data.notes) and "secret" not in str(data.notes)
+
+
+def test_synthetic_flag_is_kept_for_the_status_but_is_no_detail():
+    assert parsed({**SCORES, "synthetic": True}).metrics_info == {"synthetic": True}
+
+
+@pytest.mark.parametrize("value, shown", [
+    ("C:/Users/someone/models/best.pth", "best.pth"),
+    ("C:\\Users\\someone\\best.pth", "best.pth"),
+    ("/home/someone/runs/unet/best.pth", "best.pth"),
+    ("\\\\server\\share\\best.pth", "best.pth"),
+    ("runs/unet_refined_sar/best.pth", "best.pth"),
+    ("U-Net (unet_refined_sar)", "U-Net (unet_refined_sar)"),
+    ("train/val split", "train/val split"),
+])
+def test_path_like_values_are_reduced_to_file_names(value, shown):
+    assert parsed({**SCORES, "model": value}).metrics_info["model"] == shown
+
+
+@pytest.mark.parametrize("value", [
+    "C:\\Users\\someone\\Documents\\UOS\\Hack for Earth Competition\\GulfOilGuard-AI\\checkpoints\\unet_best.pth",
+    "C:/Users/someone/My Models/unet_best.pth",
+    "\\\\server\\team share\\unet_best.pth",
+])
+def test_windows_paths_with_spaces_are_reduced_whole(value):
+    """Regression: the real repo path has spaces; its middle words must not leak ("Hack for Earth")."""
+    assert parsed({**SCORES, "checkpoint": value}).metrics_info["checkpoint"] == "unet_best.pth"
+    assert parsed({**SCORES, "limitations": f"Scored with {value} only."}).metrics_info["limitations"] == \
+        "Scored with unet_best.pth only."
+
+
+def test_paths_inside_free_text_are_reduced_too():
+    info = parsed({**SCORES, "limitations": "Masks from C:/Users/someone/data/masks were used."}).metrics_info
+    assert info["limitations"] == "Masks from masks were used." and "someone" not in info["limitations"]
+
+
+# --- One fully valid source, never a mix (detection test pass item 4) -----------------------------------
+
+BAD_METRICS = {"dice": 1.5, "iou": -0.2, "precision": 0.85, "recall": 0.89, "model": "from metrics.json", "split": "val"}
+FULL_SUMMARY = {**REPORT_PY, "micro": {"dice": 0.81, "iou": 0.72, "precision": 0.83, "recall": 0.84}}
+
+
+def test_fully_valid_detection_summary_beats_partly_invalid_metrics(detection_dir):
+    write(detection_dir, "metrics.json", BAD_METRICS)
+    write(detection_dir, "summary.json", FULL_SUMMARY)
+    data = load_detection()
+    assert data.metrics == FULL_SUMMARY["micro"]  # all four from summary.json, none from metrics.json
+    assert "model" not in data.metrics_info and data.metrics_info["n_images"] == 1615
+    assert any("dice" in w for w in data.warnings)  # the broken file is still reported under Diagnostics
+
+
+def test_fully_valid_report_summary_beats_partly_invalid_metrics(detection_dir, report_dir):
+    write(detection_dir, "metrics.json", BAD_METRICS)
+    write(report_dir, "summary.json", FULL_SUMMARY)
+    assert load_detection().metrics == FULL_SUMMARY["micro"]
+
+
+def test_incomplete_but_valid_metrics_lose_to_a_complete_summary(detection_dir, report_dir):
+    write(detection_dir, "metrics.json", {"dice": 0.9, "iou": 0.8})  # valid, but only two scores
+    write(report_dir, "summary.json", FULL_SUMMARY)
+    assert load_detection().metrics == FULL_SUMMARY["micro"]
+
+
+def test_without_a_fully_valid_source_the_first_partial_one_is_shown(detection_dir, report_dir):
+    write(detection_dir, "metrics.json", BAD_METRICS)
+    write(report_dir, "summary.json", {**REPORT_PY, "micro": {"dice": 2.0, "iou": 0.5, "precision": 0.5,
+                                                               "recall": 0.5}})
+    data = load_detection()
+    assert data.metrics == {"precision": 0.85, "recall": 0.89}  # "—" for dice and iou, nothing from summary.json
+    assert data.metrics_info["model"] == "from metrics.json"
+    assert any("dice" in w for w in data.warnings)
+
+
+def test_fully_valid_metrics_json_still_wins(detection_dir, report_dir):
+    write(detection_dir, "metrics.json", {**SCORES, "split": "val"})
+    write(report_dir, "summary.json", FULL_SUMMARY)
+    data = load_detection()
+    assert data.metrics == SCORES and data.warnings == []

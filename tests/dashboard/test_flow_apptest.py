@@ -427,7 +427,9 @@ def test_accuracy_caption_and_evaluate_py_scores(images, stub_detection):
         "counts": {"true_positive": 1},
         "limitations": "Provider validation split used for model selection; not an independent test set."})
     text = run_stubbed_detection(new_app(), images[0])
-    assert ACCURACY_CAPTION in text and "not an independent test" in text and "never saw in training" not in text
+    # evaluate.py writes no "split", so the caption must not claim validation; its limitations text still shows.
+    assert ACCURACY_CAPTION not in text and "The report doesn&#x27;t say which images were scored." in text
+    assert "not an independent test" in text and "never saw in training" not in text
     assert "0.87" in text and "1615" in text and "best.pth" in text
     assert "C:/Users/someone" not in text  # never a local path
 
@@ -686,3 +688,87 @@ def test_diagnostics_list_the_report_files(images, report):
     for name in ("report/summary.json", "report/per_image_metrics.csv", "report/gallery_best.png",
                  "report/gallery_median.png", "report/gallery_worst.png", "detection/summary.json"):
         assert name in files
+
+
+# --- Detection test pass fixes: details allowlist, caption, undefined precision, Diagnostics paths --------
+
+
+def accuracy_caption(at: AppTest) -> str:
+    bodies = [b for b in html_bodies(at, "gog-section") if "How accurate is the model?" in b]
+    assert len(bodies) == 1
+    return bodies[0]
+
+
+@pytest.mark.parametrize("split, expected, validation_claim", [
+    ("val", "computed on the validation split. That split was also used to choose the checkpoint", True),
+    ("test", "Scores from 0 to 1, computed on the test split.", False),
+    ("train", "Scores from 0 to 1, computed on the training split.", False),
+    (None, "Scores from 0 to 1. The report doesn&#x27;t say which images were scored.", False),
+])
+def test_accuracy_caption_follows_the_files_split(split, expected, validation_claim, split_images, stub_detection,
+                                                  report):
+    metrics = {k: v for k, v in REPORT_METRICS.items() if k != "split"}
+    at = run_with_report(split_images["val/palsar_0.png"], metrics={**metrics, "split": split} if split else metrics)
+    caption = accuracy_caption(at)
+    assert expected in caption
+    assert ("validation" in caption) is validation_claim and ("choose the checkpoint" in caption) is validation_claim
+
+
+def test_unknown_metrics_keys_and_paths_never_reach_the_page(split_images, stub_detection, report):
+    at = run_with_report(split_images["val/palsar_0.png"], metrics={
+        **REPORT_METRICS, "checkpoint": "C:/Users/someone/models/best.pth", "data_dir": "C:/Users/someone/sar_data",
+        "notes": "internal note", "limitations": "Masks in /home/someone/masks/val were used."})
+    details = " ".join(html_bodies(at, "gog-details"))
+    assert "best.pth" in details and "Checkpoint" in details
+    page = page_text(at)
+    assert "someone" not in page and "sar_data" not in page and "internal note" not in page
+    assert "Masks in val were used." in page
+    diagnostics = [m.value for m in at.markdown if "not shown to viewers" in m.value]
+    assert diagnostics == ["- `metrics.json`: not shown to viewers: `data_dir`, `notes`."]
+    assert not any("couldn" in b for b in html_bodies(at, "gog-notice"))  # unknown keys are not a viewer issue
+
+
+def test_nothing_predicted_shows_precision_as_undefined(split_images, stub_detection, report):
+    csv = PER_IMAGE_CSV + "palsar_9.png,583,0.0,0.0,0.0,0.0\n"
+    block = score_block(run_with_report(split_images["val/palsar_9.png"], csv))
+    precision = block[block.index(">Precision<"):]
+    precision = precision[:precision.index("gog-stat-hint")] + precision[precision.index("gog-stat-hint"):][:120]
+    assert "gog-stat-empty" in precision and "No oil was predicted, so precision is undefined" in precision
+    assert block.count("0.00") == 3  # Dice, IoU and Recall stay as reported
+
+
+def test_reported_zero_precision_with_some_prediction_stays_a_number(split_images, stub_detection, report):
+    csv = PER_IMAGE_CSV + "palsar_9.png,583,0.0,0.0,0.0,0.4\n"
+    block = score_block(run_with_report(split_images["val/palsar_9.png"], csv))
+    assert "precision is undefined" not in block and "0.40" in block and block.count("0.00") == 3
+
+
+def diagnostics_code(at: AppTest) -> str:
+    return "\n".join(c.value for c in at.code)
+
+
+@pytest.mark.parametrize("dev", [False, True])
+def test_diagnostics_paths_are_relative_unless_dev(split_images, stub_detection, report, dev, monkeypatch):
+    from pathlib import Path
+
+    from dashboard_testkit import TEST_OUTPUTS
+
+    from services import settings
+    write_metrics(REPORT_METRICS)
+    checkpoint = settings.ROOT / "checkpoints" / "unet_best.pth"  # inside the (test) repo: shown relative
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"weights")
+    monkeypatch.setenv("GOG_CHECKPOINT", str(checkpoint))
+    at = new_app(dev=dev)
+    run_stubbed_detection(at, split_images["val/palsar_0.png"])
+    code, page = diagnostics_code(at), page_text(at)
+    user = Path.home().name
+    if dev:
+        assert str(TEST_OUTPUTS) in code and str(checkpoint) in code
+    else:
+        assert "checkpoint: checkpoints/unet_best.pth" in code
+        assert TEST_OUTPUTS.name in code and split_images["val/palsar_0.png"].parents[1].name in code
+        for secret in (str(TEST_OUTPUTS), str(split_images["val/palsar_0.png"].parents[1]), str(settings.ROOT),
+                       str(Path.home())):
+            assert secret not in page and secret.replace("\\", "\\\\") not in page
+        assert f"\\{user}\\" not in page and f"/{user}/" not in page

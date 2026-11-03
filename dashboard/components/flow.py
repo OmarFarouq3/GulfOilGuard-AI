@@ -145,6 +145,7 @@ def detect_controls(site: SpillSite) -> None:
             st.rerun()
 
 
+PRECISION_UNDEFINED = "No oil was predicted, so precision is undefined"
 SCORE_CAPTIONS = {
     "val": "How this image scored against its reference mask (validation report). The validation split was "
            "also used to choose the checkpoint, so this is not an independent test.",
@@ -172,10 +173,14 @@ def _image_score(current: selection.Selection) -> bool:
         ui.inline_empty(missing)
         return False
     ui.section("Score for this image", SCORE_CAPTIONS[split])
-    scores = row.scores()
-    ui.stat_tiles([(charts.METRIC_LABELS[k], f"{scores[k]:.2f}", "", charts.METRIC_HINTS[k]) for k in scores]
-                  + [("Reference oil", f"{row.ref_oil_fraction * 100:.1f}", "%",
-                      "Share of the image that is oil in the reference mask")])
+    tiles = []
+    for key, value in row.scores().items():
+        if key == "precision" and row.precision_undefined:  # the report writes 0/0 as 0
+            tiles.append((charts.METRIC_LABELS[key], None, "", PRECISION_UNDEFINED))
+        else:
+            tiles.append((charts.METRIC_LABELS[key], f"{value:.2f}", "", charts.METRIC_HINTS[key]))
+    ui.stat_tiles(tiles + [("Reference oil", f"{row.ref_oil_fraction * 100:.1f}", "%",
+                            "Share of the image that is oil in the reference mask")])
     return True
 
 

@@ -271,3 +271,40 @@ def test_malformed_hash_is_ignored_with_a_warning(tmp_path, checkpoint):
 def test_reported_hash_without_a_checkpoint_on_this_computer(tmp_path):
     check = check_checkpoint(tmp_path / "missing.pth", evaluation_files(tmp_path, {"checkpoint_sha256": "c" * 64}))
     assert check.state == "no_checkpoint"
+
+
+# --- Exact duplicates vs conflicting duplicates; undefined precision (detection test pass items 5, 6) ----
+
+
+def test_exact_duplicate_row_keeps_one_copy_with_a_note():
+    report = parse_per_image(HEADER + PALSAR_0 + PALSAR_0 + SENTINEL_1, default_split="val")
+    assert report.lookup("val", "palsar_0.png").dice == 0.7725 and len(report.rows) == 2
+    assert len(report.warnings) == 1
+    assert "1 exact duplicate row(s), one copy kept (line 3 repeats line 2)" in report.warnings[0]
+    assert "skipped" not in report.warnings[0]
+
+
+def test_conflicting_duplicates_stay_dropped_even_with_a_later_exact_repeat():
+    conflict = "palsar_0.png,10,0.1,0.1,0.1,0.1\n"
+    report = parse_per_image(HEADER + PALSAR_0 + conflict + PALSAR_0, default_split="val")
+    assert report.lookup("val", "palsar_0.png") is None
+    assert "with different values" in report.warnings[0] and "skipped 2 of 3 rows" in report.warnings[0]
+
+
+def test_same_name_in_two_splits_is_not_a_duplicate():
+    text = ("file,split,ref_oil_pixels,dice,iou,precision,recall\n"
+            "palsar_0.png,val,13039,0.7725,0.6294,0.7422,0.8054\n"
+            "palsar_0.png,train,13039,0.7725,0.6294,0.7422,0.8054\n")
+    report = parse_per_image(text)
+    assert not report.warnings and report.lookup("val", "palsar_0.png") and report.lookup("train", "palsar_0.png")
+
+
+@pytest.mark.parametrize("line, undefined", [
+    ("palsar_469.png,583,0.0,0.0,0.0,0.0", True),    # reference oil, nothing predicted: 0/0
+    ("palsar_1.png,583,0.0,0.0,0.0,0.4", False),     # recall > 0: something was predicted
+    ("palsar_2.png,583,0.0,0.0,0.3,0.0", False),     # precision > 0
+    ("palsar_3.png,0,0.0,0.0,0.0,0.0", False),       # no reference oil: shown as "No oil in the reference mask"
+])
+def test_precision_undefined_only_when_the_row_proves_nothing_was_predicted(line, undefined):
+    row = next(iter(parse_per_image(HEADER + line + "\n", default_split="val").rows.values()))
+    assert row.precision_undefined is undefined

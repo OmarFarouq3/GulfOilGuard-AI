@@ -19,7 +19,7 @@ from typing import Any
 
 import config
 from services import schema
-from services.files import read_geojson, read_image, read_json_object, validate_geojson
+from services.files import hide_paths, read_geojson, read_image, read_json_object, validate_geojson
 from services.imaging import compose_overlay
 from services.models import DetectionData, DetectionScene
 
@@ -68,14 +68,36 @@ def _score_source(raw: dict, data: DetectionData, name: str) -> dict:
     return {}
 
 
+# The only evaluation details viewers see. Everything else in the file is left out of the page.
+DETAIL_KEYS = ("model", "split", "n_images", "threshold", "checkpoint", "epoch", "aggregation", "created",
+               "limitations")
+# Keys the evaluation scripts write that are used elsewhere or deliberately not shown: not "unknown".
+OTHER_KNOWN_KEYS = {*config.DETECTION_METRICS, *NESTED_SCORE_KEYS, "per_class", "pairs", "synthetic", "counts",
+                    "image_size", "n_with_oil", "n_empty_reference", "macro_images_with_oil", "threshold_sweep",
+                    "checkpoint_sha256"}
+
+
 def _evaluation_info(raw: dict) -> dict[str, Any]:
-    """Details next to the scores, without the scores themselves or local paths."""
-    info = {k: v for k, v in raw.items() if k not in (*config.DETECTION_METRICS, "per_class", *NESTED_SCORE_KEYS)}
-    if isinstance(info.get("checkpoint"), str):
-        info["checkpoint"] = Path(info["checkpoint"]).name  # evaluate.py stores an absolute path
-    if "pairs" in info and "n_images" not in info:
-        info["n_images"] = info.pop("pairs")  # evaluate.py's name for the number of images
+    """The allowlisted details (DETAIL_KEYS) next to the scores; path-like text is reduced to file names.
+
+    ``synthetic`` is kept as well: it labels the scores as illustrative (never shown as a detail).
+    """
+    if "pairs" in raw and "n_images" not in raw:
+        raw = {**raw, "n_images": raw["pairs"]}  # evaluate.py's name for the number of images
+    info: dict[str, Any] = {}
+    for key in DETAIL_KEYS:
+        value = raw.get(key)
+        if value is None or isinstance(value, (dict, list)):
+            continue
+        info[key] = hide_paths(value) if isinstance(value, str) else value  # evaluate.py stores an absolute checkpoint
+    if raw.get("synthetic") is True:
+        info["synthetic"] = True
     return info
+
+
+def _unknown_keys(raw: dict, name: str) -> list[str]:
+    unknown = sorted(str(k) for k in raw if k not in DETAIL_KEYS and k not in OTHER_KNOWN_KEYS)
+    return [f"`{name}`: not shown to viewers: {', '.join(f'`{k}`' for k in unknown)}."] if unknown else []
 
 
 def parse_metrics(raw: dict | None, data: DetectionData, name: str = "metrics.json") -> None:
@@ -110,6 +132,7 @@ def parse_metrics(raw: dict | None, data: DetectionData, name: str = "metrics.js
         data.warnings.append(f"`{name}`: `per_class` should be an object of {{class: {{metric: value}}}}.")
 
     data.metrics_info = _evaluation_info(raw) if data.metrics else {}
+    data.notes += _unknown_keys(raw, name) if data.metrics else []
 
 
 def parse_spill(collection: dict | None, data: DetectionData, name: str = "spill.geojson") -> None:
@@ -158,18 +181,36 @@ def _read_scene(image_id: str, files: dict[str, Path], data: DetectionData) -> D
     return scene if scene.image or scene.mask or scene.overlay else None
 
 
-def _read_metrics(data: DetectionData) -> None:
-    """metrics.json first; summary.json (report.py) only when metrics.json gives no scores.
+def _complete(candidate: DetectionData) -> bool:
+    return bool(candidate.metrics) and set(candidate.metrics) == set(config.DETECTION_METRICS) and not candidate.warnings
 
-    summary.json is looked for in outputs/detection/, then in outputs/report/ (report.py's default).
+
+def _read_metrics(data: DetectionData) -> None:
+    """Scores from ONE evaluation file, never a mix of two.
+
+    Files are tried in config.EVALUATION_FILES order (metrics.json, then summary.json in
+    outputs/detection/ and outputs/report/). The first file whose four scores are all valid wins;
+    if none is fully valid, the first file with any valid score is used (the rest show as "—").
+    Problems in the files before the one used, and in that file itself, go to Diagnostics.
     """
+    candidates = []
     for path in config.EVALUATION_FILES:
+        candidate = DetectionData()
         raw, warning = read_json_object(path)
         if warning:
-            data.warnings.append(warning)
-        parse_metrics(raw, data, path.name)
-        if data.metrics:
-            return
+            candidate.warnings.append(warning)
+        parse_metrics(raw, candidate, path.name)
+        candidates.append(candidate)
+    chosen = next((c for c in candidates if _complete(c)), None) or next((c for c in candidates if c.metrics), None)
+    for candidate in candidates:
+        data.warnings += candidate.warnings
+        if candidate is chosen:
+            break
+    if chosen is None:
+        return
+    data.metrics, data.per_class, data.metrics_info = chosen.metrics, chosen.per_class, chosen.metrics_info
+    data.synthetic |= chosen.synthetic
+    data.notes += chosen.notes
 
 
 GALLERIES = (("gallery_best", "Best"), ("gallery_median", "Median"), ("gallery_worst", "Worst"))

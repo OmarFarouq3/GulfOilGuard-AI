@@ -78,10 +78,15 @@ def options_panel() -> None:
             diagnostics()
 
 
+def shown_path(path) -> str:
+    """Repo-relative (outside the repo: file name only); the absolute path only with ?dev=1."""
+    return str(path) if dev_mode() else settings.display(path)
+
+
 def diagnostics() -> None:
-    """Technical details for developers: data folder, file status, loader warnings."""
+    """Technical details for developers: data folder, file status, loader warnings and notes."""
     st.caption("Data folder")
-    st.code(str(config.OUTPUTS_DIR), language=None, wrap_lines=True)
+    st.code(shown_path(config.OUTPUTS_DIR), language=None, wrap_lines=True)
     rows = []
     for module, files in (("detection", config.DETECTION_FILES), ("report", config.REPORT_FILES),
                           ("drift", config.DRIFT_FILES), ("routing", config.ROUTING_FILES)):
@@ -93,11 +98,12 @@ def diagnostics() -> None:
     st.dataframe(rows, hide_index=True, width="stretch")
 
     st.caption(f"Radar image folder ({len(available_images())} readable images)")
-    st.code(str(image_picker.image_dir()), language=None, wrap_lines=True)
+    st.code(shown_path(image_picker.image_dir()), language=None, wrap_lines=True)
     st.caption("Detection setup (environment > .env > standard layout)")
     checkpoint, python = settings.resolve_checkpoint(), settings.resolve_python()
-    st.code(f"checkpoint: {checkpoint.path}  [{checkpoint.source}{'' if checkpoint.path.is_file() else ', missing'}]\n"
-            f"python:     {python.path}  [{python.source}]", language=None, wrap_lines=True)
+    st.code(f"checkpoint: {shown_path(checkpoint.path)}  [{checkpoint.source}"
+            f"{'' if checkpoint.path.is_file() else ', missing'}]\n"
+            f"python:     {shown_path(python.path)}  [{python.source}]", language=None, wrap_lines=True)
 
     warnings = list(settings.env_file()[1])
     warnings += report_loader.per_image_report().warnings + load_galleries()[1]
@@ -105,7 +111,7 @@ def diagnostics() -> None:
     for loader in (load_detection, load_drift, load_routing, load_spills):
         data = loader()
         if data is not None:
-            warnings.extend(data.warnings)
+            warnings.extend(data.warnings + getattr(data, "notes", []))
     st.caption("Loader warnings")
     if warnings:
         for message in warnings:

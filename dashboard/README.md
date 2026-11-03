@@ -126,6 +126,8 @@ Multiple scenes: name files `<image_id>_image.png`, `<image_id>_mask.png`, `<ima
 
 Either shape is accepted: the four scores at the top level (above), nested under `"metrics"` as `detection/evaluate.py --output-dir` writes it, or under `"micro"` as in `report.py`'s `summary.json`. Optional `"checkpoint_sha256"` (in `metrics.json` or `summary.json`) is compared with the SHA-256 of the checkpoint the dashboard runs: the Detect page then says "Scores were computed on this checkpoint", or warns "These scores were computed on a different checkpoint than the one running" (also under Diagnostics). Without it the page notes that the report doesn't say which checkpoint was scored. The hash is computed once per checkpoint file (cached on path, modification time and size).
 
+Scores always come from **one** file, never a mix: the first of `detection/metrics.json`, `detection/summary.json`, `report/summary.json` whose four scores are all valid; if none is fully valid, the first with any valid score (the others show as "—", with the problem under Diagnostics). Viewers see only these evaluation details: `model`, `split`, `n_images`, `threshold`, `checkpoint`, `epoch`, `aggregation`, `created` and `limitations`; any path-like text in them is reduced to its file name. Other keys are ignored on the page and listed by name only under Diagnostics. The caption under "How accurate is the model?" follows `split`: `val` adds that the split also chose the checkpoint; another split is named as such; without `split` the page says the report doesn't say which images were scored.
+
 ### Evaluation report → `outputs/report/`
 
 What `detection/report.py` writes by default (`--output-dir outputs/report`). All optional; the dashboard only reads them.

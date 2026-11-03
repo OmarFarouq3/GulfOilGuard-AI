@@ -23,16 +23,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from PIL import Image
+
 import config
 from services import schema  # noqa: F401  (puts the repo root on sys.path for shared/)
 from services import settings
-from shared.detection_cli import EXIT_NO_TORCH, KINDS, MODULE, RESULT_PREFIX, atomic_replace
+from shared.detection_cli import EXIT_FAILED, EXIT_NO_TORCH, KINDS, MODULE, RESULT_PREFIX, atomic_replace
 
 CHECKPOINT_ENV = settings.CHECKPOINT_KEY
 PYTHON_ENV = settings.PYTHON_KEY
 DETAIL_LINES = 40
 
-RunState = Literal["done", "cached", "checkpoint_missing", "image_missing", "setup_needed", "failed", "timeout"]
+RunState = Literal["done", "cached", "checkpoint_missing", "image_missing", "image_unreadable", "setup_needed",
+                   "failed", "timeout"]
 
 
 @dataclass(frozen=True)
@@ -133,6 +136,32 @@ def _checkpoint_missing_message(checkpoint: settings.Resolved) -> tuple[str, str
             f"{settings.STANDARD_CHECKPOINT.as_posix()} or set {CHECKPOINT_ENV}.", detail)
 
 
+IMAGE_UNREADABLE = ("This image could not be read, so the model could not run on it. Pick another image on Overview, "
+                    "or continue with the simulated detection.")
+CHECKPOINT_UNLOADABLE = (f"The model file could not be loaded. Check that {CHECKPOINT_ENV} points at a trained U-Net "
+                         "checkpoint (.pth).")
+
+
+def image_readable(path: Path) -> bool:
+    """The image opens and decodes (what the model needs first); checked before starting the subprocess."""
+    try:
+        with Image.open(path) as img:
+            img.verify()
+        with Image.open(path) as img:
+            img.load()
+        return True
+    except Exception:  # PIL raises many exception types for bad images
+        return False
+
+
+def _interpreter_message(python: settings.Resolved) -> tuple[str, str]:
+    """The detection interpreter is missing or won't start: name the setting and what was checked."""
+    short, detail = _checked(python, last_state="could not be started" if python.path.exists() else None)
+    return (f"The detection model could not be started: its Python is missing or would not run. Checked, in order: "
+            f"{short}. Create {settings.DETECT_VENV}/ with PyTorch or set {PYTHON_ENV} to a Python that has it, or "
+            "continue with the simulated detection.", detail)
+
+
 def _setup_message(python: settings.Resolved | None = None) -> str:
     python = python or settings.resolve_python()
     short, _detail = _checked(python, last_state="no PyTorch")
@@ -162,6 +191,8 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
     checkpoint = resolved_checkpoint.path
     if not image_path.is_file():
         return DetectionRun("image_missing", "The selected radar image is no longer available.", image_id)
+    if not image_readable(image_path):
+        return DetectionRun("image_unreadable", IMAGE_UNREADABLE, image_id)
     if not checkpoint.is_file():
         message, detail = _checkpoint_missing_message(resolved_checkpoint)
         return DetectionRun("checkpoint_missing", message, image_id, detail=detail)
@@ -178,16 +209,21 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
         return DetectionRun("timeout", f"Detection did not finish within {timeout_s:g} s.", image_id,
                             detail=" ".join(command))
     except OSError as exc:  # interpreter missing or not executable
-        return DetectionRun("failed", "The detection model could not be started.", image_id,
-                            detail=f"{' '.join(command)}\n{exc}")
+        message, checked = _interpreter_message(resolved_python)
+        return DetectionRun("setup_needed", message, image_id, detail=f"{checked}\n\n{' '.join(command)}\n{exc}")
 
     detail = _tail(result.stderr) or _tail(result.stdout)
     if result.returncode == EXIT_NO_TORCH:
         checked = _checked(resolved_python, last_state="no PyTorch")[1]
         return DetectionRun("setup_needed", _setup_message(resolved_python), image_id,
                             detail=f"{checked}\n\n{detail}".strip())
+    if result.returncode == EXIT_FAILED:
+        # The CLI's exit codes don't separate a bad checkpoint from a bad image (both EXIT_FAILED). The
+        # image was decoded above, so the checkpoint is what failed to load (or a rarer runtime error).
+        return DetectionRun("failed", CHECKPOINT_UNLOADABLE, image_id, detail=f"exit code {result.returncode}\n{detail}")
     if result.returncode != 0:
-        return DetectionRun("failed", f"Detection failed (exit code {result.returncode}).", image_id, detail=detail)
+        return DetectionRun("failed", "Detection could not be completed.", image_id,
+                            detail=f"exit code {result.returncode}\n{detail}")
 
     lines = [line for line in (result.stdout or "").splitlines() if line.startswith(RESULT_PREFIX)]
     try:

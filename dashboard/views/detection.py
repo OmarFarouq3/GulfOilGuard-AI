@@ -26,6 +26,23 @@ ui.page_heading(
 real_report = data is not None and not data.is_mock and data.metrics_info.get("synthetic") is not True
 
 
+DETAIL_LABELS = {"model": "Model", "split": "Evaluated on", "n_images": "Images evaluated",
+                 "threshold": "Decision threshold", "checkpoint": "Checkpoint", "epoch": "Checkpoint epoch",
+                 "aggregation": "Aggregation", "created": "Evaluated"}  # "limitations" is shown as a caption
+SPLIT_NAMES = {"train": "training", "test": "test"}
+
+
+def accuracy_caption(split: object) -> str:
+    """Name the split the scores come from, as the evaluation file states it; never assume validation."""
+    name = split.strip().lower() if isinstance(split, str) else ""
+    if name in ("val", "validation"):
+        return ("Scores from 0 to 1, computed on the validation split. That split was also used to choose the "
+                "checkpoint, so these are not an independent test.")
+    if name:
+        return f"Scores from 0 to 1, computed on the {SPLIT_NAMES.get(name, split.strip())} split."
+    return "Scores from 0 to 1. The report doesn't say which images were scored."
+
+
 def checkpoint_note() -> None:
     """Whether the scores were computed on the checkpoint this dashboard runs (checkpoint_sha256)."""
     check = report_loader.check_checkpoint(inference.checkpoint_path())
@@ -83,8 +100,7 @@ else:
 
     # --- Model quality ---------------------------------------------------------
     if data.metrics:
-        ui.section("How accurate is the model?", "Scores from 0 to 1, computed on the validation split. That "
-                   "split was also used to choose the checkpoint, so these are not an independent test.")
+        ui.section("How accurate is the model?", accuracy_caption(data.metrics_info.get("split")))
         ui.stat_tiles([
             (charts.METRIC_LABELS[k], f"{data.metrics[k]:.2f}" if k in data.metrics else None, "",
              charts.METRIC_HINTS[k])
@@ -97,14 +113,8 @@ else:
             figure = charts.per_class_bar(data.per_class) if data.per_class else charts.metrics_bar(data.metrics)
             st.plotly_chart(figure, width="stretch", config=charts.CHART_CONFIG)
         with right:
-            labels = {"model": "Model", "split": "Evaluated on", "n_images": "Images evaluated",
-                      "threshold": "Decision threshold", "checkpoint": "Checkpoint", "epoch": "Checkpoint epoch",
-                      "image_size": "Input size (px)", "aggregation": "Aggregation",
-                      "n_with_oil": "Images with oil", "n_empty_reference": "Images without oil"}
-            details = {labels.get(k, k.replace("_", " ").capitalize()): v
-                       for k, v in data.metrics_info.items()
-                       if k not in ("synthetic", "limitations", "checkpoint_sha256")
-                       and not isinstance(v, (dict, list))}
+            # metrics_info holds only detection_loader.DETAIL_KEYS (path-like text already reduced).
+            details = {DETAIL_LABELS[k]: v for k, v in data.metrics_info.items() if k in DETAIL_LABELS}
             ui.section("Evaluation details")
             if details:
                 ui.details_table(details)
