@@ -300,7 +300,4 @@ secrets/
 
 # Local radar image dataset (repo root only; dashboard/assets/ stays tracked)
 /assets/
-
-# assets/ is tracked, including the sample radar images in assets/images/
-# (re-included here because the generic "images/" rule above matches any folder named images).
-!/assets/images/
+# /assets/ is local-only, except the ten sample images in assets/images/train that were committed earlier.
