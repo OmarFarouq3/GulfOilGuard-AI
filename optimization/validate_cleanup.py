@@ -19,7 +19,9 @@ What is checked, in five groups:
                     the plan counted it, see tank_basis in comparison.json; else pure oil, with
                     the emulsion as a warning), sailing time = distance / speed, distance no
                     shorter than a straight line, finish_hours = sailing + cleanup, working
-                    hours, no target served twice, served_by agrees, unserved
+                    hours, meeting times in order (each stop met after dispatch and after the
+                    previous stop is cleaned), no target served twice, served_by agrees, every
+                    target either in a route or listed unserved
   E. comparison     rule violations, and every metric in comparison.json recalculated from the
                     route and target files (not taken from the file)
 
@@ -47,6 +49,7 @@ KNOTS_PER_M_PER_S = 1.943844
 VOLUME_TOL = 0.01  # m3: files round volumes to 3 decimals
 SPREAD_WARN_KM = 1.5  # a patch wider than this is not one skimming position
 EMULSION_TOL = 0.001  # share: meet_hours is rounded to 0.01 h, which moves the water fraction a little
+TIME_TOL = 0.02  # h: meet_hours is rounded to 0.01 h
 
 
 def _water_at(water: dict[float, float], hours: float) -> float | None:
@@ -234,6 +237,7 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
 
     # targets.geojson vs the rebuilt tracks.
     tfile = _read(routing_dir / "targets.geojson")["features"]
+    r.check(g, bool(tfile), f"targets.geojson holds {len(tfile)} target(s)")
     file_ids = {f["properties"]["target_id"] for f in tfile}
     track_by_id = {t.target_id: t for t in patches.tracks}
     r.check(g, file_ids == set(track_by_id), f"targets.geojson has the same {len(file_ids)} target ids as the "
@@ -263,7 +267,7 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
                      "lat": loc.latitude, "lon": loc.longitude})
 
     wide = [row["target_id"] for row in rows if row["spread90_km"] > SPREAD_WARN_KM]
-    spreads = [row["spread90_km"] for row in rows]
+    spreads = [row["spread90_km"] for row in rows] or [0.0]  # no matching target: reported above
     r.check(g, not wide, f"patch size where it is met: 90 % of a patch's oil lies within {min(spreads):.1f} to "
             f"{max(spreads):.1f} km of the point the vessel aims at" + ("" if not wide else
             f"; {len(wide)} patch(es) wider than {SPREAD_WARN_KM:g} km, so 'one skimming position' is an assumption"),
@@ -327,20 +331,29 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
         w = _water_at(wf, meet) if meet is not None else None
         return None if w is None else targets[t]["oil_volume_m3"] / (1 - w)
 
+    dispatch = drift_info["dispatch_hours"]
     seen: dict[str, str] = {}
     out = []
     for f in routes:
         p = f["properties"]
         vid, coords = p["vessel_id"], f["geometry"]["coordinates"]
-        v = by_id[vid]
+        v = by_id.get(vid)
+        if v is None:
+            r.fail(g, f"{vid} has a route but is not in the fleet file: pass the --fleet the plan was made with")
+            continue
         assigned = p["assigned_target_ids"]
+        missing = [t for t in assigned if t not in targets]
+        if missing:
+            r.fail(g, f"{vid}: stop(s) {missing} are not in targets.geojson")
+            assigned = [t for t in assigned if t in targets]
         port = [v.location.longitude, v.location.latitude]
         r.check(g, coords[0] == port and coords[-1] == port and len(coords) == len(assigned) + 2,
                 f"{vid}: starts and ends at its home port, {len(assigned)} stop(s) {assigned}")
-        for tid in assigned:
+        for tid in assigned + missing:
             if tid in seen:
                 r.fail(g, f"{tid} is served by both {seen[tid]} and {vid}")
             seen[tid] = vid
+        for tid in assigned:
             if targets.get(tid, {}).get("served_by") != vid:
                 r.fail(g, f"{tid}: targets.geojson says served_by {targets.get(tid, {}).get('served_by')}, routes say {vid}")
         oil = sum(targets[t]["oil_volume_m3"] for t in assigned)
@@ -393,6 +406,26 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
         r.check(g, finish <= v.available_hours + 1e-6,
                 f"{vid}: finishes in {finish:.2f} h of a {v.available_hours:g} h shift ({km:.1f} km, "
                 "trip back to port included)")
+        # Timeline: the first stop is met after dispatch, each next one after the previous stop is
+        # cleaned, and the last cleanup ends before the vessel is back (finish_hours after dispatch).
+        meets = [targets[t].get("meet_hours") for t in assigned]
+        if assigned and None in meets:
+            r.fail(g, f"{vid}: no meet_hours for {[t for t, m in zip(assigned, meets) if m is None]}")
+        elif assigned:
+            tank_each = [e if basis == "emulsion" and e is not None else targets[t]["oil_volume_m3"]
+                         for t, e in zip(assigned, each)]
+            done = [m + vol / rate for m, vol in zip(meets, tank_each)]
+            clash = [f"{assigned[k]} met at {meets[k]:g} h, before {assigned[k - 1]} is cleaned ({done[k - 1]:.2f} h)"
+                     for k in range(1, len(assigned)) if meets[k] < done[k - 1] - TIME_TOL]
+            early = meets[0] < dispatch - TIME_TOL
+            late_end = done[-1] > dispatch + finish + TIME_TOL
+            r.check(g, not (clash or early or late_end),
+                    f"{vid}: meetings in order, {', '.join(f'{m:g}' for m in meets)} h after release; first after "
+                    f"dispatch ({dispatch:g} h), each after the previous stop is cleaned, last cleaned at "
+                    f"{done[-1]:.2f} h, before the vessel is back ({dispatch + finish:.2f} h)"
+                    + ("" if not clash else f": {'; '.join(clash)}")
+                    + ("" if not early else f": first meeting before dispatch")
+                    + ("" if not late_end else f": last cleanup ends after finish_hours"))
         out.append({"vessel_id": vid, "targets": assigned, "oil_m3": round(oil, 2), "emulsion_m3": round(emulsion, 1),
                     "capacity_m3": v.capacity_m3, "distance_km": round(km, 1),
                     "travel_hours": round(p["estimated_travel_hours"], 2), "cleanup_hours": round(cleanup, 2),
@@ -400,6 +433,13 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
                     "_exact": {"oil": oil, "km": km, "sailing": p["estimated_travel_hours"], "finish": finish}})
 
     unserved = summary.get("unserved_target_ids", [])
+    # Every target is either in a route or listed unserved, and served_by says which.
+    not_routed = set(targets) - set(seen)
+    r.check(g, not_routed == set(unserved),
+            f"every target is in a route or listed unserved (not in a route: {sorted(not_routed) or 'none'}; "
+            f"summary.json unserved: {sorted(unserved) or 'none'})")
+    stale = sorted(t for t in not_routed if targets[t].get("served_by"))
+    r.check(g, not stale, "targets in no route have no served_by" + ("" if not stale else f": {stale}"))
     unserved_m3 = sum(targets[t]["oil_volume_m3"] for t in unserved if t in targets)
     reasons = next((part for part in summary.get("message", "").split("; ") if part.startswith("unserved:")), "")
     r.check(g, not unserved, f"unserved targets: {unserved or 'none'} ({unserved_m3:.1f} m3). {reasons}",
@@ -541,8 +581,9 @@ def main() -> None:
         "simulation_id": drift["meta"].get("simulation_id"),
         "targets": check_targets(drift_dir, plan_dir, vessels, comparison, drift, r),
         "fleet_rows": check_fleet(vessels, release, _read(plan_dir / "summary.json").get("message", ""), r),
-        "optimized": check_routes(plan_dir, vessels, drift, r),
     }
+    drift["dispatch_hours"] = result["targets"]["dispatch_hours"]
+    result["optimized"] = check_routes(plan_dir, vessels, drift, r)
     if baseline_dir is not None and (baseline_dir / "summary.json").exists():
         result["baseline"] = check_routes(baseline_dir, vessels, drift, r, label="baseline")
     if comparison:

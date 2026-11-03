@@ -67,7 +67,7 @@ must provide or can read.
   * One-command CLI pipeline to solve a scenario, run baseline evaluation, and export the plan.
 
 * **`validate_cleanup.py` (Nihal)**:
-  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank and cleanup time (on the plan's `tank_basis`: emulsion, or pure oil for older plans), sailing time (distance / speed), `finish_hours` (sailing + cleanup), working hours, return to port, unserved targets, and every metric in `comparison.json` recalculated from the route and target files. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
+  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank and cleanup time (on the plan's `tank_basis`: emulsion, or pure oil for older plans), sailing time (distance / speed), `finish_hours` (sailing + cleanup), working hours, meeting times in order, return to port, every target either served or listed unserved, and every metric in `comparison.json` recalculated from the route and target files. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
 
 ---
 
