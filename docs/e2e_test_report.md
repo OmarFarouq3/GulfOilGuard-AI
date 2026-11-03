@@ -2,7 +2,7 @@
 
 Tested by Maria on 3 Nov 2026 on a Windows laptop (Python 3.14, with internet), on `main` as of 3 Nov 2026, set up from `requirements.txt` and `dashboard/requirements.txt`. Every result below comes from a command run or a file opened on that laptop; the commands are in section 10.
 
-**Inputs.** The team outputs shared on SharePoint on 3 Nov, copied into `outputs/`: `detection/metrics.json` (Team A); `drift/drift.geojson` and `meta.json` from `Gulf drift 24h - 2026-10-23` (Team B); `routing/` with the optimized `routes.geojson`, `summary.json`, `targets.geojson` and `comparison.json`, and `routing/baseline/` with the baseline plan (Team C).
+**Inputs.** The team outputs shared on SharePoint on 3 Nov, copied into `outputs/`: `detection/metrics.json` (Team A); `drift/drift.geojson` and `meta.json` from `Gulf drift 24h - 2026-10-23` (Team B), the run for demo site S1 at 25.85°N, 55.65°E; `routing/` with the optimized `routes.geojson`, `summary.json`, `targets.geojson` and `comparison.json`, and `routing/baseline/` with the baseline plan (Team C).
 
 **Priority scale.** **P1** blocks the Detect → Predict → Respond demo. **P2** shows a wrong number or a misleading claim on stage. **P3** is cleanup that does not change what the audience sees.
 
@@ -94,6 +94,7 @@ The checker builds the shared dataclasses from each file and runs the contract c
 
 ## 9. Not tested
 
+- Demo sites S2, S3 and S4 (`outputs/sites/S2` to `S4`), which Team B will share after Nihal's validation; this test used S1. At S3, 444 of the 1,000 particles are stranded on the coast by 24 h, a case not covered here.
 - The 14 drift tests, because OpenDrift is not installed on the laptop.
 - The dashboard's built-in demo scenario (gear menu → Demo scenario).
 - The dashboard without internet, or on the venue network.
