@@ -15,8 +15,10 @@ What is checked, in five groups:
                     untargeted = afloat), split parts add up to their patch, targets.geojson
                     matches the patches rebuilt from the drift, how spread out each patch is
   C. fleet          ports are known depots (Port Saqr, Hamriyah), speeds and tanks
-  D. routes         start and end at the home port, tank (pure oil and as emulsion), working
-                    hours, cleanup time, no target served twice, served_by agrees, unserved
+  D. routes         start and end at the home port, tank and cleanup time (as emulsion when
+                    the plan counted it, see tank_basis in comparison.json; else pure oil, with
+                    the emulsion as a warning), working hours, no target served twice,
+                    served_by agrees, unserved
   E. comparison     rule violations, optimized vs baseline
 
 Every line is OK, WARN (plausible but an assumption to state) or FAIL (a broken rule).
@@ -28,6 +30,7 @@ Run from the repository root:
 
 import argparse
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta
 from math import cos, hypot, radians
 from pathlib import Path
@@ -41,6 +44,21 @@ from shared.schemas import GeoCoordinate
 KNOTS_PER_M_PER_S = 1.943844
 VOLUME_TOL = 0.01  # m3: files round volumes to 3 decimals
 SPREAD_WARN_KM = 1.5  # a patch wider than this is not one skimming position
+EMULSION_TOL = 0.001  # share: meet_hours is rounded to 0.01 h, which moves the water fraction a little
+
+
+def _water_at(water: dict[float, float], hours: float) -> float | None:
+    """Water fraction at any time: straight line between the hourly values, held outside them."""
+    if not water:
+        return None
+    steps = sorted(water)
+    if hours <= steps[0]:
+        return water[steps[0]]
+    if hours >= steps[-1]:
+        return water[steps[-1]]
+    i = next(k for k in range(1, len(steps)) if steps[k] > hours)
+    a, b = steps[i - 1], steps[i]
+    return water[a] + (hours - a) / (b - a) * (water[b] - water[a])
 
 
 class Report:
@@ -165,7 +183,11 @@ def _patch_spread_km(forecast, track_particle_ids: set[str], hours: float) -> fl
 
 def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict, drift_info: dict, r: Report) -> dict:
     g = "B targets"
-    forecast = load_drift(drift_dir)
+    emulsion = drift_info["tank_basis"] == "emulsion"
+    r.ok(g, f"tank basis of the plan: {drift_info['tank_basis']}"
+         + ("" if (comparison.get("drift") or {}).get("tank_basis")
+            else " (comparison.json has no tank_basis: made before emulsion counting)"))
+    forecast = load_drift(drift_dir, replace(DEFAULT_DRIFT_CONFIG, count_emulsion=emulsion))
     dispatch = float((comparison.get("drift") or {}).get("dispatch_hours", DEFAULT_DRIFT_CONFIG.dispatch_hours))
     if not comparison:
         r.warn(g, f"no comparison.json, so the dispatch hour is taken as the default {dispatch:g} h")
@@ -190,8 +212,9 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
     for name, parts in parents.items():
         if len(parts) > 1:
             same = all(p.positions == parts[0].positions for p in parts)
-            r.check(g, same, f"{name} is split into {len(parts)} parts (more oil than the largest tank, "
-                    f"{max_tank:g} m3) that move together, {parts[0].volumes[0]:.1f} m3 each")
+            r.check(g, same, f"{name} is split into {len(parts)} parts (it would fill more than the largest "
+                    f"tank, {max_tank:g} m3, {'as emulsion ' if emulsion else ''}at some step) that move together, "
+                    f"{parts[0].volumes[0]:.1f} m3 oil each at dispatch")
 
     # Particles of each patch (rebuilt the same way drift_targets does it).
     cell = DEFAULT_DRIFT_CONFIG.cell_deg
@@ -284,6 +307,12 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
     routes_path = routing_dir / "routes.geojson"
     routes = _read(routes_path)["features"] if routes_path.exists() else []
     wf = {h: w for h, w in drift_info["water_fraction_by_hour"].items() if w is not None}
+    basis = drift_info["tank_basis"]
+
+    def emulsion_of(t: str) -> float | None:
+        meet = targets[t].get("meet_hours")
+        w = _water_at(wf, meet) if meet is not None else None
+        return None if w is None else targets[t]["oil_volume_m3"] / (1 - w)
 
     seen: dict[str, str] = {}
     out = []
@@ -302,21 +331,34 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
             if targets.get(tid, {}).get("served_by") != vid:
                 r.fail(g, f"{tid}: targets.geojson says served_by {targets.get(tid, {}).get('served_by')}, routes say {vid}")
         oil = sum(targets[t]["oil_volume_m3"] for t in assigned)
-        r.check(g, abs(oil - p["oil_collected_m3"]) < VOLUME_TOL and oil <= v.capacity_m3 + 1e-9,
-                f"{vid}: {oil:.1f} m3 pure oil in a {v.capacity_m3:g} m3 tank ({oil / v.capacity_m3:.0%})")
-        # Emulsion: the oil takes up water, so what goes in the tank is bigger.
-        emulsion = 0.0
-        for t in assigned:
-            meet = targets[t].get("meet_hours")
-            if meet is not None and wf:
-                w = wf[min(wf, key=lambda h: abs(h - meet))]
-                emulsion += targets[t]["oil_volume_m3"] / (1 - w)
-        if emulsion:
-            r.check(g, emulsion <= v.capacity_m3, f"{vid}: as emulsion (water uptake from meta.json) about "
-                    f"{emulsion:.0f} m3, {emulsion / v.capacity_m3:.0%} of the tank", level_if_not="WARN")
-        cleanup = oil / rate
-        r.check(g, abs(cleanup - p["cleanup_hours"]) < 0.01,
-                f"{vid}: cleanup {p['cleanup_hours']:.2f} h = {oil:.1f} m3 / {rate:g} m3/h")
+        r.check(g, abs(oil - p["oil_collected_m3"]) < VOLUME_TOL,
+                f"{vid}: recovers {oil:.1f} m3 pure oil (oil_collected_m3 {p['oil_collected_m3']:.1f})")
+        # Emulsion: the oil takes up water (meta.json, at the meeting time), so the tank takes more.
+        each = [emulsion_of(t) for t in assigned]
+        emulsion = sum(e for e in each if e is not None) if all(e is not None for e in each) else 0.0
+        if basis == "emulsion":
+            for t, e in zip(assigned, each):
+                if e is not None and "emulsion_m3" in targets[t]:
+                    r.check(g, abs(e - targets[t]["emulsion_m3"]) <= max(VOLUME_TOL, EMULSION_TOL * e),
+                            f"{t}: emulsion {targets[t]['emulsion_m3']:.2f} m3 = {targets[t]['oil_volume_m3']:.2f} m3 "
+                            f"oil / (1 - {targets[t].get('water_fraction', 0):.3f} water) at {targets[t]['meet_hours']:g} h"
+                            f" (rechecked {e:.2f} m3)")
+            if "emulsion_collected_m3" in p:
+                r.check(g, abs(emulsion - p["emulsion_collected_m3"]) <= max(VOLUME_TOL, EMULSION_TOL * emulsion),
+                        f"{vid}: emulsion_collected_m3 {p['emulsion_collected_m3']:.1f} equals its targets' emulsion "
+                        f"(rechecked {emulsion:.1f} m3)")
+            load = emulsion
+        else:
+            load = oil
+            if emulsion:
+                r.check(g, emulsion <= v.capacity_m3, f"{vid}: planned as pure oil; as emulsion (water uptake "
+                        f"from meta.json) about {emulsion:.0f} m3, {emulsion / v.capacity_m3:.0%} of the tank",
+                        level_if_not="WARN")
+        r.check(g, load <= v.capacity_m3 + 1e-9,
+                f"{vid}: tank {load:.1f} m3 {basis} of {v.capacity_m3:g} m3 ({load / v.capacity_m3:.0%})")
+        cleanup = load / rate
+        r.check(g, abs(cleanup - p["cleanup_hours"]) <= max(0.01, EMULSION_TOL * cleanup),
+                f"{vid}: cleanup {p['cleanup_hours']:.2f} h = {load:.1f} m3 {basis} / {rate:g} m3/h")
         r.check(g, p["finish_hours"] <= v.available_hours + 1e-6,
                 f"{vid}: sailing {p['estimated_travel_hours']:.2f} h + cleanup {p['cleanup_hours']:.2f} h = "
                 f"{p['finish_hours']:.2f} h of a {v.available_hours:g} h shift ({p['estimated_distance_km']:.1f} km, "
@@ -390,6 +432,8 @@ def main() -> None:
     # comparison.json (dispatch hour, baseline) is optional: the dashboard needs only the three files
     comparison = _read(routing_dir / "comparison.json") if (routing_dir / "comparison.json").exists() else {}
     drift = check_drift(drift_dir, r)
+    # what the plan put in the tanks; plans made before emulsion counting have no tank_basis
+    drift["tank_basis"] = (comparison.get("drift") or {}).get("tank_basis") or "pure oil"
     init = drift["meta"].get("initial_location")
     release = GeoCoordinate(**init) if init else None
     result = {
@@ -409,6 +453,7 @@ def main() -> None:
         result["synthetic_fixture"] = describe_fixture(Path(args.synthetic_fixture))
     result["afloat_by_hour"] = drift["afloat_by_hour"]
     result["water_fraction_by_hour"] = drift["water_fraction_by_hour"]
+    result["tank_basis"] = drift["tank_basis"]
 
     group = None
     for row in r.rows:

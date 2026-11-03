@@ -87,7 +87,7 @@ Each vessel sits on its depot point in `GULF_DEPOTS`, and both Port Saqr and Ham
 
 | # | Issue | Effect on this run | Suggested fix | Owner |
 | --- | --- | --- | --- | --- |
-| 1 | **Tank capacity is checked against pure oil, but recovered oil is emulsion.** `meta.json` gives about 49 to 52 % water at the meeting times, so recovered volume is about 2× the oil volume. | Emulsion would be about 111 m³ in FALCON's 60 m³ tank (185 %) and about 285 m³ in SAQR's 250 m³ tank (114 %). The plan is not feasible as emulsion. Hamriyah's 300 m³ vessel is idle but would be needed. With emulsion counted, Hamriyah takes T01 (about 285 to 296 m³, depending on when it arrives, so only just fits) and SAQR takes T02 to T05 (about 111 m³). | Count tank use as `oil / (1 - water fraction)` at the meeting hour, or state clearly that capacity is in pure oil. | Haris (routing), Maqqavi (water fraction is already in `meta.json`) |
+| 1 | **Tank capacity is checked against pure oil, but recovered oil is emulsion.** `meta.json` gives about 49 to 52 % water at the meeting times, so recovered volume is about 2× the oil volume. | Emulsion would be about 111 m³ in FALCON's 60 m³ tank (185 %) and about 285 m³ in SAQR's 250 m³ tank (114 %). The plan is not feasible as emulsion. Hamriyah's 300 m³ vessel is idle but would be needed. With emulsion counted, Hamriyah takes T01 (about 285 to 296 m³, depending on when it arrives, so only just fits) and SAQR takes T02 to T05 (about 111 m³). | Count tank use as `oil / (1 - water fraction)` at the meeting hour, or state clearly that capacity is in pure oil. | **Done by Haris** (`e247eed`, on `routing-model`): tanks and cleanup time are now counted as emulsion, see section 8. Haris (routing), Maqqavi (water fraction) |
 | 2 | **All three depot points are on land** in the routing land data. Port Saqr is moved 2.6 km and Hamriyah 1.6 km to the nearest water. OpenStreetMap shows why: both points were on roads in the port areas (Saqr Port, and the southern edge of Hamriya Port, Sharjah), not on the water. | About 5 km and about 0.2 h of sailing per Port Saqr round trip are approximate. The dashboard draws the port on land. | **Done on this branch:** `GULF_DEPOTS` now uses the harbour entrances from OpenStreetMap, the gap between the breakwaters: Port Saqr 25.9810 N, 56.0482 E (0.95 km from the old point), Hamriyah 25.4773 N, 55.4798 E (1.46 km). All four fixtures are regenerated. Still to do: check them with `optimization.sea_check` on the land file. If the 2.2 km grid still counts them as land, move them out along the approach (about 25.985 N, 56.025 E and 25.493 N, 55.462 E, not checked yet). | Nihal (done), Joud to confirm, Haris to re-run |
 | 3 | **The whole operation is at night.** Release 12:00 UTC (16:00 local, UTC+4), dispatch 22:00 local, first patch reached 22:52, last patch cleaned about 04:14, SAQR back in port about 05:32. Sunset in RAK in late October is about 17:50 and sunrise about 06:15 (approximate). | None on the plan's rules. In a real response, skimming in the dark is usually limited. | **Accepted, no change:** this is a demo, and when vessels can work (daylight, crew shifts) is the responsibility of the response and logistics team, not this model (agreed with Maqqavi). Stated as an assumption: vessels can work around the clock at the same cleanup rate. | Accepted (Maqqavi) |
 | 4 | **Recovery: 30 m³/h for every vessel, 100 % efficient.** The plan "recovers" 98.6 % of the oil afloat at dispatch (67 % of the 300 m³ released). | At-sea mechanical recovery in practice gets back a much smaller share of a spill, so these numbers are an upper bound, not a forecast. | Present as "oil the fleet can reach and clean", not "oil recovered". Add a per-vessel rate and an efficiency factor when the schema allows. | Haris, Nihal (vessel data) |
@@ -120,8 +120,33 @@ What the difference means:
 
 ## 7. Status
 
-- Targets, volumes, grouping, fleet, capacity (as pure oil), working hours, cleanup time and return to port are all **verified against the real files**.
-- Open with Haris: issue 1 (emulsion vs tank), before the plan is presented as realistic.
+- Targets, volumes, grouping, fleet, capacity, working hours, cleanup time and return to port are all **verified against the real files**.
+- Issue 1 (emulsion vs tank) is fixed in Haris's routing (`e247eed`). The validator now checks the tank and cleanup time on the same basis as the plan (section 8). The numbers in sections 3 and 4 are from his earlier pure-oil run.
 - Issue 3 (night operations) is accepted as a stated assumption: a demo, and operating hours are the logistics team's responsibility.
 - Issue 2: the depot points are moved to the harbour entrances on this branch. Next, Haris runs `sea_check` on the land file, re-runs `run_drift_plan` with the updated `gulf_standard.json`, and `validate_cleanup.py` is rerun on his new outputs. The numbers in sections 3 and 4 come from the run with the old depot points.
 - Shared on OneDrive in `Team C/Validation/`: `validation_report.txt` (the printed report), `validation.json` (every check and number) and this write-up. The fleet files are in `Team C/Fleet/`.
+
+## 8. Re-check after Haris's emulsion update (3 Nov)
+
+Haris's commit `e247eed` counts what a vessel takes on as emulsion, `oil / (1 - water fraction)`, using the hourly water fraction in `meta.json` at the meeting time. Oil recovered is still pure oil. `comparison.json` now says which basis the plan used (`drift.tank_basis`), and `validate_cleanup.py` follows it:
+
+- **`tank_basis: emulsion`:** patches are rebuilt with emulsion counted. Each target's `emulsion_m3`, each vessel's `emulsion_collected_m3`, the tank (FAIL if over) and the cleanup time (emulsion / 30 m³/h) are rechecked.
+- **No `tank_basis`** (a plan made before the change, such as the run in sections 3 and 4): checked as pure oil, with the emulsion load as a WARN, as before. That run still gives 0 FAIL.
+
+**Preview on the real drift, new code and harbour-entrance depots: 77 OK, 3 WARN, 0 FAIL.** This is my local re-run with **straight-line distances**, because I don't have the land file. Haris's sea-grid run will replace these numbers.
+
+| | Optimized | Baseline |
+| --- | --- | --- |
+| Water fraction | 46 % at dispatch, about 50 to 57 % when met (1 m³ oil ≈ 2 m³ in the tank) | same |
+| Targets | 7: T01 (145 m³) is now split into two 72 m³ parts, because as emulsion it would overfill the 300 m³ tank | same |
+| SAQR (250 m³) | T01-2, T02: 237.8 m³ emulsion (95 %) | T05, T03, T02, T04: 112.9 m³ (45 %) |
+| Hamriyah (300 m³) | T03, T05, T01-1, T04: 175.4 m³ (58 %) | T01-1: 146.9 m³ (49 %) |
+| FALCON (60 m³) | idle | idle |
+| Unserved | T06 (0.4 m³, below the threshold) | T01-2 (72 m³) and T06 |
+| Oil recovered | 199.4 m³ | 128.0 m³ |
+| Last vessel back in port | 10.36 h after dispatch | 8.70 h |
+
+What changed:
+- The emulsion plan is now feasible: no tank is over. FALCON stays idle, and Hamriyah now does real work. This matches the expectation in issue 1.
+- **The optimizer now clearly beats the baseline on oil:** 199 vs 128 m³. Nearest-first fills both big tanks with the wrong mix and leaves half of T01 behind. It takes longer (10.4 vs 8.7 h) because it cleans more oil. So the comparison should lead with oil recovered, not response time. This replaces the "optimizer equals baseline" result in section 4 once Haris's sea-grid run confirms it.
+- Cleanup time is now about twice as long (the skimmer pumps the emulsion), which makes the night-time assumption (issue 3) cover more hours.

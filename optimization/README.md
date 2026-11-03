@@ -67,7 +67,7 @@ must provide or can read.
   * One-command CLI pipeline to solve a scenario, run baseline evaluation, and export the plan.
 
 * **`validate_cleanup.py` (Nihal)**:
-  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank (as pure oil and as emulsion), working hours, cleanup time, return to port, unserved targets and the baseline comparison. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
+  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank and cleanup time (on the plan's `tank_basis`: emulsion, or pure oil for older plans), working hours, return to port, unserved targets and the baseline comparison. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
 
 ---
 
@@ -247,7 +247,7 @@ python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-di
 | `--synthetic-fixture` | `optimization/fixtures/gulf_drift_t12.json` | summarised in the JSON for the synthetic vs real comparison |
 | `--json` | none | also write every check and number to this file |
 
-**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state (for example the tank as emulsion, a patch wider than 1.5 km, an unserved target, a missing `comparison.json`). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice). The command exits with code 1 if anything fails.
+**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state (for example the emulsion load of an older pure-oil plan, a patch wider than 1.5 km, an unserved target, a missing `comparison.json`). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice). The command exits with code 1 if anything fails.
 
 **Change the depots or the fleet.** Edit `GULF_DEPOTS` or the scenario functions in `scenario.py`, then regenerate all four fixtures and check that every vessel is on water (needs the land file from step 0.2):
 
