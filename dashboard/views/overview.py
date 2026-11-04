@@ -6,7 +6,7 @@ import streamlit as st
 
 from components import illustrations, incident, ui
 from components.data import all_stages, combined_status, demo_mode, selected_site, spills_stage
-from components.labels import HOURS, KM2
+from components.labels import HOURS, KM2, response_time_tile
 from services import scenario
 from services.files import as_float
 from services.geo import polygon_area_km2
@@ -50,7 +50,7 @@ if predict and predict.steps:
     spread_24 = area or None
 
 vessels = float(len(respond.routes)) if respond and respond.routes else None
-response_time = respond.response_time_hours if respond else None
+response_label, response_time, response_hint = response_time_tile(respond)
 
 if results_status == "simulated":
     st.html(f'<div class="gog-kpi-status">{ui.chip("simulated")}'
@@ -67,7 +67,7 @@ ui.stat_tiles([
     ("Slick detected", ui.fmt(slick_area), KM2, "Area of oil found in the latest scene"),
     (f"Spread at 24 {HOURS}", ui.fmt(spread_24), KM2, "Predicted oil footprint one day later"),
     ("Vessels deployed", ui.fmt(vessels, 0), "", "Response vessels with an assigned route"),
-    ("Response time", ui.fmt(response_time), HOURS, "Until the last vessel completes its route"),
+    (response_label, ui.fmt(response_time), HOURS, response_hint),
 ])
 
 # --- Choose an incident ----------------------------------------------------------

@@ -57,7 +57,7 @@ def routing_files(site_id: str, lat: float, lon: float, simulation_id: str) -> d
         "routes": {"type": "FeatureCollection", "features": [{
             "type": "Feature", "geometry": {"type": "LineString", "coordinates": [port, target, port]},
             "properties": {"vessel_id": f"V-{site_id}", "assigned_target_ids": ["T01"], "estimated_distance_km": 80.0,
-                           "estimated_travel_hours": 2.5, "oil_collected_m3": 140.0}}]},
+                           "estimated_travel_hours": 2.5, "finish_hours": 7.2, "oil_collected_m3": 140.0}}]},
         "summary": {"status": "feasible", "message": f"plan for {site_id}", "synthetic": True,
                     "scenario_id": f"{simulation_id}@dispatch6h"},
         "targets": {"type": "FeatureCollection", "features": [{

@@ -246,7 +246,7 @@ def anchor_routing(routing: RoutingData, site: SpillSite, offset: Offset) -> Rou
         RouteEntry(
             route=dataclasses.replace(e.route, coordinates=tuple(_shift(c, offset) for c in e.route.coordinates)),
             vessel=dataclasses.replace(e.vessel, location=_shift(e.vessel.location, offset)) if e.vessel else None,
-            oil_collected_m3=e.oil_collected_m3,
+            oil_collected_m3=e.oil_collected_m3, finish_hours=e.finish_hours,
         )
         for e in routing.routes
     ]

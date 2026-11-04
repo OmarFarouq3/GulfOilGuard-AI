@@ -18,7 +18,7 @@ import streamlit as st
 import config
 from components import flow, maps, ui
 from components.data import demo_mode, drift_stage, routing_stage, selected_site
-from components.labels import HOURS, KM, M3, M_PER_S, STATUS_LABELS
+from components.labels import HOURS, KM, M3, M_PER_S, STATUS_LABELS, response_time_tile
 from services import scenario
 from services.drift_loader import afloat
 
@@ -115,16 +115,22 @@ else:
                    f"ports{fleet}, and the dispatch time{when}.")
 
     target_oil = data.target_oil_m3
+    response_label, response_hours, response_hint = response_time_tile(data)
+    completion = data.completion_hours is not None
     ui.stat_tiles([
         ("Vessels deployed", ui.fmt(float(len(data.routes)), 0) if data.routes else None, "",
          "Vessels with an assigned route"),
-        ("Response time", ui.fmt(data.response_time_hours), HOURS, "Until the last vessel completes its route"),
+        (response_label, ui.fmt(response_hours), HOURS, response_hint),
+        *([("Sailing time", ui.fmt(data.sailing_time_hours), HOURS, "Longest sailing time of any vessel, no cleaning")]
+          if completion else []),
         ("Distance sailed", ui.fmt(data.total_distance_km), KM, "All vessels combined"),
         ("Estimated oil recovery", ui.fmt(data.oil_collected_m3, 0), M3,
          f"Of about {target_oil:,.0f} {M3} in the oil patches" if target_oil else "Estimated volume collected"),
     ])
-    st.caption("Response time is the longest sailing time of any vessel, including its trip back to port. It "
-               "excludes the time spent cleaning.")
+    st.caption("Response time is the completion time: until the last vessel is back in port, cleaning included. "
+               "Sailing time counts the sailing only, including the trip back to port." if completion else
+               "Response time here is the longest sailing time of any vessel, including its trip back to port: the "
+               "plan gives no cleaning time, so it is not the completion time.")
 
     unserved = [t for t in data.targets if t.target_id in data.unserved_target_ids]
     if unserved:
@@ -223,6 +229,7 @@ else:
     if data.routes:
         columns = {
             "distance": f"Distance ({KM})",
+            "finish": f"Time to finish ({HOURS})",
             "time": f"Sailing ({HOURS})",
             "speed": f"Speed ({M_PER_S})",
             "capacity": f"Capacity ({M3})",
@@ -233,6 +240,7 @@ else:
             "Visiting order": " → ".join(e.route.assigned_target_ids) or "—",
             "Stops": len(e.route.assigned_target_ids),
             columns["distance"]: e.route.estimated_distance_km,
+            columns["finish"]: e.finish_hours,
             columns["time"]: e.route.estimated_travel_hours,
             columns["speed"]: e.vessel.speed_m_per_s if e.vessel else None,
             columns["capacity"]: e.vessel.capacity_m3 if e.vessel else None,
@@ -243,6 +251,8 @@ else:
             "Visiting order": st.column_config.TextColumn(width="medium"),
             "Stops": st.column_config.NumberColumn(width="small"),
             columns["distance"]: st.column_config.NumberColumn(format="%.1f", width="small"),
+            columns["finish"]: st.column_config.NumberColumn(
+                format="%.1f", width="small", help="Back in port with cleaning included (empty if the plan doesn't say)"),
             columns["time"]: st.column_config.NumberColumn(
                 format="%.1f", width="small", help="Sailing time from dispatch, including the trip back to port"),
             columns["speed"]: st.column_config.NumberColumn(format="%.1f", width="small"),
@@ -268,11 +278,11 @@ else:
         share = {plan: f"{metrics[f'{plan}_oil_recovered_m3'] / total:.0%}"
                  for plan in ("optimized", "baseline") if total and f"{plan}_oil_recovered_m3" in metrics}
         rows = [
-            (f"Last vessel back, including cleaning ({HOURS})", *pair("response_hours", 2)),
+            (f"Response time: last vessel back, cleaning included ({HOURS})", *pair("response_hours", 2)),
             ("Patches served", *pair("targets_covered", 0)),
             (f"Oil recovered ({M3})", *pair("oil_recovered_m3", 0)),
             ("Oil recovered, share of the targeted oil", share.get("optimized", "—"), share.get("baseline", "—")),
-            (f"Longest sailing route ({HOURS}), the response time above", *pair("longest_route_hours", 2)),
+            (f"Longest sailing time ({HOURS})", *pair("longest_route_hours", 2)),
             (f"Distance sailed ({KM})", *pair("distance_km")),
         ]
         ui.table(["", "Optimised", "Baseline"], rows, numeric=(1, 2), key="gog-compare")

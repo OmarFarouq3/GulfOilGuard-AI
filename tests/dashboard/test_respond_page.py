@@ -111,7 +111,7 @@ def test_real_site_plan_is_labelled_like_its_forecast(real_sites, spill):
     text = captions(at)
     assert "Assumptions, not observations: the vessels and their start positions, taken as home ports (fleet file " \
            "gulf_standard.json), and the dispatch time (+6 h after the release, 2026-10-23 18:00 UTC)." in text
-    assert "It excludes the time spent cleaning." in text
+    assert "Response time is the completion time: until the last vessel is back in port, cleaning included." in text
     assert f"The map opens at +{LAYER_HOURS[spill]} h: the forecast step closest to the average meeting time" in text
     assert "cut from the oil afloat at the +6 h dispatch" in text
 
@@ -225,8 +225,8 @@ def test_map_fits_the_routes_and_patches_not_the_oil_layer(real_sites, drawn):
 def test_comparison_table_from_comparison_json(real_sites):
     rows = comparison_rows(respond("S2"))
     assert rows["Distance sailed (km)"] == ("194.8", "58.2")
-    assert rows["Longest sailing route (h), the response time above"] == ("5.03", "2.24")
-    assert rows["Last vessel back, including cleaning (h)"] == ("7.18", "8.55")
+    assert rows["Longest sailing time (h)"] == ("5.03", "2.24")
+    assert rows["Response time: last vessel back, cleaning included (h)"] == ("7.18", "8.55")
     assert rows["Patches served"] == ("4", "4")
     assert rows["Oil recovered, share of the targeted oil"] == ("100%", "99%")
 
@@ -278,8 +278,8 @@ def test_plan_assumptions_and_validation_warnings_as_written(real_sites):
 def test_vessel_table_headers_and_idle_vessels(real_sites):
     at = respond("S3")
     frame = next(f.value for f in at.dataframe if "Visiting order" in f.value.columns)
-    assert list(frame.columns) == ["Vessel", "Visiting order", "Stops", "Distance (km)", "Sailing (h)", "Speed (m/s)",
-                                   "Capacity (m³)", "Oil (m³)"]  # short enough for its column (measured at 1150 px)
+    assert list(frame.columns) == ["Vessel", "Visiting order", "Stops", "Distance (km)", "Time to finish (h)",
+                                   "Sailing (h)", "Speed (m/s)", "Capacity (m³)", "Oil (m³)"]
     assert "Not deployed: RAK-FRV-FALCON, RAK-OSRV-SAQR." in captions(at)
 
 
@@ -369,8 +369,8 @@ def test_only_the_viewer_relevant_warnings_are_shown(sites):
 def test_comparison_starts_with_the_finish_time_and_states_the_objective(real_sites):
     at = respond("S2")
     labels = [row[0] for row in html_table(at, "gog-compare")[1:]]
-    assert labels == ["Last vessel back, including cleaning (h)", "Patches served", "Oil recovered (m³)",
-                      "Oil recovered, share of the targeted oil", "Longest sailing route (h), the response time above",
+    assert labels == ["Response time: last vessel back, cleaning included (h)", "Patches served", "Oil recovered (m³)",
+                      "Oil recovered, share of the targeted oil", "Longest sailing time (h)",
                       "Distance sailed (km)"]
     text = captions(at)
     assert "The optimiser does not aim for the shortest total distance." in text
@@ -406,3 +406,117 @@ def test_validation_lists_become_plain_text():
     assert scenario._plain_lists("unserved: ['T05', 'T06']") == "unserved: T05, T06"
     for unchanged in ("90 % of a patch's oil", "'one skimming position' is an assumption", "at [25.8, 55.6]"):
         assert scenario._plain_lists(unchanged) == unchanged
+
+
+
+# --- E2: response time is the completion time (decision D2); sailing time separately -----------------------
+
+COMPLETION = {"S1": "7.6", "S2": "7.2", "S3": "7.8", "S4": "7.2"}  # max finish_hours in the real routes, 1 decimal
+SAILING = {"S1": "2.7", "S2": "5.0", "S3": "1.2", "S4": "0.9"}  # max estimated_travel_hours
+
+
+def tiles_text(at) -> str:
+    return " ".join(b for b in bodies(at, "gog-stats") if "Vessels deployed" in b)
+
+
+@needs_real
+@pytest.mark.parametrize("spill", ["S1", "S2", "S3", "S4"])
+def test_response_time_is_completion_with_sailing_separately(real_sites, spill):
+    import re
+    at = respond(spill)
+    text = re.sub(r"<[^>]+>", " ", tiles_text(at))
+    assert re.search(rf"Response time\s+{COMPLETION[spill]}\s+h\s+Until the last vessel is back in port, cleaning included",
+                     text), text
+    assert re.search(rf"Sailing time\s+{SAILING[spill]}\s+h\s+Longest sailing time of any vessel, no cleaning", text), text
+    assert "sailing only" not in text
+
+
+@needs_real
+def test_vessel_table_has_finish_and_sailing_columns(real_sites):
+    at = respond("S1")
+    frame = next(f.value for f in at.dataframe if "Visiting order" in f.value.columns)
+    routes = json.loads(config.site_files("S1")["routing"]["routes"].read_text(encoding="utf-8"))["features"]
+    expected = {f["properties"]["vessel_id"]: (f["properties"]["finish_hours"], f["properties"]["estimated_travel_hours"])
+                for f in routes}
+    for row in frame.to_dict("records"):
+        finish, sailing = expected[row["Vessel"]]
+        assert row["Time to finish (h)"] == pytest.approx(finish) and row["Sailing (h)"] == pytest.approx(sailing)
+        assert row["Time to finish (h)"] > row["Sailing (h)"]
+
+
+@needs_real
+def test_overview_headline_uses_the_completion_time(real_sites):
+    import re
+    at = go(respond("S1"), "views/overview.py")
+    tile = re.sub(r"<[^>]+>", " ", bodies(at, "Spread at 24")[0])
+    assert re.search(r"Response time\s+7\.6\s+h\s+Until the last vessel is back in port, cleaning included", tile), tile
+
+
+@needs_real
+def test_comparison_uses_the_same_definition_on_both_sides(real_sites):
+    """comparison.json response_hours = max finish_hours of each plan's own routes (sailing + cleaning)."""
+    for spill in ("S1", "S2", "S3", "S4"):
+        files = config.site_files(spill)
+        metrics = json.loads(files["routing"]["comparison"].read_text(encoding="utf-8"))["metrics"]
+        for plan, routes_file in (("optimized", files["routing"]["routes"]), ("baseline", files["baseline"]["routes"])):
+            routes = json.loads(routes_file.read_text(encoding="utf-8"))["features"]
+            assert metrics[f"{plan}_response_hours"] == pytest.approx(max(f["properties"]["finish_hours"] for f in routes),
+                                                                      abs=0.01)
+            assert metrics[f"{plan}_longest_route_hours"] == pytest.approx(
+                max(f["properties"]["estimated_travel_hours"] for f in routes), abs=0.01)
+
+
+def without_finish(sites_fixture, *ids) -> None:
+    """The fixture site's routes as written by an exporter that gives no finish_hours."""
+    sites_fixture("S1")
+    routes_file = config.site_files("S1")["routing"]["routes"]
+    routes = json.loads(routes_file.read_text(encoding="utf-8"))
+    for feature in routes["features"]:
+        feature["properties"].pop("finish_hours", None)
+        for vessel in ids:
+            if feature["properties"]["vessel_id"] == vessel:
+                feature["properties"]["finish_hours"] = 4.0
+    routes_file.write_text(json.dumps(routes), encoding="utf-8")
+
+
+def test_without_finish_hours_the_tile_says_sailing_only(sites):
+    import re
+    without_finish(sites)
+    at = respond("S1")
+    text = re.sub(r"<[^>]+>", " ", tiles_text(at))
+    assert re.search(r"Response time \(sailing only\)\s+2\.5\s+h\s+Longest sailing time; the plan gives no cleaning time", text)
+    assert "Sailing time" not in text  # the headline already is the sailing time
+    assert "it is not the completion time" in captions(at)
+    go(at, "views/overview.py")
+    assert "Response time (sailing only)" in bodies(at, "Spread at 24")[0]
+
+
+def test_finish_hours_reading_rules():
+    from services.models import RouteEntry
+    from services.schema import GeoCoordinate, VesselRoute
+
+    def entry(travel, finish):
+        route = VesselRoute("V", ("T1",), (GeoCoordinate(25.0, 55.0), GeoCoordinate(25.1, 55.1)), 10.0, travel)
+        return RouteEntry(route=route, finish_hours=finish)
+
+    both = RoutingData(routes=[entry(2.0, 7.5), entry(3.0, 5.0)])
+    assert (both.completion_hours, both.sailing_time_hours, both.response_time_hours) == (7.5, 3.0, 7.5)
+    partial = RoutingData(routes=[entry(2.0, 7.5), entry(3.0, None)])  # a partial maximum would understate it
+    assert partial.completion_hours is None and partial.response_time_hours == 3.0
+    assert RoutingData().response_time_hours is None
+
+
+def test_finish_below_sailing_is_ignored_with_a_warning(sites):
+    sites("S1")
+    routes_file = config.site_files("S1")["routing"]["routes"]
+    routes = json.loads(routes_file.read_text(encoding="utf-8"))
+    routes["features"][0]["properties"]["finish_hours"] = 1.0  # sailing is 2.5 h
+    routes_file.write_text(json.dumps(routes), encoding="utf-8")
+    data = load_routing(config.site_files("S1")["routing"])
+    assert data.routes[0].finish_hours is None and any("finish_hours 1.0 is less than" in w for w in data.warnings)
+
+
+def test_demo_plan_shows_completion_and_sailing():
+    from services import mock_data
+    demo = mock_data.routing()
+    assert demo.completion_hours is not None and demo.completion_hours > demo.sailing_time_hours
