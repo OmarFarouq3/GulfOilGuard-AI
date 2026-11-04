@@ -6,8 +6,9 @@ labelled mask (detection/masks/val, the convention in detection/README.md). The 
 what outputs/report/per_image_metrics.csv recorded for the same image, and evaluate() over a small
 labelled folder must give the same counts-based metrics.
 
-Needs torch, the checkpoint, the image and its mask. They are git-ignored data, so on a machine
-without them the tests skip and say which file is missing.
+Needs torch, the checkpoint and two validation images with their masks (palsar_0, sentinel_12). They are
+git-ignored data, so on a machine without them the tests skip and say which file is missing
+(tests/README.md says where each file comes from).
 """
 
 from __future__ import annotations
@@ -37,7 +38,9 @@ IMAGE = ROOT / "assets" / "images" / "val" / "palsar_0.png"
 TRUTH = ROOT / "detection" / "masks" / "val" / "palsar_0.png"
 REPORT = ROOT / "outputs" / "report" / "per_image_metrics.csv"
 
-missing = [p.relative_to(ROOT).as_posix() for p in (CHECKPOINT, IMAGE, TRUTH) if not p.is_file()]
+SECOND = "sentinel_12.png"  # the second image of the labelled-folder test
+missing = [p.relative_to(ROOT).as_posix() for p in (CHECKPOINT, IMAGE, TRUTH, IMAGE.parent / SECOND, TRUTH.parent / SECOND)
+           if not p.is_file()]
 pytestmark = [
     pytest.mark.skipif(torch is None, reason=f"torch is not installed ({import_error}); pip install -r requirements.txt"),
     pytest.mark.skipif(bool(missing), reason=f"missing real data: {', '.join(missing)} (masks: detection/masks/val "
@@ -98,7 +101,7 @@ def test_scores_against_the_labelled_mask_match_the_report(prediction):
 def test_evaluate_on_a_labelled_folder_computes_the_metrics(tmp_path):
     images, masks = tmp_path / "images", tmp_path / "masks"
     images.mkdir(), masks.mkdir()
-    for name in ("palsar_0.png", "sentinel_12.png"):
+    for name in ("palsar_0.png", SECOND):
         shutil.copy(IMAGE.parent / name, images / name)
         shutil.copy(TRUTH.parent / name, masks / name)
     metrics = evaluate(CHECKPOINT, images, masks, device="cpu", batch_size=2)
