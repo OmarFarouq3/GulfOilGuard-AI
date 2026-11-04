@@ -129,7 +129,7 @@ def test_sync_resets_the_flow_when_the_data_source_changes(session, image_dir, n
 
 def test_sync_undoes_a_model_detection_whose_files_are_gone(session, image_dir, tmp_path, monkeypatch):
     """Fix 6: "done" is re-verified against disk on every run."""
-    monkeypatch.setattr(inference.config, "DETECTION_DIR", tmp_path / "det")
+    monkeypatch.setattr(inference.config, "LIVE_DETECTION_DIR", tmp_path / "det")
     selection.select_spill("GOG-SIM-01")
     selection.sync(IDS, SOURCE)
     for path in inference.output_files("img-1").values():

@@ -41,14 +41,15 @@ def _scene_files(directory: Path) -> dict[str, dict[str, Path]]:
     return scenes
 
 
-def mask_path(image_id: str) -> Path:
+def mask_path(image_id: str, directory: Path | None = None) -> Path:
     """Where the mask for ``image_id`` lives (DetectionOutput.mask_path)."""
-    named = config.DETECTION_DIR / f"{image_id}_mask.png"
+    named = (directory or config.DETECTION_DIR) / f"{image_id}_mask.png"
     return named if named.exists() else config.DETECTION_FILES["mask"]
 
 
-def parse_spill(collection: dict | None, data: DetectionData, name: str = "spill.geojson") -> None:
-    """Validate each slick as a DetectionOutput; only valid slicks are drawn."""
+def parse_spill(collection: dict | None, data: DetectionData, name: str = "spill.geojson",
+                mask_dir: Path | None = None) -> None:
+    """Validate each slick as a DetectionOutput; only valid slicks are drawn. ``mask_dir``: where the masks are."""
     if collection is None:
         return
     valid = []
@@ -62,7 +63,7 @@ def parse_spill(collection: dict | None, data: DetectionData, name: str = "spill
         try:
             schema.number(props.get("area_km2"), "area_km2")
             image_id = schema.text(props.get("image_id"), "image_id")
-            detection = schema.detection_output(props, ring, mask_path(image_id))
+            detection = schema.detection_output(props, ring, mask_path(image_id, mask_dir))
         except schema.SchemaError as exc:
             data.warnings.append(f"`{name}` feature {i}: {exc}; skipped.")
             continue
@@ -107,13 +108,14 @@ def load_galleries() -> tuple[list[tuple[str, bytes]], list[str]]:
     return shown, warnings
 
 
-def load_scene(image_id: str) -> DetectionData | None:
-    """Only the ``<image_id>_*`` scene.
+def load_scene(image_id: str, directory: Path | None = None) -> DetectionData | None:
+    """Only the ``<image_id>_*`` scene, from ``directory`` (default: outputs/detection/).
 
-    ``spill.geojson`` is left out: its outlines belong to other scenes.
+    ``spill.geojson`` is left out: its outlines belong to other scenes. A live run's scene is read
+    from ``config.LIVE_DETECTION_DIR``.
     """
     data = DetectionData()
-    files = _scene_files(config.DETECTION_DIR).get(image_id)
+    files = _scene_files(directory or config.DETECTION_DIR).get(image_id)
     scene = _read_scene(image_id, files, data) if files else None
     if scene is None:
         return None

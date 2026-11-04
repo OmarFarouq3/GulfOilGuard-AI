@@ -69,8 +69,10 @@ def _simulated_outline(site: SpillSite, image_id: str) -> dict:
 
 def selected_detection(site: SpillSite, run: DetectionRun | None, simulated_accepted: bool) -> DetectionData | None:
     """Model result for the selected image, else the accepted simulated detection, else None."""
+    mask_dir = None
     if run is not None and run.ok:
-        data = load_scene(run.image_id)
+        mask_dir = config.LIVE_DETECTION_DIR  # live runs never write into outputs/
+        data = load_scene(run.image_id, mask_dir)
         if data is None:  # result files were removed since the run
             return None
         data.mask_source = "model"
@@ -81,7 +83,7 @@ def selected_detection(site: SpillSite, run: DetectionRun | None, simulated_acce
         return None
     image_id = data.scenes[0].image_id if data.scenes else site.spill_id
     data.spill, data.detections = None, []
-    parse_spill(_simulated_outline(site, image_id), data)
+    parse_spill(_simulated_outline(site, image_id), data, mask_dir=mask_dir)
     data.outline_simulated = True
     return data
 

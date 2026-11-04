@@ -207,10 +207,11 @@ def test_timeout_becomes_a_status(files, monkeypatch):
 def test_loader_picks_up_the_written_scene(files, monkeypatch):
     monkeypatch.setattr(inference.subprocess, "run", FakeRun())
     image, checkpoint, _out = files
-    out = inference.config.DETECTION_DIR  # load_scene reads the configured (test) outputs folder
+    out = inference.config.LIVE_DETECTION_DIR  # live runs go here by default, never into outputs/detection/
     assert inference.run_detection(image, "loader-check", checkpoint=checkpoint).state == "done"
     try:
-        data = load_scene("loader-check")
+        assert load_scene("loader-check") is None  # not in outputs/detection/
+        data = load_scene("loader-check", out)
         assert data is not None and [s.image_id for s in data.scenes] == ["loader-check"]
         scene = data.scenes[0]
         assert scene.image and scene.mask and scene.overlay

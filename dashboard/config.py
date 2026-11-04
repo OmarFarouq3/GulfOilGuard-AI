@@ -1,6 +1,7 @@
 """Dashboard configuration: output paths (the data contract), map defaults and colours.
 
-Detect can run the U-Net in a subprocess and read its results from ``outputs/``.
+Detect can run the U-Net in a subprocess; those live results go to ``runs/dashboard/`` (git-ignored),
+never into ``outputs/``, which holds the modules' saved results.
 Predict and Respond read files written by their modules. See ``dashboard/README.md``.
 
 The outputs folder resolves in this order:
@@ -8,6 +9,8 @@ The outputs folder resolves in this order:
 2. ``outputs_dir`` in ``dashboard/settings.yaml`` (optional, relative paths are
    resolved against the repository root)
 3. ``<repo root>/outputs``
+
+Live detection runs go to ``GULFOILGUARD_RUNS`` if set, else ``<repo root>/runs/dashboard``.
 """
 
 from __future__ import annotations
@@ -38,6 +41,18 @@ def _resolve_outputs_dir() -> Path:
 
 
 OUTPUTS_DIR = _resolve_outputs_dir()
+
+
+def _resolve_runs_dir() -> Path:
+    """Where "Run detection" writes: GULFOILGUARD_RUNS, else <repo>/runs/dashboard (runs/ is git-ignored)."""
+    env_value = os.environ.get("GULFOILGUARD_RUNS")
+    return Path(env_value).expanduser().resolve() if env_value else REPO_ROOT / "runs" / "dashboard"
+
+
+# Live detection results, apart from the shared outputs/: a click never changes outputs/detection/
+# or what the next session shows from it.
+RUNS_DIR = _resolve_runs_dir()
+LIVE_DETECTION_DIR = RUNS_DIR / "detection"
 
 # --- Data contract -----------------------------------------------------------
 # Detection module

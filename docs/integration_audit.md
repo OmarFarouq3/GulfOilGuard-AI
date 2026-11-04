@@ -51,7 +51,7 @@ Read-only audit, 3 Nov 2026, on branch `dashboard` at `4b6d9c7` after `git fetch
 | Report summary | `outputs/report/summary.json` | `threshold`, `n_images`, `n_with_oil` (1539), `n_empty_reference` (76), `micro` {4 scores}, `macro_images_with_oil` {4 scores}, `threshold_sweep` {"0.10".."0.90": {4 scores}} |
 | Per-image metrics | `outputs/report/per_image_metrics.csv` | Columns `file, ref_oil_pixels, dice, iou, precision, recall`; 1,615 rows (validation split), no NaN, no duplicates |
 | Galleries | `outputs/report/gallery_{best,median,worst}.png` | 1024 × 1134 RGB; 4 rows of input, reference, prediction, errors (green TP, red FP, blue FN) |
-| Prediction examples | `outputs/detection/<image_id>_{image,mask,overlay}.png` + `_run.json` | Written by the dashboard's real model runs (`detection/predict_cli.py`); mask = 8-bit grey PNG at the input size, values {0, 255}, white = oil |
+| Prediction examples | `outputs/detection/<image_id>_{image,mask,overlay}.png` | Saved scenes; the dashboard's live model runs (`detection/predict_cli.py`) now write to `runs/dashboard/detection/` instead (plus `_run.json`), never to `outputs/`; mask = 8-bit grey PNG at the input size, values {0, 255}, white = oil |
 | Radar images | `assets/images/train/` (6,455 PNG), `assets/images/val/` (1,615 PNG) | 256 × 256 Refined Deep-SAR SOS crops; `sentinel_*` / `palsar_*`. Only `train/palsar_0..9.png` are tracked in Git |
 | Docs | `docs/detection_model_card.md`, `detection_evaluation.md`, `prediction_review.md` | Text; the unmerged `prediction-review` branch adds findings on the galleries |
 

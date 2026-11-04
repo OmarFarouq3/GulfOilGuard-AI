@@ -112,7 +112,7 @@ def stub_detection(monkeypatch):
 
     monkeypatch.setattr(inference, "run_detection", fake)
     yield calls
-    for path in inference.config.DETECTION_DIR.glob("*"):
+    for path in [*inference.config.DETECTION_DIR.glob("*"), *inference.config.LIVE_DETECTION_DIR.glob("*")]:
         path.unlink()
 
 

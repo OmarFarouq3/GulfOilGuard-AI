@@ -1,8 +1,10 @@
 """Run the U-Net on the selected radar image, in a subprocess (Streamlit never imports torch).
 
 ``run_detection`` calls ``python -m detection.predict_cli`` with the detection interpreter
-(services/settings.py: GOG_DETECTION_PYTHON, .env, .venv-detect/, else this interpreter), which writes ``<image_id>_{image,mask,overlay}.png`` into
-``outputs/detection/``, the names ``detection_loader`` already reads. A small manifest
+(services/settings.py: GOG_DETECTION_PYTHON, .env, .venv-detect/, else this interpreter), which writes
+``<image_id>_{image,mask,overlay}.png`` into ``config.LIVE_DETECTION_DIR`` (``runs/dashboard/detection/``,
+git-ignored), the names ``detection_loader`` reads. Live runs never write into ``outputs/``: that folder
+holds the modules' saved results, which a click must not change. A small manifest
 ``<image_id>_run.json`` records which image (path + mtime) and checkpoint (path + mtime)
 produced them; while both are unchanged, a re-run returns the stored result instantly.
 The CLI contract (module, result line, exit codes) lives in shared/detection_cli.py.
@@ -62,7 +64,7 @@ def detection_python() -> str:
 
 
 def output_files(image_id: str, out_dir: Path | None = None) -> dict[str, Path]:
-    out = out_dir or config.DETECTION_DIR
+    out = out_dir or config.LIVE_DETECTION_DIR
     return {kind: out / f"{image_id}_{kind}.png" for kind in KINDS}
 
 
@@ -74,7 +76,7 @@ def outputs_exist(image_id: str, out_dir: Path | None = None) -> bool:
 
 
 def manifest_path(image_id: str, out_dir: Path | None = None) -> Path:
-    return (out_dir or config.DETECTION_DIR) / f"{image_id}_run.json"
+    return (out_dir or config.LIVE_DETECTION_DIR) / f"{image_id}_run.json"
 
 
 def _fingerprint(image_path: Path, checkpoint: Path) -> dict[str, Any]:
@@ -182,7 +184,7 @@ def run_detection(image_path: Path, image_id: str, *, checkpoint: Path | None = 
                                else settings.resolve_checkpoint())
         resolved_python = settings.given(python, "interpreter passed in") if python else settings.resolve_python()
         return _run_detection(Path(image_path), image_id, resolved_checkpoint, resolved_python,
-                              out_dir or config.DETECTION_DIR, timeout_s, fresh)
+                              out_dir or config.LIVE_DETECTION_DIR, timeout_s, fresh)
     except Exception:  # last resort: a status, never an error page
         return DetectionRun("failed", "Detection could not be completed.", image_id, detail=traceback.format_exc())
 
@@ -201,6 +203,7 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
     if cached:
         return cached
 
+    out.mkdir(parents=True, exist_ok=True)
     command = _command(str(resolved_python.path), checkpoint, image_path, out, image_id)
     try:
         result = subprocess.run(command, cwd=config.REPO_ROOT, capture_output=True, timeout=timeout_s,
