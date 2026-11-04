@@ -60,9 +60,6 @@ class DetectionScene:
 class DetectionData:
     scenes: list[DetectionScene] = field(default_factory=list)
     detections: list[DetectionOutput] = field(default_factory=list)  # one per georeferenced slick
-    metrics: dict[str, float] | None = None  # not in schema: dice, iou, precision, recall
-    per_class: dict[str, dict[str, float]] | None = None  # not in schema
-    metrics_info: dict[str, Any] = field(default_factory=dict)  # not in schema: model, split, ...
     spill: dict | None = None  # GeoJSON polygons for the map (schema has points only)
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
@@ -75,7 +72,7 @@ class DetectionData:
 
     @property
     def has_content(self) -> bool:
-        return bool(self.scenes or self.metrics or self.per_class or self.spill)
+        return bool(self.scenes or self.spill)
 
 
 @dataclass

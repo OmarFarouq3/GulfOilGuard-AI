@@ -87,35 +87,23 @@ def test_predict_subtitle_follows_the_same_rule(sites, spill_file):
     assert "of the slick" not in heading(at)
 
 
-# --- E5: every description of the detection scores carries the validation caveat --------------------------
+# --- E5: no claim that the detection scores are on unseen data --------------------------
 
 VAL_METRICS = {"model": "U-Net", "split": "val", "n_images": 1615, "threshold": 0.5,
                "dice": 0.8689, "iou": 0.7682, "precision": 0.8459, "recall": 0.8932}
 
 
-def test_detect_describes_validation_scores_consistently():
+def test_detect_makes_no_unseen_data_claim():
+    """The overall scores and their validation caveat left with the removed section; nothing left on Detect
+    may claim the scores are on unseen or independent data."""
     config.DETECTION_DIR.mkdir(parents=True, exist_ok=True)
     config.DETECTION_FILES["metrics"].write_text(json.dumps(VAL_METRICS), encoding="utf-8")
     try:
         at = go(new_app(), "views/detection.py")
-        caption = section(at, "Overall model accuracy")
-        assert "That split was also used to choose the checkpoint, so these are not an independent test." in caption
         how = " ".join(m.value for e in at.expander if e.label == "How to read this" for m in e.markdown)
-        assert "the labelled validation images, which were also used to choose the checkpoint, so they are not an " \
-               "independent test" in how
-        text = " ".join(b for b in bodies(at, "")) + how
-        assert "never saw" not in text and "unseen" not in text
-    finally:
-        config.DETECTION_FILES["metrics"].unlink(missing_ok=True)
-
-
-def test_detect_does_not_assume_validation_for_another_split():
-    config.DETECTION_DIR.mkdir(parents=True, exist_ok=True)
-    config.DETECTION_FILES["metrics"].write_text(json.dumps({**VAL_METRICS, "split": "test"}), encoding="utf-8")
-    try:
-        at = go(new_app(), "views/detection.py")
-        how = " ".join(m.value for e in at.expander if e.label == "How to read this" for m in e.markdown)
-        assert "a labelled evaluation set" in how and "choose the checkpoint" not in how
+        text = " ".join(bodies(at, "")) + how
+        for claim in ("never saw", "unseen", "independent test set", "Overall model accuracy"):
+            assert claim not in text, claim
     finally:
         config.DETECTION_FILES["metrics"].unlink(missing_ok=True)
 

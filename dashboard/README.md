@@ -77,7 +77,7 @@ Every sample file is marked `"synthetic": true`, so the dashboard labels those p
 Open `http://localhost:8501/?demo=1` before you start (or switch on **Demo scenario** from the gear menu). Point out the violet **Simulated scenario** chip once, at the start: the numbers are illustrative, the pipeline and interface are real.
 
 1. **Overview (30 s).** "GulfOilGuard-AI turns satellite radar into a cleanup plan for the Arabian Gulf." Read the four headline tiles: a 6.8 km² slick, spreading to about 52 km² within 24 hours, 3 vessels deployed, response complete in about 4.6 hours. Point to the timeline in the top bar: "Detect, Predict, Respond: one incident, three steps." Close on *How far can you trust this?*: each stage feeds the next, so uncertainty compounds, and we show that openly.
-2. **01 Detect (30 s).** Radar image, detected oil and overlay side by side: "Oil calms the sea, so it looks dark to radar." Show the accuracy tiles (Dice 0.78, precision 0.81, recall 0.75) and mention look-alikes such as calm water, algae and rain cells. Finish on the map: the slick placed off the Abu Dhabi coast.
+2. **01 Detect (30 s).** Radar image, detected oil and overlay side by side: "Oil calms the sea, so it looks dark to radar." Mention look-alikes such as calm water, algae and rain cells. Finish on the map: the slick placed off the Abu Dhabi coast.
 3. **02 Predict (30 s).** Step through **Now → +6 h → +12 h → +24 h** with the segmented control. The slick moves south-east and spreads as colours darken from amber to burnt orange. Mention the drivers below the map: a north-west wind (shamal) at 8 m/s and a weak current.
 4. **03 Respond (30 s).** Three vessels from three bases, each in its own cool colour, converge on the amber oil patches. Read the totals (about 148 km sailed, 235 m³ of an estimated 276 m³ recovered) and the vessel table. Close: "When the detection, drift and routing models produce real results, this exact view fills in automatically."
 
@@ -98,8 +98,8 @@ All files live under `outputs/` at the repo root (in `.gitignore`; generated loc
 | File | Required | Content |
 | --- | --- | --- |
 | `mask.png` | yes | Predicted binary mask (`DetectionOutput.mask_path`); white (>127) = oil. |
-| `metrics.json` | yes | Held-out scores in [0, 1] (*extension*, see below). |
-| `summary.json` | optional | `detection/report.py`'s summary; its `micro` scores are used when `metrics.json` has none. Also looked for in `outputs/report/`. |
+| `metrics.json` | yes | The model's evaluation (`detection/evaluate.py`). Not shown on the page; only its `split` and `checkpoint_sha256` are read (see below). |
+| `summary.json` | optional | `detection/report.py`'s summary. Not shown on the page; only its `split` and `checkpoint_sha256` are read. Also looked for in `outputs/report/`. |
 | `overlay.png` | optional | Mask drawn over the scene. If missing, the dashboard builds one from `image.png` + `mask.png`. |
 | `image.png` | optional | The SAR input scene shown next to the mask. |
 | `spill.geojson` | optional* | One `Polygon`/`MultiPolygon` feature per detected slick. *Needed for the map and for drift integration. |
@@ -114,19 +114,7 @@ Multiple scenes: name files `<image_id>_image.png`, `<image_id>_mask.png`, `<ima
 | `confidence` | `DetectionOutput.confidence` | optional, [0, 1] |
 | `area_km2` | *extension* | optional, nonnegative; otherwise the polygon area is computed |
 
-```json
-{
-  "dice": 0.78, "iou": 0.64, "precision": 0.81, "recall": 0.75,
-  "per_class": {"oil": {"dice": 0.78, "iou": 0.64, "precision": 0.81, "recall": 0.75}},
-  "model": "unet-baseline-v1", "split": "val", "n_images": 1615, "threshold": 0.5
-}
-```
-
-`metrics.json` is an *extension*: `shared/schemas.py` has no metrics type. Its four keys match `SegmentationMetrics` in `detection/evaluate.py`. `per_class` and the descriptive keys are optional.
-
-Either shape is accepted: the four scores at the top level (above), nested under `"metrics"` as `detection/evaluate.py --output-dir` writes it, or under `"micro"` as in `report.py`'s `summary.json`. Optional `"checkpoint_sha256"` (in `metrics.json` or `summary.json`) is compared with the SHA-256 of the checkpoint the dashboard runs: the Detect page then says "Scores were computed on this checkpoint", or warns "These scores were computed on a different checkpoint than the one running" (also under Diagnostics). Without it the page notes that the report doesn't say which checkpoint was scored. The hash is computed once per checkpoint file (cached on path, modification time and size).
-
-Scores always come from **one** file, never a mix: the first of `detection/metrics.json`, `detection/summary.json`, `report/summary.json` whose four scores are all valid; if none is fully valid, the first with any valid score (the others show as "—", with the problem under Diagnostics). Viewers see only these evaluation details: `model`, `split`, `n_images`, `threshold`, `checkpoint`, `epoch`, `aggregation`, `created` and `limitations`; any path-like text in them is reduced to its file name. Other keys are ignored on the page and listed by name only under Diagnostics. The caption under "Overall model accuracy" follows `split`: `val` adds that the split also chose the checkpoint; another split is named as such; without `split` the page says the report doesn't say which images were scored.
+**The model's overall scores are not shown.** The Detect page shows results for the analysed scene only: the image, the predicted mask, the overlay, the scene's own score when the evaluation report has one, and the slick on the map. The overall Dice / IoU / precision / recall in `metrics.json` / `summary.json` are the same for every scene, so the page leaves them out. From those files the dashboard reads only `split` (to match the per-image report rows, below) and `checkpoint_sha256`, which is compared with the SHA-256 of the checkpoint the dashboard runs: when they differ, the scene's score carries the warning "These scores were computed on a different checkpoint than the one running" (also under Diagnostics). The hash is computed once per checkpoint file (cached on path, modification time and size). `tests/check_outputs.py` still checks `metrics.json` as part of the detection contract.
 
 ### Evaluation report → `outputs/report/`
 
@@ -134,13 +122,13 @@ What `detection/report.py` writes by default (`--output-dir outputs/report`). Al
 
 | File | Used for |
 | --- | --- |
-| `summary.json` | Scores for "Overall model accuracy" when `outputs/detection/` has neither `metrics.json` nor `summary.json` (order: `detection/metrics.json` > `detection/summary.json` > `report/summary.json`). |
-| `per_image_metrics.csv` | "Score for this image" on Detect, after a real model run: Dice, IoU, Precision, Recall and the reference oil share (`ref_oil_pixels / 65,536`) of the selected image. Each score tile also shows the overall value in small type ("Overall 0.87"), so the per-image block and "Overall model accuracy" below it, which never changes between images, are not confused. Columns `file, ref_oil_pixels, dice, iou, precision, recall`, optionally `split`. |
-| `gallery_best.png`, `gallery_median.png`, `gallery_worst.png` | The expander "Best, median and worst validation images" under "Overall model accuracy". An unreadable file is left out and listed under Diagnostics. |
+| `summary.json` | Its `split` and `checkpoint_sha256` (as for `outputs/detection/`); its scores are not shown. |
+| `per_image_metrics.csv` | "Score for this image" on Detect, after a real model run: Dice, IoU, Precision, Recall and the reference oil share (`ref_oil_pixels / 65,536`) of the selected image. Columns `file, ref_oil_pixels, dice, iou, precision, recall`, optionally `split`. |
+| `gallery_best.png`, `gallery_median.png`, `gallery_worst.png` | The expander "Best, median and worst validation images" on Detect (not next to the demo scene). An unreadable file is left out and listed under Diagnostics. |
 
 **Splits.** The Refined Deep-SAR SOS `train/` and `val/` folders reuse the same file names (`palsar_0.png` exists in both, with different content), so a file name alone is ambiguous. A CSV row matches the selected image only when **both** the split and the file name agree. The image's split is the nearest folder named `train`, `val` or `test` between the image and the image folder (inclusive, so `GOG_IMAGE_DIR=assets/images/val` counts as `val`). A row's split is its `split` column, else a folder in `file` (`val/palsar_0.png`), else the report's `"split"` from `metrics.json` / `summary.json`; with none of these the rows match nothing. Images in `train/` show "No reference score: this image was part of the model's training data"; images without a matching row show "No reference score for this image"; a row with no reference oil shows "No oil in the reference mask" instead of its degenerate 0 / 1 scores. Nothing is matched by name alone.
 
-**Caveat.** `report.py` scores the validation split, which was also used to choose the checkpoint, so these scores (overall and per image) are not an independent test. For demos, set `GOG_IMAGE_DIR=assets/images/val` (environment or `.env`): only validation images can show a per-image score, and none of them were used to fit the weights.
+**Caveat.** `report.py` scores the validation split, which was also used to choose the checkpoint, so the per-image scores are not an independent test (the page says so next to them). For demos, set `GOG_IMAGE_DIR=assets/images/val` (environment or `.env`): only validation images can show a per-image score, and none of them were used to fit the weights.
 
 ### Drift module → `outputs/drift/`
 

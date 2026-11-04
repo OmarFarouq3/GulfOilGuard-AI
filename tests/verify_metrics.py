@@ -16,8 +16,9 @@ Per site (outputs/sites/S1..S4) and its nearest-target baseline:
   comparison.json  optimized_/baseline_ response_hours, longest_route_hours, oil_recovered_m3,
                    targets_covered, distance_km recomputed from each plan's own routes
   targets          cut at one forecast hour that is in the site's drift file, from afloat oil only
-Detection: Dice / IoU / precision / recall from outputs/detection/metrics.json, and recomputed from
-one real image / labelled mask / predicted mask triple when the labelled mask is on this machine.
+Detection: the val palsar_0 image / labelled mask / predicted mask triple, recomputed and compared with
+the per-image report row the Detect page shows ("Score for this image"); metrics.json is only checked
+for consistency, as the page no longer shows the model's overall scores.
 """
 
 from __future__ import annotations
@@ -162,13 +163,13 @@ def dashboard():
     import logging
     logging.getLogger("streamlit").setLevel(logging.ERROR)
     import config
-    from services.detection_loader import load_detection
+    from services import report_loader
     from services.routing_loader import load_comparison, load_routing
-    return config, load_routing, load_comparison, load_detection
+    return config, load_routing, load_comparison, report_loader
 
 
 def main() -> int:
-    config, load_routing, load_comparison, load_detection = dashboard()
+    config, load_routing, load_comparison, report_loader = dashboard()
     for site in SITES:
         d = OUTPUTS / "sites" / site
         if not (d / "routing" / "routes.geojson").is_file():
@@ -208,12 +209,9 @@ def main() -> int:
                       f"skims {route['oil_collected_m3']:.1f} m3 for {route['cleanup_hours']:.2f} h at 30 m3/h "
                       f"(optimization/config.py) = finish {route['finish_hours']:.2f} h")
 
-    print("\n=== Detection (outputs/detection/metrics.json)")
+    # The Detect page no longer shows the model's overall scores; metrics.json is only checked for consistency.
+    print("\n=== Detection (outputs/detection/metrics.json, not shown on the page)")
     raw = read(OUTPUTS / "detection" / "metrics.json")
-    detection = load_detection()
-    for key in ("dice", "iou", "precision", "recall"):
-        check(f"{key} (split {raw.get('split')}, {raw.get('n_images')} images)", raw[key],
-              (detection.metrics or {}).get(key) if detection else None, tol=1e-6)
     dice = raw["dice"]
     check("IoU = Dice / (2 - Dice) for the pooled counts", dice / (2 - dice), raw["iou"], tol=1e-6)
     truth = ROOT / "detection" / "masks" / "val" / "palsar_0.png"
@@ -229,8 +227,11 @@ def main() -> int:
         print(f"\n=== Triple: assets/images/val/palsar_0.png, {truth.relative_to(ROOT).as_posix()}, "
               f"{predicted[0].relative_to(OUTPUTS).as_posix()} vs report/per_image_metrics.csv")
         check("labelled oil pixels", int(recorded["ref_oil_pixels"]), scores["ref_oil_pixels"], tol=0)
+        row = report_loader.per_image_report().lookup("val", "palsar_0.png")  # "Score for this image" on Detect
+        shown = row.scores() if row else {}
         for key in ("dice", "iou", "precision", "recall"):
-            check(f"palsar_0 {key}", float(recorded[key]), scores[key])
+            check(f"palsar_0 {key}: recomputed vs the CSV", scores[key], float(recorded[key]))
+            check(f"palsar_0 {key}: recomputed vs Score for this image", scores[key], shown.get(key))
     else:
         print("\nTriple check skipped: needs detection/masks/val/palsar_0.png (masks.zip), a palsar_0 mask in "
               "outputs/detection and outputs/report/per_image_metrics.csv.")

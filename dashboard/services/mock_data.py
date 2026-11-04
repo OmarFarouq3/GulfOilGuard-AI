@@ -295,7 +295,7 @@ def detection() -> DetectionData:
     files = _files()
     scene = DetectionScene(IMAGE_ID, files["detection/image.png"], files["detection/mask.png"],
                            files["detection/overlay.png"])
-    data = build_detection([scene], files["detection/metrics.json"], files["detection/spill.geojson"])
+    data = build_detection([scene], files["detection/spill.geojson"])
     data.is_mock = True
     return data
 

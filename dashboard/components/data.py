@@ -67,7 +67,7 @@ def _real_forecast_simulated_release(data: Any) -> bool:
 def _real_detection_simulated_location(data: Any) -> bool:
     """Model mask on a real image + simulated outline, and nothing else synthetic (e.g. sample scores)."""
     return (isinstance(data, DetectionData) and data.mask_source == "model" and data.outline_simulated
-            and not data.is_mock and data.metrics_info.get("synthetic") is not True)
+            and not data.is_mock)
 
 
 def dev_mode() -> bool:
