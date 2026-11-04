@@ -167,5 +167,27 @@ def site_forecast(site: SpillSite) -> Stage:
     return _stage("predict", scenario.site_drift(site))
 
 
+def detection_located() -> bool:
+    """The detected slick has a map location (a valid spill.geojson), so Detect and Predict can be one incident.
+
+    The demo scenario is one simulated incident throughout (labelled as such), so it counts as located.
+    """
+    if demo_mode():
+        return True
+    detection = load_detection()
+    return bool(detection and detection.spill)
+
+
+def release_point() -> tuple[float, float] | None:
+    """(lat, lon) the forecast on Predict starts from: the selected site's, else the single forecast's."""
+    site = selected_site()
+    if site and scenario.sites_mode(demo_mode()):
+        return site.location.latitude, site.location.longitude
+    if scenario.sites_mode(demo_mode()):
+        return None  # one release point per site
+    drift = load_drift()
+    return scenario.drift_origin(drift) if drift and drift.has_content else None
+
+
 def all_stages() -> dict[str, Stage]:
     return {"detect": detection_stage(), "predict": drift_stage(), "respond": routing_stage()}

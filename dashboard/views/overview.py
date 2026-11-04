@@ -5,7 +5,8 @@ from __future__ import annotations
 import streamlit as st
 
 from components import illustrations, incident, ui
-from components.data import all_stages, combined_status, demo_mode, selected_site, spills_stage
+from components.data import (all_stages, combined_status, demo_mode, detection_located, release_point,
+                             selected_site, spills_stage)
 from components.labels import HOURS, KM2, response_time_tile
 from services import scenario
 from services.files import as_float
@@ -71,17 +72,32 @@ ui.stat_tiles([
 ])
 
 # --- Choose an incident ----------------------------------------------------------
-ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages.")
+# Without spill.geojson the radar scene has no location: Detect and Predict are not the same incident yet.
+located = detection_located()
+if located:
+    ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages.")
+else:
+    ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages. Its forecast "
+               "and response plan start from a synthetic release point there; the radar image assigned to it is a "
+               "sample from the dataset, not taken at that point.")
 incident.picker(spills_stage())
 
 # --- Response flow ---------------------------------------------------------------
-ui.section("Incident response flow", "Follow one incident through the three stages of the response.")
+if located:
+    ui.section("Incident response flow", "Follow one incident through the three stages of the response.")
+else:
+    release = release_point()
+    where = f" at {ui.coordinates(*release)}" if release else ""
+    ui.section("Response flow", "Not one incident yet: the radar scene on Detect has no location (no georeferenced "
+               f"slick), and the forecast on Predict starts from a synthetic release point{where}, not from that scene.")
 
 FLOW = (
     ("detect", "views/detection.py", "01", "Detect",
      "A deep-learning model scans Sentinel-1 radar imagery and outlines dark oil slicks on the sea surface."),
     ("predict", "views/drift.py", "02", "Predict",
-     "Winds and ocean currents drive a drift simulation that forecasts where the oil goes over 24 hours."),
+     "Winds and ocean currents drive a drift simulation that forecasts where the oil goes over 24 hours." if located
+     else "Winds and ocean currents drive a drift simulation that forecasts where oil released at a synthetic "
+          "point goes over 24 hours."),
     ("respond", "views/cleanup.py", "03", "Respond",
      "An optimiser assigns vessels to the predicted oil patches and plans the fastest collection routes."),
 )

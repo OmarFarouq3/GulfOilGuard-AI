@@ -11,7 +11,7 @@ import streamlit as st
 
 import config
 from components import flow, maps, ui
-from components.data import demo_mode, drift_stage, selected_site
+from components.data import demo_mode, detection_located, drift_stage, selected_site
 from components.labels import HOURS, KM, KM2, M3, M_PER_S
 from services import schema, selection
 from services.drift_loader import afloat
@@ -23,7 +23,8 @@ data = stage.data
 ui.page_heading(
     "Step 02 · Predict",
     "Forecast where the oil will go",
-    "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours.",
+    "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours." if detection_located()
+    else "Winds and ocean currents drive a drift simulation of oil released at the spill site over the next 24 hours.",
     stage,
 )
 site = selected_site()
