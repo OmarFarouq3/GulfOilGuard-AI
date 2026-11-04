@@ -67,7 +67,7 @@ def _real_forecast_simulated_release(data: Any) -> bool:
 def _real_detection_simulated_location(data: Any) -> bool:
     """Model mask on a real image + simulated outline, and nothing else synthetic (e.g. sample scores)."""
     return (isinstance(data, DetectionData) and data.mask_source == "model" and data.outline_simulated
-            and not data.is_mock and data.metrics_info.get("synthetic") is not True)
+            and not data.is_mock)
 
 
 def dev_mode() -> bool:
@@ -165,6 +165,28 @@ def spills_stage() -> Stage:
 def site_forecast(site: SpillSite) -> Stage:
     """A site's own forecast and its label (per-site layout), whether or not its Predict step was run."""
     return _stage("predict", scenario.site_drift(site))
+
+
+def detection_located() -> bool:
+    """The detected slick has a map location (a valid spill.geojson), so Detect and Predict can be one incident.
+
+    The demo scenario is one simulated incident throughout (labelled as such), so it counts as located.
+    """
+    if demo_mode():
+        return True
+    detection = load_detection()
+    return bool(detection and detection.spill)
+
+
+def release_point() -> tuple[float, float] | None:
+    """(lat, lon) the forecast on Predict starts from: the selected site's, else the single forecast's."""
+    site = selected_site()
+    if site and scenario.sites_mode(demo_mode()):
+        return site.location.latitude, site.location.longitude
+    if scenario.sites_mode(demo_mode()):
+        return None  # one release point per site
+    drift = load_drift()
+    return scenario.drift_origin(drift) if drift and drift.has_content else None
 
 
 def all_stages() -> dict[str, Stage]:

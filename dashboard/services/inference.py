@@ -1,8 +1,10 @@
 """Run the U-Net on the selected radar image, in a subprocess (Streamlit never imports torch).
 
 ``run_detection`` calls ``python -m detection.predict_cli`` with the detection interpreter
-(services/settings.py: GOG_DETECTION_PYTHON, .env, .venv-detect/, else this interpreter), which writes ``<image_id>_{image,mask,overlay}.png`` into
-``outputs/detection/``, the names ``detection_loader`` already reads. A small manifest
+(services/settings.py: GOG_DETECTION_PYTHON, .env, .venv-detect/, else this interpreter), which writes
+``<image_id>_{image,mask,overlay}.png`` into ``config.LIVE_DETECTION_DIR`` (``runs/dashboard/detection/``,
+git-ignored), the names ``detection_loader`` reads. Live runs never write into ``outputs/``: that folder
+holds the modules' saved results, which a click must not change. A small manifest
 ``<image_id>_run.json`` records which image (path + mtime) and checkpoint (path + mtime)
 produced them; while both are unchanged, a re-run returns the stored result instantly.
 The CLI contract (module, result line, exit codes) lives in shared/detection_cli.py.
@@ -10,6 +12,12 @@ The CLI contract (module, result line, exit codes) lives in shared/detection_cli
 No Streamlit here, so everything is easy to unit-test. ``run_detection`` never raises:
 every problem becomes a status with a viewer-safe ``message``; ``detail`` holds the
 technical output (traceback, paths), which the page shows only with ``?dev=1``.
+
+The page starts runs with ``start_detection``: the run goes on in a worker thread, so the page can
+say "still running" (and keep saying it across reruns and page changes) instead of blocking a
+script run. When a run fails or times out, ``with_saved_result`` points at an earlier result for
+the same image (the last live run with this image and model, else the saved scene in
+``outputs/detection/``), which the page shows with a "couldn't run" message.
 """
 
 from __future__ import annotations
@@ -18,8 +26,11 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import traceback
-from dataclasses import dataclass, field
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,10 +56,16 @@ class DetectionRun:
     image_id: str | None = None
     detail: str | None = None  # technical output (stderr tail, paths): shown only with ?dev=1
     info: dict[str, Any] = field(default_factory=dict)  # threshold, image_size, epoch, oil_fraction, checkpoint
+    saved_dir: Path | None = None  # failed run: folder with an earlier result for this image (with_saved_result)
 
     @property
     def ok(self) -> bool:
         return self.state in ("done", "cached")
+
+    @property
+    def result_dir(self) -> Path | None:
+        """Where the result shown for this run is: this run's output, else the saved fallback, else None."""
+        return config.LIVE_DETECTION_DIR if self.ok else self.saved_dir
 
 
 def checkpoint_path() -> Path:
@@ -62,7 +79,7 @@ def detection_python() -> str:
 
 
 def output_files(image_id: str, out_dir: Path | None = None) -> dict[str, Path]:
-    out = out_dir or config.DETECTION_DIR
+    out = out_dir or config.LIVE_DETECTION_DIR
     return {kind: out / f"{image_id}_{kind}.png" for kind in KINDS}
 
 
@@ -74,7 +91,7 @@ def outputs_exist(image_id: str, out_dir: Path | None = None) -> bool:
 
 
 def manifest_path(image_id: str, out_dir: Path | None = None) -> Path:
-    return (out_dir or config.DETECTION_DIR) / f"{image_id}_run.json"
+    return (out_dir or config.LIVE_DETECTION_DIR) / f"{image_id}_run.json"
 
 
 def _fingerprint(image_path: Path, checkpoint: Path) -> dict[str, Any]:
@@ -182,7 +199,7 @@ def run_detection(image_path: Path, image_id: str, *, checkpoint: Path | None = 
                                else settings.resolve_checkpoint())
         resolved_python = settings.given(python, "interpreter passed in") if python else settings.resolve_python()
         return _run_detection(Path(image_path), image_id, resolved_checkpoint, resolved_python,
-                              out_dir or config.DETECTION_DIR, timeout_s, fresh)
+                              out_dir or config.LIVE_DETECTION_DIR, timeout_s, fresh)
     except Exception:  # last resort: a status, never an error page
         return DetectionRun("failed", "Detection could not be completed.", image_id, detail=traceback.format_exc())
 
@@ -201,6 +218,7 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
     if cached:
         return cached
 
+    out.mkdir(parents=True, exist_ok=True)
     command = _command(str(resolved_python.path), checkpoint, image_path, out, image_id)
     try:
         result = subprocess.run(command, cwd=config.REPO_ROOT, capture_output=True, timeout=timeout_s,
@@ -245,3 +263,56 @@ def _run_detection(image_path: Path, image_id: str, resolved_checkpoint: setting
         return DetectionRun("failed", "Detection finished but its result could not be saved.", image_id,
                             detail=traceback.format_exc())
     return DetectionRun("done", "Detection finished.", image_id, info=info)
+
+
+# --- Background runs and the saved-result fallback ---------------------------------------------------
+
+FALLBACK_STATES = ("failed", "timeout", "setup_needed")  # the model could not run; image and checkpoint exist
+_WORKERS = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gog-detect")
+
+
+@dataclass(frozen=True, eq=False)
+class DetectionJob:
+    """A detection run going on in a worker thread (``start_detection``)."""
+    image_path: Path
+    image_id: str
+    started: float  # time.monotonic()
+    future: Future
+
+    def elapsed_s(self) -> float:
+        return time.monotonic() - self.started
+
+    def wait(self, timeout_s: float) -> DetectionRun | None:
+        """The result once the run is over (waiting up to ``timeout_s``), else None: still running."""
+        try:
+            result = self.future.result(timeout=timeout_s)
+        except FutureTimeout:
+            return None
+        except Exception:  # run_detection never raises; a stub or a broken thread might
+            return DetectionRun("failed", "Detection could not be completed.", self.image_id,
+                                detail=traceback.format_exc())
+        return with_saved_result(result, self.image_path)
+
+
+def start_detection(image_path: Path, image_id: str, **kwargs: Any) -> DetectionJob:
+    """Run ``run_detection`` in a worker thread; the subprocess timeout (DETECTION_TIMEOUT_S) still applies."""
+    future = _WORKERS.submit(lambda: run_detection(image_path, image_id, **kwargs))
+    return DetectionJob(Path(image_path), image_id, time.monotonic(), future)
+
+
+def saved_result_dir(image_path: Path, image_id: str, checkpoint: Path | None = None) -> Path | None:
+    """An earlier result for this image: the last live run with this image and model, else outputs/detection/."""
+    try:
+        if cached_run(Path(image_path), image_id, checkpoint, config.LIVE_DETECTION_DIR):
+            return config.LIVE_DETECTION_DIR
+    except OSError:
+        pass
+    return config.DETECTION_DIR if outputs_exist(image_id, config.DETECTION_DIR) else None
+
+
+def with_saved_result(run: DetectionRun, image_path: Path) -> DetectionRun:
+    """A run that could not finish, pointed at an earlier result for the same image when there is one."""
+    if run.state not in FALLBACK_STATES or run.image_id is None:
+        return run
+    saved = saved_result_dir(image_path, run.image_id)
+    return replace(run, saved_dir=saved) if saved else run

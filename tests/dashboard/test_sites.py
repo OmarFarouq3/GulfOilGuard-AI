@@ -57,7 +57,7 @@ def routing_files(site_id: str, lat: float, lon: float, simulation_id: str) -> d
         "routes": {"type": "FeatureCollection", "features": [{
             "type": "Feature", "geometry": {"type": "LineString", "coordinates": [port, target, port]},
             "properties": {"vessel_id": f"V-{site_id}", "assigned_target_ids": ["T01"], "estimated_distance_km": 80.0,
-                           "estimated_travel_hours": 2.5, "oil_collected_m3": 140.0}}]},
+                           "estimated_travel_hours": 2.5, "finish_hours": 7.2, "oil_collected_m3": 140.0}}]},
         "summary": {"status": "feasible", "message": f"plan for {site_id}", "synthetic": True,
                     "scenario_id": f"{simulation_id}@dispatch6h"},
         "targets": {"type": "FeatureCollection", "features": [{
@@ -280,7 +280,7 @@ def heading(at: AppTest) -> str:
 def test_overview_offers_the_site_markers_and_says_numbers_are_per_site(sites):
     sites("S1", "S2", "S3", "S4")
     at = new_app()
-    assert "pick a site on the map to see its numbers" in " ".join(bodies(at, "gog-kpi-scope"))
+    assert "pick a site on the map or in the list below it to see its numbers" in " ".join(bodies(at, "gog-kpi-scope"))
     assert ">—<" in bodies(at, "Spread at 24")[0]  # no single dataset behind the headline numbers
     go(at, "views/drift.py")
     assert FORECAST_CHIP not in heading(at) and SIMULATED_CHIP not in heading(at)  # no data until a site is picked
@@ -290,7 +290,8 @@ def test_stranding_at_24_h_on_the_selected_site(sites):
     sites("S1", "S3", gone={"S3": {12: {"stranded": 1}, 24: {"stranded": 4}}})
     at = go(new_app("S3"), "views/drift.py", "flow_run_predict")
     assert FORECAST_CHIP in heading(at)
-    assert "Real OpenDrift forecast for site S3" in " ".join(bodies(at, "gog-flow-note"))
+    assert "OpenDrift run for site S3, made for its own release point (not moved from another site)" in \
+        " ".join(bodies(at, "gog-flow-note"))
     expected = {0: (10, 0), 6: (10, 0), 12: (9, 1), 24: (6, 4)}
     for hours, (afloat, gone) in expected.items():
         next(b for b in at.button if b.key == f"drift_jump_{hours}").click()
@@ -308,7 +309,8 @@ def test_selected_site_drives_predict_respond_and_the_headline(sites):
     details = " ".join(h.proto.body for e in at.expander if e.label == "Run details" for h in e.get("html"))
     assert "openoil-25.70N-55.40E" in details and "openoil-25.85N" not in details
     go(at, "views/cleanup.py", "flow_run_respond")
-    assert "Response plan for site S2" in " ".join(bodies(at, "Response plan for site"))
+    assert "Precomputed response plan for site S2, optimised on this site" in \
+        " ".join(bodies(at, "response plan for site"))
     assert "V-S2" in page_text(at) and "V-S1" not in page_text(at)
     go(at, "views/overview.py")
     assert "These numbers are for site S2" in " ".join(bodies(at, "gog-kpi-scope"))

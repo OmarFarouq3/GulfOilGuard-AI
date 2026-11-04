@@ -341,8 +341,8 @@ def test_selected_spill_at_the_release_point_gets_the_real_forecast(write_drift)
     write_drift()
     at = predict_page(spill="GOG-SIM-01")
     assert FORECAST_CHIP in heading(at)
-    note = html_with(at, "Real OpenDrift forecast, made for this release point")
-    assert note and "test inputs, not a detection" in note[0]
+    note = html_with(at, "OpenDrift run made for this release point (not moved from elsewhere)")
+    assert note and "the oil type and the amount are assumptions, not a detection" in note[0]
     provenance = html_with(at, 'class="gog-prov"')[0]
     assert "OpenDrift run" in provenance and "Release point and time" in provenance
     assert at.select_slider[0].options and len(at.select_slider[0].options) == 25

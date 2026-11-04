@@ -17,6 +17,7 @@ def _remove_test_outputs():
     """The outputs folder config points at for the whole session; deleted afterwards."""
     yield
     shutil.rmtree(dashboard_testkit.TEST_OUTPUTS, ignore_errors=True)
+    shutil.rmtree(dashboard_testkit.TEST_RUNS, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

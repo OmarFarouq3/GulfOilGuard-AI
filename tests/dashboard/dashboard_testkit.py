@@ -2,7 +2,7 @@
 
 The dashboard's modules are top-level names (``config``, ``services``, ``components``), as
 when Streamlit runs ``dashboard/app.py``, so ``dashboard/`` goes on sys.path. ``config``
-reads ``GULFOILGUARD_OUTPUTS`` once at import, so it is pointed at a throwaway folder before
+reads ``GULFOILGUARD_OUTPUTS`` and ``GULFOILGUARD_RUNS`` once at import, so they point at throwaway folders before
 anything imports it, and the GOG_* variables are cleared: tests never touch the real
 ``outputs/`` or ``assets/images``. The real values are kept for the end-to-end check only.
 """
@@ -27,6 +27,8 @@ for _key in REAL_ENV:
     os.environ.pop(_key, None)
 TEST_OUTPUTS = Path(tempfile.mkdtemp(prefix="gog_test_outputs_"))  # removed by conftest at session end
 os.environ["GULFOILGUARD_OUTPUTS"] = str(TEST_OUTPUTS)
+TEST_RUNS = Path(tempfile.mkdtemp(prefix="gog_test_runs_"))  # live detection runs; removed with TEST_OUTPUTS
+os.environ["GULFOILGUARD_RUNS"] = str(TEST_RUNS)
 
 for _path in (DASHBOARD_DIR, REPO_ROOT):
     if str(_path) not in sys.path:

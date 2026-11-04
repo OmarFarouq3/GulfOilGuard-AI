@@ -236,7 +236,8 @@ def mock_files() -> dict[str, Any]:
                 "vessel_id": vessel_id,
                 "assigned_target_ids": assigned,
                 "estimated_distance_km": round(distance_km, 1),
-                "estimated_travel_hours": round(sailing_hours + SKIM_HOURS_PER_TARGET * len(assigned), 2),
+                "estimated_travel_hours": round(sailing_hours, 2),  # sailing only, as in dashboard_export.py
+                "finish_hours": round(sailing_hours + SKIM_HOURS_PER_TARGET * len(assigned), 2),  # + skimming
                 # Vessel (location = first route coordinate)
                 "speed_m_per_s": speed_m_per_s,
                 "capacity_m3": capacity_m3,
@@ -294,7 +295,7 @@ def detection() -> DetectionData:
     files = _files()
     scene = DetectionScene(IMAGE_ID, files["detection/image.png"], files["detection/mask.png"],
                            files["detection/overlay.png"])
-    data = build_detection([scene], files["detection/metrics.json"], files["detection/spill.geojson"])
+    data = build_detection([scene], files["detection/spill.geojson"])
     data.is_mock = True
     return data
 

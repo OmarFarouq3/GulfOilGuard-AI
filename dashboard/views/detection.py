@@ -1,4 +1,4 @@
-"""Detect: SAR imagery, predicted oil mask, model quality and the slick on the map.
+"""Detect: SAR imagery, the predicted oil mask for the analysed scene, and the slick on the map.
 
 With a spill selected on Overview, components.flow runs the U-Net on its radar image first.
 """
@@ -8,10 +8,9 @@ from __future__ import annotations
 import streamlit as st
 
 import config
-from components import charts, flow, maps, ui
+from components import flow, maps, ui
 from components.data import detection_stage, selected_site
 from components.labels import slick_tooltip
-from services import inference, report_loader
 from services.detection_loader import load_galleries
 
 stage = detection_stage()
@@ -22,52 +21,16 @@ ui.page_heading(
     "A U-Net model reads SAR imagery and outlines oil on the sea surface.",     #Edit 1: Sentinel-1 radar --> SAR imagery
     stage,
 )
-# Team A's report describes the real model: never shown next to the demo scene or illustrative scores.
-real_report = data is not None and not data.is_mock and data.metrics_info.get("synthetic") is not True
+# The evaluation report's example images describe the real model: never shown next to the demo scene.
+real_report = data is not None and not data.is_mock
 
-
-DETAIL_LABELS = {"model": "Model", "split": "Evaluated on", "n_images": "Images evaluated",
-                 "threshold": "Decision threshold", "checkpoint": "Checkpoint", "epoch": "Checkpoint epoch",
-                 "aggregation": "Aggregation", "created": "Evaluated"}  # "limitations" is shown as a caption
-SPLIT_NAMES = {"train": "training", "test": "test"}
-
-
-def accuracy_caption(split: object) -> str:
-    """Name the split the scores come from, as the evaluation file states it; never assume validation."""
-    name = split.strip().lower() if isinstance(split, str) else ""
-    if name in ("val", "validation"):
-        return ("Scores from 0 to 1, computed on the validation split. That split was also used to choose the "
-                "checkpoint, so these are not an independent test.")
-    if name:
-        return f"Scores from 0 to 1, computed on the {SPLIT_NAMES.get(name, split.strip())} split."
-    return "Scores from 0 to 1. The report doesn't say which images were scored."
-
-
-OVERALL_TITLE = "Overall model accuracy"
-STATIC_NOTE = "These overall scores don't change from image to image; the score for the selected image is shown above."
-SPLIT_WORDS = {"val": "validation", "validation": "validation", "train": "training", "test": "test"}
-
-
-def overall_caption(split: object, n_images: object) -> str:
-    """Name the evaluated image set without implying a per-image average."""
-    name = split.strip().lower() if isinstance(split, str) else ""
-    word = SPLIT_WORDS.get(name, split.strip() if name else "")
-    known = isinstance(n_images, int) and not isinstance(n_images, bool) and n_images > 0
-    images = f"{n_images:,} {word} images" if known else f"all evaluated {word} images"
-    return f"Scores across {' '.join(images.split())}. {accuracy_caption(split)}"
-
-
-def checkpoint_note() -> None:
-    """Whether the scores were computed on the checkpoint this dashboard runs (checkpoint_sha256)."""
-    check = report_loader.check_checkpoint(inference.checkpoint_path())
-    if check.state == "mismatch":
-        st.html(f'<div class="gog-notice">{ui.esc(check.message)}</div>')
-    else:
-        st.html(f'<p class="gog-flow-note">{ui.esc(check.message)}</p>')
+MASK_MISSING = ("The detected oil mask for this scene is not available yet, so the radar image is shown without "
+                "the model's outline.")
+NO_SCENE = "The radar image and detected oil mask are not available yet. They will appear here once a scene has been analysed."
 
 
 def galleries() -> None:
-    """report.py's best / median / worst validation images (under Overall model accuracy), when the files exist."""
+    """report.py's best / median / worst validation images, when the files exist."""
     shown, _warnings = load_galleries()  # unreadable files are listed under Diagnostics
     if not shown:
         return
@@ -80,9 +43,8 @@ def galleries() -> None:
 
 
 site = selected_site()
-image_scored = False  # a "Score for this image" block with scores is on the page
 if site:
-    image_scored = flow.detect_controls(site, data.metrics if real_report else None)
+    flow.detect_controls(site)
 else:
     flow.no_selection_prompt()
 
@@ -92,8 +54,8 @@ if data is None:
             "detect",
             "No satellite scene analysed yet",
             "Once a radar scene of the Gulf is analysed, this view shows the image, the oil the model "
-            "found in it, how accurate the model is, and where the slick sits on the map.",
-            ["Radar scene", "Detected oil outline", "Model performance", "Slick on the map"],   #Edit 2: Model accuracy  --> Model performance
+            "found in it, and where the slick sits on the map.",
+            ["Radar scene", "Detected oil outline", "Slick on the map"],
         )
 else:
     # --- Imagery ---------------------------------------------------------------
@@ -107,41 +69,14 @@ else:
         panels = [(label, img) for label, img in (
             ("Radar image", scene.image), ("Detected oil (white)", scene.mask), ("Overlay", scene.overlay),
         ) if img]
+        if scene.mask is None:
+            st.html(f'<div class="gog-notice">{ui.esc(MASK_MISSING)}</div>')
         with st.container(key="gog-imagery"):
             for column, (label, img) in zip(st.columns(len(panels)), panels):
                 column.image(img, caption=label, width="stretch", alt=label)
     else:
-        ui.inline_empty("The radar image and detected oil outline will appear here.")
+        ui.inline_empty(NO_SCENE)
 
-    # --- Model quality ---------------------------------------------------------
-    if data.metrics:
-        ui.section(OVERALL_TITLE, overall_caption(data.metrics_info.get("split"), data.metrics_info.get("n_images")))
-        ui.stat_tiles([
-            (charts.METRIC_LABELS[k], f"{data.metrics[k]:.2f}" if k in data.metrics else None, "",
-             charts.METRIC_HINTS[k])
-            for k in config.DETECTION_METRICS
-        ])
-        if image_scored:
-            st.html(f'<p class="gog-flow-note">{ui.esc(STATIC_NOTE)}</p>')
-        if real_report:
-            checkpoint_note()
-        left, right = st.columns([3, 2], gap="large")
-        with left:
-            figure = charts.per_class_bar(data.per_class) if data.per_class else charts.metrics_bar(data.metrics)
-            st.plotly_chart(figure, width="stretch", config=charts.CHART_CONFIG)
-        with right:
-            # metrics_info holds only detection_loader.DETAIL_KEYS (path-like text already reduced).
-            details = {DETAIL_LABELS[k]: v for k, v in data.metrics_info.items() if k in DETAIL_LABELS}
-            ui.section("Evaluation details")
-            if details:
-                ui.details_table(details)
-            else:
-                ui.inline_empty("Model and evaluation details will appear here.")
-            if isinstance(data.metrics_info.get("limitations"), str):
-                st.caption(data.metrics_info["limitations"])
-    else:
-        ui.section(OVERALL_TITLE)
-        ui.inline_empty("Accuracy scores will appear here once the model has been evaluated.")
     if real_report:
         galleries()
 
@@ -168,7 +103,6 @@ else:
 - **Dark means oil.** Oil damps the small waves that reflect radar back to the satellite, so slicks look dark.
 - **Look-alikes** also look dark: very calm water, algae and natural films, rain cells and ship wakes. They cause false alarms (lower precision).
 - **Thin or broken slicks**, and strong wind that breaks slicks up, cause missed oil (lower recall).
-- **Accuracy scores** describe the model on a labelled evaluation set, not a guarantee for every new scene.
 - **Location** is a separate step: a correct outline with wrong scene geometry still lands in the wrong place.
 """
         )

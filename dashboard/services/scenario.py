@@ -68,9 +68,12 @@ def _simulated_outline(site: SpillSite, image_id: str) -> dict:
 
 
 def selected_detection(site: SpillSite, run: DetectionRun | None, simulated_accepted: bool) -> DetectionData | None:
-    """Model result for the selected image, else the accepted simulated detection, else None."""
-    if run is not None and run.ok:
-        data = load_scene(run.image_id)
+    """Model result for the selected image (or the saved one when the run failed), else the accepted
+    simulated detection, else None."""
+    mask_dir = None
+    if run is not None and run.result_dir is not None:
+        mask_dir = run.result_dir  # the live run's output, or an earlier result after a failed run
+        data = load_scene(run.image_id, mask_dir)
         if data is None:  # result files were removed since the run
             return None
         data.mask_source = "model"
@@ -81,7 +84,7 @@ def selected_detection(site: SpillSite, run: DetectionRun | None, simulated_acce
         return None
     image_id = data.scenes[0].image_id if data.scenes else site.spill_id
     data.spill, data.detections = None, []
-    parse_spill(_simulated_outline(site, image_id), data)
+    parse_spill(_simulated_outline(site, image_id), data, mask_dir=mask_dir)
     data.outline_simulated = True
     return data
 
@@ -168,6 +171,18 @@ def site_drift(site: SpillSite) -> DriftData | None:
     return dataclasses.replace(data, anchored_to=site.spill_id)
 
 
+def site_drift_unreadable(site: SpillSite) -> list[str]:
+    """Why this site's drift files give no forecast although they exist (unreadable or invalid); [] otherwise.
+
+    ``site_drift`` returns None both for a site with no drift files and for files that could not be read;
+    these are the loader's warnings for the second case, for Diagnostics and Predict's note.
+    """
+    data = load_drift(config.site_files(site.spill_id)["drift"])
+    if data is None or data.has_content:
+        return []
+    return [f"Site `{site.spill_id}`: {w}" for w in data.warnings]
+
+
 def site_routing(site: SpillSite) -> RoutingData | None:
     """The routing files of this spill's site folder, unmoved; None if it has none."""
     data = load_routing(config.site_files(site.spill_id)["routing"])
@@ -246,7 +261,7 @@ def anchor_routing(routing: RoutingData, site: SpillSite, offset: Offset) -> Rou
         RouteEntry(
             route=dataclasses.replace(e.route, coordinates=tuple(_shift(c, offset) for c in e.route.coordinates)),
             vessel=dataclasses.replace(e.vessel, location=_shift(e.vessel.location, offset)) if e.vessel else None,
-            oil_collected_m3=e.oil_collected_m3,
+            oil_collected_m3=e.oil_collected_m3, finish_hours=e.finish_hours,
         )
         for e in routing.routes
     ]

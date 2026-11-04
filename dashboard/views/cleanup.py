@@ -18,9 +18,12 @@ import streamlit as st
 import config
 from components import flow, maps, ui
 from components.data import demo_mode, drift_stage, routing_stage, selected_site
-from components.labels import HOURS, KM, M3, M_PER_S, STATUS_LABELS
+from components.labels import (COMPARE_RESPONSE_ROW, COMPARE_SAILING_ROW, FALLBACK_CAPTION, FINISH_HELP, HOURS, KM, M3,
+                               M_PER_S, RESPONSE_CAPTION, SAILING_HELP, SAILING_HINT, STATUS_LABELS,
+                               response_time_tile)
 from services import scenario
 from services.drift_loader import afloat
+from services.files import display_text
 
 stage = routing_stage()
 data = stage.data
@@ -41,7 +44,7 @@ else:
 # the moving-oil re-planning keeps the best sailed round by the same order, optimization/moving_targets.py).
 OBJECTIVE = ("The optimiser does not aim for the shortest total distance. In order, it aims to recover the most oil "
              "(leaving a patch unserved costs far more than any detour), then to get the last vessel back to port, "
-             "cleaning included, as early as possible (one hour earlier is worth 100 km of extra sailing, an "
+             "cleanup included, as early as possible (one hour earlier is worth 100 km of extra sailing, an "
              "assumption), and only then to sail the fewest kilometres. So it may sail further than the baseline to "
              "finish sooner.")
 STEP_KEY = "respond_step"
@@ -69,7 +72,8 @@ def oil_step(hours: list[float], default: float) -> float:
             for h in key_hours:
                 st.button(step_label(h), key=f"respond_jump_{h:g}", type="tertiary",
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
-    shown = st.select_slider("Predicted oil shown", options=hours, format_func=step_label, key=STEP_KEY)
+    shown = st.select_slider("Predicted oil shown", options=hours, format_func=step_label, key=STEP_KEY,
+                             help="Steps through the saved forecast; the plan is not re-optimised.")
     st.session_state[SAVED_STEP_KEY] = (owner, shown)
     return shown
 
@@ -88,7 +92,7 @@ def stops(entry) -> list[tuple[float, float]]:
 def unserved_reasons(message: str | None) -> str | None:
     """The plan's own words after 'unserved:' in its message, if it gives them."""
     found = re.search(r"unserved: (.+?)(?:; |$)", message or "")
-    return found.group(1) if found else None
+    return display_text(found.group(1)) if found else None
 
 
 if data is None:
@@ -101,6 +105,7 @@ if data is None:
             ["Vessel routes", "Visiting order", "Fleet totals", "Estimated oil recovery"],
         )
 else:
+    flow.precomputed_plan_note(data, drift)
     site_plan = bool(site and data.anchored_to == site.spill_id and scenario.sites_mode(demo_mode()))
     comparison, baseline, _warnings = scenario.site_comparison(site) if site_plan else (None, None, [])  # Diagnostics
     if data.status:
@@ -110,27 +115,35 @@ else:
         dispatch = comparison.get("dispatch_hours") if comparison else None
         when = (f" (+{dispatch:g} {HOURS} after the release" + (f", {comparison['dispatch_time'][:16].replace('T', ' ')} UTC"
                 if comparison.get("dispatch_time") else "") + ")") if dispatch is not None else ""
-        fleet = f" (fleet file {comparison['fleet']}.json)" if comparison and comparison.get("fleet") else ""
+        fleet = (f" (fleet file {display_text(comparison['fleet'])}.json)"
+                 if comparison and comparison.get("fleet") else "")
         st.caption(f"Assumptions, not observations: the vessels and their start positions, taken as home "
                    f"ports{fleet}, and the dispatch time{when}.")
 
     target_oil = data.target_oil_m3
+    response_label, response_hours, response_hint = response_time_tile(data)
+    completion = data.completion_hours is not None
     ui.stat_tiles([
         ("Vessels deployed", ui.fmt(float(len(data.routes)), 0) if data.routes else None, "",
          "Vessels with an assigned route"),
-        ("Response time", ui.fmt(data.response_time_hours), HOURS, "Until the last vessel completes its route"),
+        (response_label, ui.fmt(response_hours), HOURS, response_hint),
+        *([("Sailing time", ui.fmt(data.sailing_time_hours), HOURS, SAILING_HINT)]
+          if completion else []),
         ("Distance sailed", ui.fmt(data.total_distance_km), KM, "All vessels combined"),
         ("Estimated oil recovery", ui.fmt(data.oil_collected_m3, 0), M3,
          f"Of about {target_oil:,.0f} {M3} in the oil patches" if target_oil else "Estimated volume collected"),
     ])
-    st.caption("Response time is the longest sailing time of any vessel, including its trip back to port. It "
-               "excludes the time spent cleaning.")
+    st.caption(RESPONSE_CAPTION if completion else FALLBACK_CAPTION)
 
     unserved = [t for t in data.targets if t.target_id in data.unserved_target_ids]
-    if unserved:
+    if data.unserved_target_ids:  # every id summary.json lists, with its volume when targets.geojson has it
         reasons = unserved_reasons(data.message)
-        listed = ", ".join(f"{t.target_id} ({t.oil_volume_m3:,.1f} {M3})" for t in unserved)
-        st.html(f'<div class="gog-notice">Not served: {ui.esc(listed)}.'
+        volumes = {t.target_id: t.oil_volume_m3 for t in data.targets}
+        listed = ", ".join(f"{t} ({volumes[t]:,.1f} {M3})" if t in volumes else t for t in data.unserved_target_ids)
+        count = len(data.unserved_target_ids)
+        total = len(set(volumes) | set(data.unserved_target_ids)) if data.targets else 0  # every patch the plan names
+        share = f"{count} of {total} oil patches" if total else f"{count} oil patch{'es' if count != 1 else ''}"
+        st.html(f'<div class="gog-notice">Not served: {share}: {ui.esc(listed)}.'
                 + (f" The plan says: {ui.esc(reasons)}." if reasons else "") + "</div>")
 
     # --- Map ---------------------------------------------------------------------
@@ -223,6 +236,7 @@ else:
     if data.routes:
         columns = {
             "distance": f"Distance ({KM})",
+            "finish": f"Time to finish ({HOURS})",
             "time": f"Sailing ({HOURS})",
             "speed": f"Speed ({M_PER_S})",
             "capacity": f"Capacity ({M3})",
@@ -233,21 +247,25 @@ else:
             "Visiting order": " → ".join(e.route.assigned_target_ids) or "—",
             "Stops": len(e.route.assigned_target_ids),
             columns["distance"]: e.route.estimated_distance_km,
+            columns["finish"]: e.finish_hours,
             columns["time"]: e.route.estimated_travel_hours,
             columns["speed"]: e.vessel.speed_m_per_s if e.vessel else None,
             columns["capacity"]: e.vessel.capacity_m3 if e.vessel else None,
             columns["oil"]: e.oil_collected_m3,
         } for e in data.routes])
+        # Pixel widths sized to the headers and the real vessel ids (HAMRIYAH-OSRV-RESERVE), so all nine fit at 1,150 px.
         st.dataframe(table, hide_index=True, width="stretch", alt="Vessel assignments", column_config={
-            "Vessel": st.column_config.TextColumn(width="medium"),
-            "Visiting order": st.column_config.TextColumn(width="medium"),
-            "Stops": st.column_config.NumberColumn(width="small"),
-            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width="small"),
+            "Vessel": st.column_config.TextColumn(width=200),
+            "Visiting order": st.column_config.TextColumn(width=210),
+            "Stops": st.column_config.NumberColumn(width=55),
+            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width=105),
+            columns["finish"]: st.column_config.NumberColumn(
+                format="%.1f", width=130, help=FINISH_HELP),
             columns["time"]: st.column_config.NumberColumn(
-                format="%.1f", width="small", help="Sailing time from dispatch, including the trip back to port"),
-            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width="small"),
-            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width="small"),
-            columns["oil"]: st.column_config.NumberColumn(format="%.0f", width="small",
+                format="%.1f", width=95, help=SAILING_HELP),
+            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width=95),
+            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width=105),
+            columns["oil"]: st.column_config.NumberColumn(format="%.0f", width=80,
                                                           help="Estimated oil recovered by this vessel, in m³"),
         })
         if data.idle_vessel_ids:
@@ -268,11 +286,11 @@ else:
         share = {plan: f"{metrics[f'{plan}_oil_recovered_m3'] / total:.0%}"
                  for plan in ("optimized", "baseline") if total and f"{plan}_oil_recovered_m3" in metrics}
         rows = [
-            (f"Last vessel back, including cleaning ({HOURS})", *pair("response_hours", 2)),
+            (f"{COMPARE_RESPONSE_ROW} ({HOURS})", *pair("response_hours", 2)),
             ("Patches served", *pair("targets_covered", 0)),
             (f"Oil recovered ({M3})", *pair("oil_recovered_m3", 0)),
             ("Oil recovered, share of the targeted oil", share.get("optimized", "—"), share.get("baseline", "—")),
-            (f"Longest sailing route ({HOURS}), the response time above", *pair("longest_route_hours", 2)),
+            (f"{COMPARE_SAILING_ROW} ({HOURS})", *pair("longest_route_hours", 2)),
             (f"Distance sailed ({KM})", *pair("distance_km")),
         ]
         ui.table(["", "Optimised", "Baseline"], rows, numeric=(1, 2), key="gog-compare")
@@ -299,12 +317,13 @@ else:
     # --- What the files say about themselves --------------------------------------------
     if data.message:
         with st.expander("Plan assumptions", icon=":material/rule:"):
-            st.markdown("\n".join(f"- {part.strip()}" for part in data.message.split("; ") if part.strip()))
+            st.markdown("\n".join(f"- {display_text(part.strip())}" for part in data.message.split("; ")
+                                   if part.strip()))
     warnings = scenario.site_validation_warnings(site) if site_plan else []
     if warnings:
-        with st.expander("Warnings from the cleanup team's checks", icon=":material/warning:"):
+        with st.expander("Warnings from the plan's own checks", icon=":material/warning:"):
             st.caption("As written in the site's validation report.")
-            st.markdown("\n".join(f"- {w}" for w in warnings))  # st.markdown renders no HTML: shown as written
+            st.markdown("\n".join(f"- {display_text(w)}" for w in warnings))  # st.markdown renders no HTML
 
     with st.expander("How to read this", icon=":material/help:"):
         st.markdown(

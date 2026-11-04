@@ -9,3 +9,4 @@ ortools
 scipy
 streamlit
 plotly
+pytest

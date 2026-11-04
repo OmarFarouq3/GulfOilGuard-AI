@@ -3,7 +3,8 @@
 - ``routes.geojson``: one LineString per vessel (``VesselRoute``). Properties: ``vessel_id``,
   ``assigned_target_ids`` (visiting order), optional ``estimated_distance_km``,
   ``estimated_travel_hours``; optional ``Vessel`` fields ``speed_m_per_s``, ``capacity_m3``,
-  ``available_hours``; extension ``oil_collected_m3`` (not in schema).
+  ``available_hours``; extensions ``oil_collected_m3`` and ``finish_hours`` (sailing + cleaning, back
+  in port; not in schema).
 - ``summary.json``: ``OptimizationOutput`` without routes: ``status`` (required), ``message``.
 - ``targets.geojson`` (optional): Point features (``ResponseTarget``) with ``target_id`` and
   ``oil_volume_m3``; extension ``source_hours`` (not in schema).
@@ -44,6 +45,7 @@ def parse_routes(collection: dict | None, data: RoutingData, name: str = "routes
             route = schema.vessel_route(props, geometry["coordinates"])
             vessel = schema.vessel(props, route.coordinates[0])
             collected = schema.number(props.get("oil_collected_m3"), "oil_collected_m3")
+            finish = schema.number(props.get("finish_hours"), "finish_hours")
         except schema.SchemaError as exc:
             data.warnings.append(f"`{name}` feature {i}: {exc}; skipped.")
             continue
@@ -56,7 +58,12 @@ def parse_routes(collection: dict | None, data: RoutingData, name: str = "routes
                                  f"{vessel.capacity_m3}.")
         if vessel and route.estimated_travel_hours is not None and route.estimated_travel_hours > vessel.available_hours:
             data.warnings.append(f"`{name}` {route.vessel_id}: estimated_travel_hours exceeds available_hours.")
-        data.routes.append(RouteEntry(route=route, vessel=vessel, oil_collected_m3=collected))
+        travel = route.estimated_travel_hours
+        if finish is not None and travel is not None and finish < travel - 0.01:
+            data.warnings.append(f"`{name}` {route.vessel_id}: finish_hours {finish} is less than the sailing time "
+                                 f"{travel}; ignored.")
+            finish = None
+        data.routes.append(RouteEntry(route=route, vessel=vessel, oil_collected_m3=collected, finish_hours=finish))
         path = props.get("sea_path")
         if path is not None:
             try:

@@ -7,6 +7,8 @@ replacing services.inference.run_detection, which AppTest's script run shares wi
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from dashboard_testkit import APP, make_image_dir, page_text
@@ -110,7 +112,7 @@ def stub_detection(monkeypatch):
 
     monkeypatch.setattr(inference, "run_detection", fake)
     yield calls
-    for path in inference.config.DETECTION_DIR.glob("*"):
+    for path in [*inference.config.DETECTION_DIR.glob("*"), *inference.config.LIVE_DETECTION_DIR.glob("*")]:
         path.unlink()
 
 
@@ -148,7 +150,10 @@ def test_overview_without_images_shows_the_empty_state_card(tmp_path, monkeypatc
     cards = html_bodies(at, "gog-images-missing")
     assert len(cards) == 1
     card = cards[0]
-    assert "No radar images found" in card and str(directory) in card and "GOG_IMAGE_DIR" in card
+    from services import settings
+    shown = settings.shown_folder(directory)  # under the home folder: "~\...", never the OS user name
+    assert "No radar images found" in card and shown in card and "GOG_IMAGE_DIR" in card
+    assert str(Path.home()) not in card
     assert ".png" in card and ".jpg" in card and "assets/images/val" in card
     assert not [p for p in at.get("page_link") if p.proto.label == "Continue to Detect"]
     open_page(at, DETECT)
@@ -379,7 +384,6 @@ def test_every_page_renders_without_selection(images, demo):
 
 # --- Status labels, metrics caption, image source (dashboard review fixes) ------------------------
 
-ACCURACY_CAPTION = "computed on the validation split"
 
 
 def write_metrics(content: dict) -> None:
@@ -395,12 +399,12 @@ def run_stubbed_detection(at: AppTest, image) -> str:
     return page_text(checked(at.run()))
 
 
-def test_model_mask_with_synthetic_scores_stays_simulated(images, stub_detection):
-    """A real mask next to illustrative ("synthetic") scores is not "real detection": fully simulated wording."""
+def test_synthetic_scores_no_longer_change_the_detect_label(images, stub_detection):
+    """The overall scores are not shown any more, so an illustrative metrics.json no longer labels a real mask."""
     write_metrics({"synthetic": True, "dice": 0.7, "iou": 0.6, "precision": 0.7, "recall": 0.7})
     at = new_app()
-    run_stubbed_detection(at, images[0])
-    assert SIMULATED_CHIP in heading(at) and MIXED_CHIP not in heading(at)
+    text = run_stubbed_detection(at, images[0])
+    assert MIXED_CHIP in heading(at) and "Overall model accuracy" not in text
 
 
 def test_timeline_and_overview_use_the_mixed_wording(images, stub_detection):
@@ -412,26 +416,16 @@ def test_timeline_and_overview_use_the_mixed_wording(images, stub_detection):
     assert SIMULATED_CHIP in html_bodies(at, "gog-kpi-status")[0]  # headline area comes from the simulated outline
 
 
-def test_accuracy_caption_only_with_metrics(images, stub_detection):
-    text = run_stubbed_detection(new_app(), images[0])
-    assert "Overall model accuracy" in text and ACCURACY_CAPTION not in text
-    assert "never saw in training" not in text
-
-
-def test_accuracy_caption_and_evaluate_py_scores(images, stub_detection):
-    """metrics.json exactly as detection/evaluate.py writes it: scores nested, absolute checkpoint path."""
+def test_evaluate_py_metrics_json_is_not_shown_on_detect(images, stub_detection):
+    """metrics.json exactly as detection/evaluate.py writes it: none of it reaches the Detect page."""
     write_metrics({
         "checkpoint": "C:/Users/someone/models/oil_unet/best.pth", "epoch": 12, "pairs": 1615, "threshold": 0.5,
-        "image_size": 256, "aggregation": "global pixel counts (micro)",
         "metrics": {"dice": 0.8689, "iou": 0.7682, "precision": 0.8459, "recall": 0.8932},
-        "counts": {"true_positive": 1},
         "limitations": "Provider validation split used for model selection; not an independent test set."})
     text = run_stubbed_detection(new_app(), images[0])
-    # evaluate.py writes no "split", so the caption must not claim validation; its limitations text still shows.
-    assert ACCURACY_CAPTION not in text and "The report doesn&#x27;t say which images were scored." in text
-    assert "not an independent test" in text and "never saw in training" not in text
-    assert "0.87" in text and "1615" in text and "best.pth" in text
-    assert "C:/Users/someone" not in text  # never a local path
+    for gone in ("Overall model accuracy", "Evaluation details", "0.87", "0.85", "0.89", "1615", "1,615",
+                 "best.pth", "Provider validation split", "C:/Users/someone"):
+        assert gone not in text, gone
 
 
 def test_image_source_caption_from_file_name(tmp_path, monkeypatch):
@@ -614,20 +608,21 @@ def running_checkpoint(tmp_path, monkeypatch):
 def test_checkpoint_hash_match(split_images, stub_detection, report, running_checkpoint):
     at = run_with_report(split_images["val/palsar_0.png"],
                          metrics={**REPORT_METRICS, "checkpoint_sha256": running_checkpoint})
-    assert any("Scores were computed on this checkpoint." in b for b in html_bodies(at, "gog-flow-note"))
     text = page_text(at)
     assert MISMATCH not in text and running_checkpoint not in text  # the hash is no detail for viewers
+    assert "Scores were computed on this checkpoint." not in text  # the note of the removed overall section
 
 
 def test_checkpoint_hash_mismatch_is_a_visible_warning(split_images, stub_detection, report, running_checkpoint):
+    """The per-image scores come from the same report: a report made with another checkpoint is still flagged."""
     at = run_with_report(split_images["val/palsar_0.png"], metrics={**REPORT_METRICS, "checkpoint_sha256": "a" * 64})
     assert any(MISMATCH in body for body in html_bodies(at, "gog-notice"))
     assert any(MISMATCH in m.value for m in at.markdown), "also listed under Diagnostics"
 
 
-def test_checkpoint_hash_missing_is_a_quiet_note(split_images, stub_detection, report, running_checkpoint):
+def test_checkpoint_hash_missing_shows_nothing(split_images, stub_detection, report, running_checkpoint):
     at = run_with_report(split_images["val/palsar_0.png"])
-    assert any(UNREPORTED in b for b in html_bodies(at, "gog-flow-note"))
+    assert UNREPORTED not in page_text(at)  # the quiet note belonged to the removed overall section
     assert not any("checkpoint" in b for b in html_bodies(at, "gog-notice"))
 
 
@@ -676,8 +671,10 @@ def test_galleries_hidden_next_to_the_demo_scene(images, report):
 
 
 def test_galleries_shown_without_a_selection(images, report):
+    from dashboard_testkit import make_image
     write_galleries(report)
-    write_metrics(REPORT_METRICS)
+    inference.config.DETECTION_DIR.mkdir(parents=True, exist_ok=True)
+    make_image(inference.config.DETECTION_DIR / "scene_image.png")  # a scene to show: the page is not empty
     at = checked(new_app().run())
     assert gallery_captions(open_page(at, DETECT)) == ["Best", "Median", "Worst"]
 
@@ -693,39 +690,14 @@ def test_diagnostics_list_the_report_files(images, report):
 # --- Detection test pass fixes: details allowlist, caption, undefined precision, Diagnostics paths --------
 
 
-def accuracy_caption(at: AppTest) -> str:
-    bodies = [b for b in html_bodies(at, "gog-section") if "Overall model accuracy" in b]
-    assert len(bodies) == 1
-    return bodies[0]
-
-
-@pytest.mark.parametrize("split, expected, validation_claim", [
-    ("val", "computed on the validation split. That split was also used to choose the checkpoint", True),
-    ("test", "Scores from 0 to 1, computed on the test split.", False),
-    ("train", "Scores from 0 to 1, computed on the training split.", False),
-    (None, "Scores from 0 to 1. The report doesn&#x27;t say which images were scored.", False),
-])
-def test_accuracy_caption_follows_the_files_split(split, expected, validation_claim, split_images, stub_detection,
-                                                  report):
-    metrics = {k: v for k, v in REPORT_METRICS.items() if k != "split"}
-    at = run_with_report(split_images["val/palsar_0.png"], metrics={**metrics, "split": split} if split else metrics)
-    caption = accuracy_caption(at)
-    assert expected in caption
-    assert ("validation" in caption) is validation_claim and ("choose the checkpoint" in caption) is validation_claim
-
-
 def test_unknown_metrics_keys_and_paths_never_reach_the_page(split_images, stub_detection, report):
     at = run_with_report(split_images["val/palsar_0.png"], metrics={
         **REPORT_METRICS, "checkpoint": "C:/Users/someone/models/best.pth", "data_dir": "C:/Users/someone/sar_data",
         "notes": "internal note", "limitations": "Masks in /home/someone/masks/val were used."})
-    details = " ".join(html_bodies(at, "gog-details"))
-    assert "best.pth" in details and "Checkpoint" in details
     page = page_text(at)
     assert "someone" not in page and "sar_data" not in page and "internal note" not in page
-    assert "Masks in val were used." in page
-    diagnostics = [m.value for m in at.markdown if "not shown to viewers" in m.value]
-    assert diagnostics == ["- `metrics.json`: not shown to viewers: `data_dir`, `notes`."]
-    assert not any("couldn" in b for b in html_bodies(at, "gog-notice"))  # unknown keys are not a viewer issue
+    assert "Masks in" not in page and "Evaluation details" not in page  # metrics.json is no longer shown at all
+    assert not any("couldn" in b for b in html_bodies(at, "gog-notice"))
 
 
 def test_nothing_predicted_shows_precision_as_undefined(split_images, stub_detection, report):
@@ -777,14 +749,6 @@ def test_diagnostics_paths_are_relative_unless_dev(split_images, stub_detection,
 # --- Overall vs per-image scores ------------------------------------------------------------------
 
 OVERALL = "Overall model accuracy"
-STATIC_NOTE = ("These overall scores don&#x27;t change from image to image; the score for the selected image is "
-               "shown above.")
-
-
-def overall_section(at: AppTest) -> str:
-    bodies = [b for b in html_bodies(at, "gog-section") if OVERALL in b]
-    assert len(bodies) == 1
-    return bodies[0]
 
 
 def score_tiles(at: AppTest) -> dict[str, str]:
@@ -794,71 +758,22 @@ def score_tiles(at: AppTest) -> dict[str, str]:
     return {re.search(r'gog-stat-label">(.*?)</div>', c, re.S).group(1).strip(): c for c in cells}
 
 
-@pytest.mark.parametrize("extra, subtitle", [
-    ({"n_images": 1615}, "Scores across 1,615 validation images. Scores from 0 to 1, computed on the validation split. "
-                         "That split was also used to choose the checkpoint, so these are not an independent test."),
-    ({"n_images": None}, "Scores across all evaluated validation images. Scores from 0 to 1, computed on the "
-                         "validation split."),
-    ({"n_images": 40, "split": "test"}, "Scores across 40 test images. Scores from 0 to 1, computed on the test split."),
-    ({"n_images": 40, "split": None}, "Scores across 40 images. Scores from 0 to 1. The report doesn&#x27;t say which "
-                                      "images were scored."),
-    ({"n_images": "many"}, "Scores across all evaluated validation images."),
-])
-def test_overall_section_title_and_subtitle(split_images, stub_detection, report, extra, subtitle):
-    metrics = {k: v for k, v in {**REPORT_METRICS, **extra}.items() if v is not None}
-    section = overall_section(run_with_report(split_images["val/palsar_0.png"], metrics=metrics))
-    assert "<h3>Overall model accuracy</h3>" in section and subtitle in section
-    assert "How accurate is the model?" not in section
-
-
-def test_overall_title_without_scores(split_images, stub_detection, report):
-    at = new_app()
-    run_stubbed_detection(at, split_images["val/palsar_0.png"])  # no metrics.json at all
-    assert "Overall model accuracy" in overall_section(at)
-    assert STATIC_NOTE not in page_text(at)
-
-
-def test_static_note_only_next_to_a_per_image_score(split_images, stub_detection, report):
-    at = run_with_report(split_images["val/palsar_0.png"])
-    notes = [b for b in html_bodies(at, "gog-flow-note") if STATIC_NOTE in b]
-    assert len(notes) == 1
-    bodies = [h.proto.body for h in at.get("html")]
-    order = [i for i, b in enumerate(bodies) if "Score for this image" in b or OVERALL in b or STATIC_NOTE in b]
-    assert [("Score for this image" in bodies[i], OVERALL in bodies[i], STATIC_NOTE in bodies[i]) for i in order] == [
-        (True, False, False), (False, True, False), (False, False, True)]  # block, then section, then note
-
-
 @pytest.mark.parametrize("image, csv", [
     ("train/palsar_0.png", PER_IMAGE_CSV),          # training data
     ("misc/palsar_0.png", PER_IMAGE_CSV),           # split unknown
     ("val/palsar_9.png", PER_IMAGE_CSV),            # not in the report
     ("val/palsar_5.png", PER_IMAGE_CSV),            # no oil in the reference mask
 ])
-def test_no_static_note_without_per_image_scores(split_images, stub_detection, report, image, csv):
+def test_no_overall_scores_without_per_image_scores(split_images, stub_detection, report, image, csv):
     at = run_with_report(split_images[image], csv)
-    assert STATIC_NOTE not in page_text(at) and "Overall 0." not in page_text(at)
+    assert OVERALL not in page_text(at) and "Overall 0." not in page_text(at)
 
 
-def test_no_static_note_without_a_selection(images, report):
-    write_metrics(REPORT_METRICS)
-    at = open_page(checked(new_app().run()), DETECT)
-    assert OVERALL in overall_section(at) and STATIC_NOTE not in page_text(at)
-
-
-def test_each_score_tile_shows_the_overall_value(split_images, stub_detection, report):
+def test_score_tiles_show_this_images_values_only(split_images, stub_detection, report):
     tiles = score_tiles(run_with_report(split_images["val/palsar_0.png"]))
-    expected = {"Dice": ("0.77", "Overall 0.87"), "IoU": ("0.63", "Overall 0.77"),
-                "Precision": ("0.74", "Overall 0.85"), "Recall": ("0.81", "Overall 0.89")}
-    for label, (value, overall) in expected.items():
-        assert f">{value}<" in tiles[label] and f'<div class="gog-stat-secondary">{overall}</div>' in tiles[label]
+    for label, value in {"Dice": "0.77", "IoU": "0.63", "Precision": "0.74", "Recall": "0.81"}.items():
+        assert f">{value}<" in tiles[label] and "gog-stat-secondary" not in tiles[label]  # no "Overall 0.87" line
     assert "gog-stat-secondary" not in tiles["Reference oil"]
-
-
-def test_no_overall_line_for_a_missing_overall_score(split_images, stub_detection, report):
-    metrics = {k: v for k, v in REPORT_METRICS.items() if k != "recall"}  # only three overall scores
-    tiles = score_tiles(run_with_report(split_images["val/palsar_0.png"], metrics=metrics))
-    assert "Overall 0.87" in tiles["Dice"] and "gog-stat-secondary" not in tiles["Recall"]
-    assert ">0.81<" in tiles["Recall"]  # the per-image value itself is unchanged
 
 
 def test_no_overall_lines_without_overall_scores(split_images, stub_detection, report):
@@ -868,11 +783,11 @@ def test_no_overall_lines_without_overall_scores(split_images, stub_detection, r
     run_stubbed_detection(at, split_images["val/palsar_0.png"])
     tiles = score_tiles(at)
     assert ">0.77<" in tiles["Dice"] and "gog-stat-secondary" not in score_block(at)
-    assert STATIC_NOTE not in page_text(at)  # no overall section with scores, so no note either
+    assert OVERALL not in page_text(at)
 
 
-def test_undefined_precision_keeps_its_dash_next_to_the_overall_line(split_images, stub_detection, report):
+def test_undefined_precision_keeps_its_dash(split_images, stub_detection, report):
     csv = PER_IMAGE_CSV + "palsar_9.png,583,0.0,0.0,0.0,0.0\n"
     tiles = score_tiles(run_with_report(split_images["val/palsar_9.png"], csv))
     assert "gog-stat-empty" in tiles["Precision"] and "precision is undefined" in tiles["Precision"]
-    assert "Overall 0.85" in tiles["Precision"] and ">0.00<" in tiles["Dice"]
+    assert "Overall" not in tiles["Precision"] and ">0.00<" in tiles["Dice"]

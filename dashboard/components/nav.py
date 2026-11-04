@@ -15,7 +15,7 @@ from components.labels import STAGE_STATUS
 from services import image_picker, report_loader, scenario, selection, settings
 from services.detection_loader import load_detection, load_galleries
 from services.drift_loader import load_drift
-from services.files import format_mtime, read_json_object
+from services.files import display_text, format_mtime, read_json_object
 from services.routing_loader import load_routing
 from services.selection import available_images
 from services.spill_loader import load_spills, site_ids
@@ -121,6 +121,8 @@ def site_diagnostics() -> list[str]:
             drift = load_drift(config.site_files(site_id)["drift"])
         else:
             drift = scenario.site_drift(marker)  # includes the release point vs marker check
+            if drift is None:
+                warnings.extend(scenario.site_drift_unreadable(marker))  # site_drift drops these
         routing = load_routing(config.site_files(site_id)["routing"])
         for data in (drift, routing):
             if data is not None:
@@ -178,7 +180,7 @@ def diagnostics() -> None:
     st.caption("Loader warnings")
     if warnings:
         for message in warnings:
-            st.markdown(f"- {message}")
+            st.markdown(f"- {display_text(message)}")
     else:
         st.markdown(":green[No warnings]")
     st.caption(f"Demo scenario: {'on' if demo_mode() else 'off'}. URL options: ?demo=1, ?dev=1")

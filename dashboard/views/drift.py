@@ -11,11 +11,11 @@ import streamlit as st
 
 import config
 from components import flow, maps, ui
-from components.data import demo_mode, drift_stage, selected_site
+from components.data import demo_mode, detection_located, drift_stage, selected_site
 from components.labels import HOURS, KM, KM2, M3, M_PER_S
 from services import schema, selection
 from services.drift_loader import afloat
-from services.files import as_float, iter_positions
+from services.files import as_float, display_text, iter_positions
 from services.geo import centroid, haversine_km, polygon_area_km2
 
 stage = drift_stage()
@@ -23,7 +23,10 @@ data = stage.data
 ui.page_heading(
     "Step 02 · Predict",
     "Forecast where the oil will go",
-    "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours.",
+    "Winds and ocean currents drive a drift simulation of the slick for 24 hours after the release."
+    if detection_located()
+    else "Winds and ocean currents drive a drift simulation of oil released at the spill site, for 24 hours after "
+         "the release.",
     stage,
 )
 site = selected_site()
@@ -59,7 +62,7 @@ def trajectory_point(hours: float) -> tuple[float, float] | None:
 
 
 STEP_KEY = "drift_step"
-SAVED_STEP_KEY = "drift_step_saved"  # not a widget key: survives leaving the page
+SAVED_STEP_KEY = "drift_step_saved"  # (anchored_to, hours): not a widget key, survives leaving the page
 NOT_AFLOAT_COLOR = "#8fa9b8"  # muted slate: never an oil colour
 NOT_AFLOAT_LABEL = "No longer afloat"
 DETAIL_LABELS = {"model": "Drift model", "oil_type": "Oil type", "release_volume_m3": f"Oil released ({M3})",
@@ -118,14 +121,17 @@ if data is None:
             ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
         )
 else:
+    flow.precomputed_drift_note(data)
     hours = data.hours
     # One forecast time at a time: a slider through every step (the real run has 25 hourly
     # steps), plus buttons for the key times. The selected step lives in session_state.
     # Streamlit forgets a widget's value when its page is left, so the step is also kept in
-    # SAVED_STEP_KEY and restored when the user comes back.
+    # SAVED_STEP_KEY and restored when the user comes back, for the same site only: another site
+    # opens at its default step, never at the step last viewed for a different site.
+    owner = data.anchored_to
     if st.session_state.get(STEP_KEY) not in hours:
         saved = st.session_state.get(SAVED_STEP_KEY)
-        st.session_state[STEP_KEY] = saved if saved in hours else next(
+        st.session_state[STEP_KEY] = saved[1] if saved and saved[0] == owner and saved[1] in hours else next(
             (h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])
     key_hours = [h for h in config.DRIFT_KEY_HOURS if h in hours]
     if key_hours and len(hours) > len(key_hours):
@@ -133,8 +139,9 @@ else:
             for h in key_hours:
                 st.button(step_label(h), key=f"drift_jump_{h:g}", type="tertiary",
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
-    selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY)
-    st.session_state[SAVED_STEP_KEY] = selected
+    selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY,
+                            help="Steps through the saved forecast; nothing is re-simulated.")
+    st.session_state[SAVED_STEP_KEY] = (owner, selected)
 
     features = data.steps[selected]
     oil = [f for f in features if afloat(f)]  # oil still on the water
@@ -213,7 +220,7 @@ else:
             with st.expander("Run details", icon=":material/info:"):
                 ui.details_table(details)
                 if isinstance(meta.get("note"), str):
-                    st.caption(meta["note"])
+                    st.caption(display_text(meta["note"]))
     else:
         ui.inline_empty("Wind and current conditions will appear here.")
 

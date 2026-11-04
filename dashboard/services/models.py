@@ -60,9 +60,6 @@ class DetectionScene:
 class DetectionData:
     scenes: list[DetectionScene] = field(default_factory=list)
     detections: list[DetectionOutput] = field(default_factory=list)  # one per georeferenced slick
-    metrics: dict[str, float] | None = None  # not in schema: dice, iou, precision, recall
-    per_class: dict[str, dict[str, float]] | None = None  # not in schema
-    metrics_info: dict[str, Any] = field(default_factory=dict)  # not in schema: model, split, ...
     spill: dict | None = None  # GeoJSON polygons for the map (schema has points only)
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
@@ -75,7 +72,7 @@ class DetectionData:
 
     @property
     def has_content(self) -> bool:
-        return bool(self.scenes or self.metrics or self.per_class or self.spill)
+        return bool(self.scenes or self.spill)
 
 
 @dataclass
@@ -103,6 +100,7 @@ class RouteEntry:
     route: VesselRoute
     vessel: Vessel | None = None  # when speed / capacity / availability are provided
     oil_collected_m3: float | None = None  # not in schema
+    finish_hours: float | None = None  # not in schema: sailing + cleaning, back in port (dashboard_export.py)
 
 
 @dataclass
@@ -134,10 +132,25 @@ class RoutingData:
         return sum(known) if known else None
 
     @property
-    def response_time_hours(self) -> float | None:
-        """Until the last vessel finishes: max of VesselRoute.estimated_travel_hours."""
+    def sailing_time_hours(self) -> float | None:
+        """Longest sailing time of any vessel: max of VesselRoute.estimated_travel_hours (no cleaning)."""
         known = [r.route.estimated_travel_hours for r in self.routes if r.route.estimated_travel_hours is not None]
         return max(known) if known else None
+
+    @property
+    def completion_hours(self) -> float | None:
+        """When the last vessel is back in port, cleaning included: max of the ``finish_hours`` extension.
+
+        None unless every route gives ``finish_hours`` (a partial maximum would understate it).
+        """
+        known = [r.finish_hours for r in self.routes]
+        return max(known) if known and None not in known else None
+
+    @property
+    def response_time_hours(self) -> float | None:
+        """The headline response time (decision D2): completion time, else sailing time only."""
+        completion = self.completion_hours
+        return completion if completion is not None else self.sailing_time_hours
 
     @property
     def target_oil_m3(self) -> float | None:
