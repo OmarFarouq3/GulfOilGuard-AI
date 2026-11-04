@@ -9,7 +9,9 @@ So the moving problem is wrapped around the fixed-point model:
      patch will be when the vessel arrives (an interception, _intercept). This gives the real
      meeting times
   4. if the solver aimed more than replan_tolerance_km away from where a patch was really
-     met, go back to 2 with the real meeting times (at most max_replans rounds, config.py)
+     met, or a planned stop no longer fit when sailed (the patch's emulsion grew past the tank
+     left, or the hours ran out), go back to 2 with the real meeting times, the times the
+     vessel got to the skipped patches included (at most max_replans rounds, config.py)
 
 Of all rounds, the best SAILED plan is kept (most oil, then earliest finish, then fewest km):
 a new round can reorder the stops, so the last round is not always the best one.
@@ -98,6 +100,9 @@ class _Voyage:
         self.tank = vessel.capacity_m3
         self.minutes_left = minutes_down(vessel.available_hours)
         self.stops: list[Stop] = []
+        # target_id -> hours since release when the vessel got to a planned patch and it no
+        # longer fit (it grew, or the hours ran out): the solver's picture of it was wrong
+        self.missed: dict[str, float] = {}
 
     def reach(self, track: PatchTrack, distance_to, config: RoutingConfig, gone_below_m3: float):
         """(the stop, None) if this vessel can still catch, hold and clean the patch, and then get
@@ -213,7 +218,8 @@ def sail(
     config: RoutingConfig = DEFAULT_CONFIG,
     drift_config: DriftTargetConfig = DEFAULT_DRIFT_CONFIG,
 ) -> list[_Voyage]:
-    """Sail each vessel's visiting order against the moving oil. Stops that no longer fit are skipped."""
+    """Sail each vessel's visiting order against the moving oil. Stops that no longer fit are
+    skipped, and kept in `missed` with the time the vessel got there."""
     by_id = {t.target_id: t for t in tracks}
     order = {r.vessel_id: r.assigned_target_ids for r in plan.routes}
     voyages = []
@@ -221,9 +227,12 @@ def sail(
         voyage = _Voyage(vessel, dispatch_hours, provider)
         for target_id in order.get(vessel.vessel_id, ()):
             track = by_id[target_id]
-            stop, _ = voyage.reach(track, distances_from(provider, voyage.here), config, drift_config.gone_below_m3)
+            distance_to = distances_from(provider, voyage.here)
+            stop, _ = voyage.reach(track, distance_to, config, drift_config.gone_below_m3)
             if stop is not None:
                 voyage.take(stop, track, config)
+            else:
+                voyage.missed[target_id] = _intercept(distance_to, track, voyage.clock, vessel.speed_m_per_s)[0]
         voyages.append(voyage)
     return voyages
 
@@ -272,17 +281,23 @@ def _solve_moving(vessels, tracks, dispatch_hours, provider, config, drift_confi
         # How wrong was the solver's picture? Where it planned to meet each patch vs where it did.
         gaps = [haversine_km(snapshot[s.target_id].location, s.target.location) for v in voyages for s in v.stops]
         gap = max(gaps, default=0.0)
+        # A planned stop that no longer fit when sailed is the solver being wrong too (the patch
+        # grew past the tank, or the hours ran out), even though it adds nothing to the gaps.
+        missed = {i: h for v in voyages for i, h in v.missed.items()}
         score = _score(voyages, dispatch_hours)
         if best is None or score < best[0]:
             best = (score, voyages, rounds, gaps, warnings)
-        guess |= {s.target_id: s.meet_hours for v in voyages for s in v.stops}
-        if static or gap <= drift_config.replan_tolerance_km:
+        # next round: every planned patch as it really was when its vessel got there
+        guess |= missed | {s.target_id: s.meet_hours for v in voyages for s in v.stops}
+        if static or (not missed and gap <= drift_config.replan_tolerance_km):
             break
     _, voyages, kept, gaps, warnings = best
     tolerance = drift_config.replan_tolerance_km
     stopped = (
         "nothing moves" if static
-        else f"the solver aimed within {tolerance:g} km" if gap <= tolerance
+        else f"the solver aimed within {tolerance:g} km and every planned stop fit" if not missed and gap <= tolerance
+        else f"max_replans reached, {len(missed)} planned stop(s) no longer fit when sailed "
+             f"({', '.join(sorted(missed))})" if missed
         else f"max_replans reached, the solver still aimed up to {gap:.1f} km off"
     )
     notes = [provider.description, *warnings,
