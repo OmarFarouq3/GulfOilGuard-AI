@@ -30,6 +30,9 @@ DETAIL_LABELS = {"model": "Model", "split": "Evaluated on", "n_images": "Images 
                  "threshold": "Decision threshold", "checkpoint": "Checkpoint", "epoch": "Checkpoint epoch",
                  "aggregation": "Aggregation", "created": "Evaluated"}  # "limitations" is shown as a caption
 SPLIT_NAMES = {"train": "training", "test": "test"}
+MASK_MISSING = ("The detected oil mask for this scene is not available yet, so the radar image is shown without "
+                "the model's outline. The accuracy scores below describe the model, not this scene.")
+NO_SCENE = "The radar image and detected oil mask are not available yet. They will appear here once a scene has been analysed."
 
 
 def accuracy_caption(split: object) -> str:
@@ -107,11 +110,13 @@ else:
         panels = [(label, img) for label, img in (
             ("Radar image", scene.image), ("Detected oil (white)", scene.mask), ("Overlay", scene.overlay),
         ) if img]
+        if scene.mask is None:
+            st.html(f'<div class="gog-notice">{ui.esc(MASK_MISSING)}</div>')
         with st.container(key="gog-imagery"):
             for column, (label, img) in zip(st.columns(len(panels)), panels):
                 column.image(img, caption=label, width="stretch", alt=label)
     else:
-        ui.inline_empty("The radar image and detected oil outline will appear here.")
+        ui.inline_empty(NO_SCENE)
 
     # --- Model quality ---------------------------------------------------------
     if data.metrics:
