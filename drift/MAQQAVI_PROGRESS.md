@@ -1,6 +1,6 @@
 # Team B – Maqqavi: progress so far
 
-Last updated: 3 Nov 2026 (day 3). Day 1 task from Omar: install OpenDrift and run one official example. Day 2 task: the first 24-hour Gulf oil-drift simulation with Joud's data, in the format routing and the dashboard read. Day 3 task: backend integration: drift runs for the four demo locations, connected to Harris's routing and Nihal's validation, in the files Obeid's dashboard reads.
+Last updated: 4 Nov 2026 (final four-site outputs). Day 1 task from Omar: install OpenDrift and run one official example. Day 2 task: the first 24-hour Gulf oil-drift simulation with Joud's data, in the format routing and the dashboard read. Day 3 task: backend integration: drift runs for the four demo locations, connected to Harris's routing and Nihal's validation, in the files Obeid's dashboard reads.
 
 ## Status
 
@@ -16,7 +16,7 @@ Last updated: 3 Nov 2026 (day 3). Day 1 task from Omar: install OpenDrift and ru
 | Output files and a particle-distribution picture shared with the team | Done, in the team SharePoint folder (see "Day 2") |
 | Integration checks with Harris, Obeid and Maria's checker | Done (see "Day 2" and "Day 3") |
 | Drift, routing and validation for the four demo locations | Done (see "Day 3"); files in the team SharePoint folder |
-| Dashboard reads the four locations | Folder layout and files handed to Obeid; his loader change is pending |
+| Dashboard reads the four locations | Obeid's loaders (his `dashboard` branch, not merged yet) read all four sites with no warnings; his full page test is still to come |
 
 ## What was done
 
@@ -94,26 +94,32 @@ The demo uses four fixed locations (coordinates from Joud, agreed with Omar and 
 |---|---|---|---:|
 | S1 | 25.85°N, 55.65°E, off Ras Al Khaimah (primary; the day 2 run) | about 12 km east, all at sea | 183.6 |
 | S2 | 25.70°N, 55.40°E, off Umm Al Quwain | about 10 km east, all at sea | 176.5 |
-| S3 | 25.45°N, 55.35°E, off Sharjah / Hamriyah | 444 of 1,000 particles stranded on the Ajman–Hamriyah coast, from hour 20 | 101.6 |
+| S3 | 25.45°N, 55.35°E, off Sharjah / Hamriyah | 444 of 1,000 particles (81.8 m³) stranded on the Ajman–Hamriyah coast: the first at hour 11, most after hour 20 | 101.6 |
 | S4 | 25.98°N, 55.85°E, off Ras Al Khaimah near Dhayah | about 15 km north-east, all at sea | 188.8 |
 
 All four points lie inside Joud's data (24.75–27.0°N, 55.0–56.92°E), with current and wave data at every hour, so no new data was needed. The S3 particles are stranded on OpenDrift's coastline, not dropped for missing data.
 
-**Cleanup routing and validation.** Harris's `run_drift_plan` (vessels leave 6 h after the release) with Nihal's fleet (depots at the Port Saqr and Hamriyah harbour entrances), then Nihal's `validate_cleanup`:
+**Checks on the drift inputs (asked by Joud).** All four runs read `data/processed/wind_clean.nc` and `currents_clean.nc`. Stokes drift is on and comes from `currents_clean.nc`, whose Stokes variables equal the raw `vsdx`/`vsdy` exactly. OpenDrift showed no warnings, and wind, currents and Stokes came from the files for every particle at every step, with no fallback values.
 
-| Site | Oil afloat when vessels leave (m³) | Vessels used (optimized plan) | Oil cleaned (m³) | Last vessel back in port, h after dispatch: optimized / baseline | Validation |
-|---|---:|---|---:|---|---|
-| S1 | 204 | FALCON, SAQR | 201 | 7.58 / 7.58 | 52 OK, 7 WARN, 0 FAIL |
-| S2 | 194 | SAQR, Hamriyah reserve | 190 | 7.18 / 8.55 | 49 OK, 5 WARN, 0 FAIL |
-| S3 | 200 | Hamriyah reserve | 198 | 7.79 / 7.51 | 44 OK, 5 WARN, 0 FAIL |
-| S4 | 209 | FALCON, SAQR | 205 | 7.18 / 8.11 | 49 OK, 5 WARN, 0 FAIL |
+**Limit near the coast.** The current file has gaps next to the coast, and OpenDrift fills them from neighbouring cells without a warning. This barely touches S1, S2 and S4 (0, 0 and 3 of 25,000 samples), but 68 % of S3's samples are next to a gap and 2.3 % are inside one. So S3's stranding time and place rely partly on filled-in currents.
 
-- The warnings are the assumptions Nihal lists: tank use is counted as pure oil (as emulsion the tanks would overflow), a wide patch is cleaned from one point, and each site leaves one patch under 0.5 m³ unserved.
-- At S3 the optimized plan finishes 0.28 h later than the baseline but collects 0.7 m³ more, because the solver ranks oil collected before time.
-- Port Saqr's new depot point still counts as land in the 2.2 km routing grid (it is moved 2.1 km to water). Nihal knows.
+**Cleanup routing and validation.** Harris's `run_drift_plan` (vessels leave 6 h after the release; tank use and cleanup time counted as emulsion) with Nihal's fleet (Port Saqr staging point 25.985°N, 56.035°E; Hamriyah harbour entrance 25.4773°N, 55.4798°E), then Nihal's `validate_sites`:
+
+| Site | Oil afloat when vessels leave (m³) | Vessels used (optimized plan) | Oil cleaned, optimized / baseline (m³) | Last vessel back in port, h after dispatch: optimized / baseline | Distance vs baseline | Validation |
+|---|---:|---|---|---|---:|---|
+| S1 | 204.0 | SAQR, Hamriyah reserve | 199.2 / 199.6 | 10.50 / 10.59 | −28.0 % | 129 OK, 3 WARN, 0 FAIL |
+| S2 | 194.3 | SAQR, Hamriyah reserve | 188.4 / 188.5 | 11.82 / 11.85 | 0.0 % | 115 OK, 3 WARN, 0 FAIL |
+| S3 | 200.3 | SAQR, Hamriyah reserve | 196.1 / 195.6 | 11.48 / 11.48 | +3.7 % | 117 OK, 4 WARN, 0 FAIL |
+| S4 | 208.6 | SAQR, Hamriyah reserve | 204.3 / 204.5 | 11.40 / 12.56 | +1.9 % | 113 OK, 3 WARN, 0 FAIL |
+
+- The optimized plan cleans about the same oil as the baseline at every site. Its gains are 28 % less distance at S1 and the last vessel back 1.2 h sooner at S4; S2 and S3 are ties on time.
+- The warnings are stated limits: a wide patch is cleaned from one point, each site leaves one patch under 0.5 m³ unserved in both plans, and at S3 the oil on the coast is outside the cleanup plan.
+- Harris's fix matters at S3. Before it, a patch that outgrew the tank as it took up water was skipped, and the optimized plan cleaned only 129 m³.
+- At S3 one patch (T03) is close enough to the coast that its planning point falls in a land cell of the 2.2 km grid and is moved 2.0 km to water, so distances there are approximate.
 - Maria's `tests/check_outputs.py` reports that all four sites follow the contract, drift and routing.
+- Obeid's loaders read all four sites with no warnings, each forecast at its own marker (0 km moved).
 
-**Files** (not in Git): one folder per location, with the same layout as `outputs/`, shared in the team SharePoint folder (`outputs/` at its top level).
+**Files** (not in Git): one folder per location, with the same layout as `outputs/`, shared in the team SharePoint folder (`outputs/` at its top level). Obeid's `dashboard` branch reads this layout: one marker per site folder, showing that site's own files.
 
 ```text
 outputs/sites/S1 … S4/
@@ -121,31 +127,30 @@ outputs/sites/S1 … S4/
   routing/                          routes.geojson, targets.geojson, summary.json, comparison.json, baseline/
   routing.txt                       printout of the routing run
   validation.txt, validation.json   Nihal's validation report
-outputs/fleet/gulf_standard.json    the fleet the routes were planned with
+outputs/sites/sites_summary.md, .json   the results table for the demo
+outputs/fleet/gulf_standard.json        the fleet the routes were planned with
 ```
 
-Obeid has the layout. His dashboard reads only `outputs/drift/` and `outputs/routing/` so far; reading the folder of the clicked marker is his change.
-
-**How to reproduce one site** (repository root, OpenDrift environment with OR-Tools, land file in `data/land/`):
+**How these outputs were made** (repository root, OpenDrift environment with OR-Tools, land file in `data/land/`). `validate_sites` covers all four sites at once; the other commands run once per site (S2 shown).
 
 ```bash
 python -m drift.run_gulf_demo --lat 25.70 --lon 55.40 --out-dir outputs/sites/S2/drift
 python -m optimization.run_drift_plan --drift-dir outputs/sites/S2/drift --dashboard-dir outputs/sites/S2/routing --fleet outputs/fleet/gulf_standard.json
-python -m optimization.validate_cleanup --drift-dir outputs/sites/S2/drift --routing-dir outputs/sites/S2/routing --fleet outputs/fleet/gulf_standard.json --json outputs/sites/S2/validation.json
+python -m optimization.validate_sites --sites-dir outputs/sites --fleet outputs/fleet/gulf_standard.json --write
 python tests/check_outputs.py outputs/sites/S2 --gulf
 ```
 
-Routing and validation ran on Nihal's branch `feature/cleanup-validation` (it includes Harris's latest commit), because those changes are not merged into `main` yet. S1's drift files are the day 2 run, unchanged.
+Harris's fix and Nihal's newest validator are not in `main` yet, so drift and routing ran on `routing-model` at `1567f55`, and validation and the checker on `feature/final-scenario-validation` at `a237099`. A trial merge of both branches is clean, and the same steps on it give byte-identical outputs (all 51 files).
 
-**Release date.** Maria's integration plan (on her branch) records 20 Oct 12:00 UTC for the first run. Omar decided that all runs use 23 Oct 12:00 UTC and asked Maria to change it.
+**Release date.** All runs use 23 Oct 2026 12:00 UTC, as Omar decided. Maria's integration plan (decision D3) now says the same.
 
 ## Next steps
 
-1. When Omar merges Harris's and Nihal's branches: pull `main`. Re-run routing and validation only if the merged code or fleet differs from what was used (for example, if Nihal moves the Port Saqr depot further out).
-2. Obeid: Predict and Respond read the clicked marker's folder in `outputs/sites/`; then test Detect → Predict → Respond for the four locations.
+1. When Omar merges Harris's and Nihal's branches: pull `main` and compare the merged code with the versions above. Re-run only if the routing or validator code changed.
+2. Obeid: merge the `dashboard` branch and test Detect → Predict → Respond for the four locations.
 
 ## Open questions
 
 - **Windage:** the usual "3 % of wind speed" rule partly includes wave effects, so check it is not partly counted twice now that wave drift is added separately (OpenDrift's default is kept for now).
-- **Oil volume for vessel capacity:** the files give pure oil volume; recovered emulsion is larger by 1 / (1 - water fraction). Nihal's validation shows the tanks would overflow as emulsion at every site. Open with Harris.
+- **Random seed label:** `meta.json` and `drift/README.md` record seed 42, but OpenDrift resets the seed to 0 when the model starts, so 42 is not used. The runs are repeatable and the results are unaffected; only the recorded number is wrong.
 - **Georeferencing:** drift needs a verified release point and time. Detection output has no coordinates yet, so the release is a synthetic point.
