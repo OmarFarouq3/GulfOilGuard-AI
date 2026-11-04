@@ -133,10 +133,14 @@ else:
                "plan gives no cleaning time, so it is not the completion time.")
 
     unserved = [t for t in data.targets if t.target_id in data.unserved_target_ids]
-    if unserved:
+    if data.unserved_target_ids:  # every id summary.json lists, with its volume when targets.geojson has it
         reasons = unserved_reasons(data.message)
-        listed = ", ".join(f"{t.target_id} ({t.oil_volume_m3:,.1f} {M3})" for t in unserved)
-        st.html(f'<div class="gog-notice">Not served: {ui.esc(listed)}.'
+        volumes = {t.target_id: t.oil_volume_m3 for t in data.targets}
+        listed = ", ".join(f"{t} ({volumes[t]:,.1f} {M3})" if t in volumes else t for t in data.unserved_target_ids)
+        count = len(data.unserved_target_ids)
+        total = len(set(volumes) | set(data.unserved_target_ids)) if data.targets else 0  # every patch the plan names
+        share = f"{count} of {total} oil patches" if total else f"{count} oil patch{'es' if count != 1 else ''}"
+        st.html(f'<div class="gog-notice">Not served: {share}: {ui.esc(listed)}.'
                 + (f" The plan says: {ui.esc(reasons)}." if reasons else "") + "</div>")
 
     # --- Map ---------------------------------------------------------------------

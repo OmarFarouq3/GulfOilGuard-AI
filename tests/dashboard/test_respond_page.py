@@ -199,7 +199,8 @@ def test_unserved_patch_is_flagged_with_its_volume(real_sites, spill, drawn):
     at = respond(spill)
     target, volume = UNSERVED[spill]
     notice = " ".join(b for b in bodies(at, "gog-notice") if b.lstrip().startswith('<div class="gog-notice"'))
-    assert f"Not served: {target} ({volume} m³)" in notice and "less than 0.5 m3 left" in notice
+    total = {"S1": 6, "S2": 5, "S3": 6, "S4": 6}[spill]
+    assert f"Not served: 1 of {total} oil patches: {target} ({volume} m³)." in notice and "less than 0.5 m3 left" in notice
     assert any(t.startswith(f"{target} · {volume} m³ · not served") for t in drawn["markers"])
     legend = next(b for b in bodies(at, "gog-legend") if b.lstrip().startswith('<div class="gog-legend"'))
     assert "Oil patch not served" in legend
@@ -520,3 +521,49 @@ def test_demo_plan_shows_completion_and_sailing():
     from services import mock_data
     demo = mock_data.routing()
     assert demo.completion_hours is not None and demo.completion_hours > demo.sailing_time_hours
+
+
+
+# --- E7: every unserved target from summary.json is listed --------------------------------------------------
+
+
+def unserved_notice(at) -> str:
+    return " ".join(b for b in bodies(at, "gog-notice")
+                    if b.lstrip().startswith('<div class="gog-notice"') and "Not served" in b)
+
+
+def set_unserved(ids: list[str]) -> None:
+    summary_file = config.site_files("S1")["routing"]["summary"]
+    summary = json.loads(summary_file.read_text(encoding="utf-8"))
+    summary["unserved_target_ids"] = ids
+    summary_file.write_text(json.dumps(summary), encoding="utf-8")
+
+
+def test_unserved_ids_missing_from_targets_are_still_listed(sites):
+    sites("S1")
+    set_unserved(["T01", "T09"])  # T09 is not in targets.geojson
+    notice = unserved_notice(respond("S1"))
+    assert "Not served: 2 of 2 oil patches: T01 (140.0 m³), T09." in notice
+
+
+def test_no_unserved_targets_means_no_notice(sites):
+    sites("S1")
+    set_unserved([])
+    at = respond("S1")
+    assert unserved_notice(at) == "" and "not served" not in page_text(at).lower().replace("oil patch not served", "")
+
+
+def test_unserved_targets_in_the_single_folder_layout():
+    """Maria's layout: outputs/routing/ with no site folders, the page without a selected spill."""
+    from test_sites import routing_files
+    files = routing_files("S1", 25.85, 55.65, "openoil-25.85N-55.65E-20261023T1200Z")
+    files["summary"]["unserved_target_ids"] = ["T06"]
+    config.ROUTING_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        for key, content in files.items():
+            config.ROUTING_FILES[key].write_text(json.dumps(content), encoding="utf-8")
+        at = go(new_app(), "views/cleanup.py")
+        assert "Not served: 1 of 2 oil patches: T06." in unserved_notice(at)  # T01 in targets.geojson + T06
+    finally:
+        for path in config.ROUTING_DIR.glob("*"):
+            path.unlink()
