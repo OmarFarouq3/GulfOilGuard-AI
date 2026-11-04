@@ -162,13 +162,18 @@ else:
     else:
         ui.inline_empty("The slick will appear on the map once the scene has been located geographically.")
 
+    # The same caveat as the accuracy caption and detection/evaluate.py's recorded note: validation images
+    # chose the checkpoint, so they are not an independent test.
+    split = str(data.metrics_info.get("split") or "").strip().lower()
+    scored_on = ("the labelled validation images, which were also used to choose the checkpoint, so they are not an "
+                 "independent test" if split in ("val", "validation") else "a labelled evaluation set")
     with st.expander("How to read this", icon=":material/help:"):
         st.markdown(
-            """
+            f"""
 - **Dark means oil.** Oil damps the small waves that reflect radar back to the satellite, so slicks look dark.
 - **Look-alikes** also look dark: very calm water, algae and natural films, rain cells and ship wakes. They cause false alarms (lower precision).
 - **Thin or broken slicks**, and strong wind that breaks slicks up, cause missed oil (lower recall).
-- **Accuracy scores** describe the model on a labelled evaluation set, not a guarantee for every new scene.
+- **Accuracy scores** describe the model on {scored_on}; they are not a guarantee for every new scene.
 - **Location** is a separate step: a correct outline with wrong scene geometry still lands in the wrong place.
 """
         )
