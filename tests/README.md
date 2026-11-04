@@ -6,6 +6,8 @@ Planned coverage: mask pairing/class encoding; metrics with empty and known mask
 
 `test_model.py` checks the implemented U-Net using synthetic tensors: shape preservation, custom channels, gradient flow and weight updates, checkpoint round trips, and invalid inputs. It requires PyTorch but does not import the dataset loader or read satellite files. Run discovered tests from the repository root with `python -m unittest discover -s tests -v`.
 
+The routing tests (`test_optimization_*.py`) are pytest test functions, not `unittest.TestCase` classes, so `unittest discover` imports them but runs none of them. Run everything except the dashboard tests with `python -m pytest tests --ignore=tests/dashboard` after `python -m pip install -r requirements.txt` (which includes `pytest`). The dashboard tests in `tests/dashboard/` need the dashboard's own packages: `python -m pip install -r requirements-dev.txt`, then `python -m pytest tests/dashboard`.
+
 For an additional learning check, run `python -m detection.smoke_test`. It fits two synthetic rectangles with the default U-Net on CPU. This is a model sanity check, not a measure of real oil-spill performance.
 
 `test_training.py` adds synthetic PNG checks for paired transforms, mask threshold boundaries, missing/misaligned pairs, known and empty segmentation metrics, and a full train/save/resume/evaluate/predict cycle. These checks require NumPy and Pillow as well as PyTorch. All training fixtures are created in temporary directories; no downloaded imagery is used by unit tests.
