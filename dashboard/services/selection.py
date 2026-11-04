@@ -25,7 +25,7 @@ import streamlit as st
 from services import image_picker, inference
 from services.files import as_float, mtime
 from services.geo import haversine_km
-from services.inference import DetectionRun
+from services.inference import DetectionJob, DetectionRun
 from services.models import SpillSite
 
 SPILL_KEY = "sel_spill_id"
@@ -34,6 +34,7 @@ IMAGE_ID_KEY = "sel_image_id"
 LAST_CLICK_KEY = "sel_last_click"
 DOWNSTREAM_PREFIX = "sel_result_"
 DETECT_RUN_KEY = DOWNSTREAM_PREFIX + "detect_run"  # DetectionRun of the last attempt
+DETECT_JOB_KEY = DOWNSTREAM_PREFIX + "detect_job"  # DetectionJob still running (inference.start_detection)
 DETECT_SIMULATED_KEY = DOWNSTREAM_PREFIX + "detect_simulated"  # simulated detection accepted
 PREDICT_DONE_KEY = DOWNSTREAM_PREFIX + "predict_done"
 RESPOND_DONE_KEY = DOWNSTREAM_PREFIX + "respond_done"
@@ -164,7 +165,7 @@ def sync(valid_spill_ids: Iterable[str], source: Any) -> None:
         clear_downstream()
         return
     run = detection_run()
-    if run and run.ok and not inference.outputs_exist(run.image_id):
+    if run and run.result_dir and not inference.outputs_exist(run.image_id, run.result_dir):
         st.session_state.pop(DETECT_RUN_KEY, None)
         _clear_after_detection()
 
@@ -176,6 +177,19 @@ def detection_run() -> DetectionRun | None:
     return st.session_state.get(DETECT_RUN_KEY)
 
 
+def pending_detection() -> DetectionJob | None:
+    return st.session_state.get(DETECT_JOB_KEY)
+
+
+def start_detection(job: DetectionJob) -> None:
+    """A run has started: the previous result and the later steps no longer apply."""
+    _clear_after_detection()
+    _claim()
+    st.session_state.pop(DETECT_RUN_KEY, None)
+    st.session_state.pop(DETECT_SIMULATED_KEY, None)
+    st.session_state[DETECT_JOB_KEY] = job
+
+
 def simulated_detection_accepted() -> bool:
     return bool(st.session_state.get(DETECT_SIMULATED_KEY))
 
@@ -184,6 +198,7 @@ def record_detection(run: DetectionRun) -> None:
     """Store a detection attempt. Without a model checkpoint, fall back to the simulated detection."""
     _clear_after_detection()
     _claim()
+    st.session_state.pop(DETECT_JOB_KEY, None)
     st.session_state[DETECT_RUN_KEY] = run
     st.session_state[DETECT_SIMULATED_KEY] = run.state == "checkpoint_missing"
 
@@ -191,12 +206,13 @@ def record_detection(run: DetectionRun) -> None:
 def accept_simulated_detection() -> None:
     _clear_after_detection()
     _claim()
+    st.session_state.pop(DETECT_JOB_KEY, None)
     st.session_state[DETECT_SIMULATED_KEY] = True
 
 
 def detection_done() -> bool:
-    run = detection_run()
-    return bool(run and run.ok) or simulated_detection_accepted()
+    run = detection_run()  # a saved result shown after a failed run counts too
+    return bool(run and run.result_dir) or simulated_detection_accepted()
 
 
 def predict_done() -> bool:

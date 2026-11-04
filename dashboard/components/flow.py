@@ -25,6 +25,12 @@ LOCKED_REASON = {
     "predict": "Run detection on the selected image first, or continue with the simulated detection.",
     "respond": "Show the drift forecast first.",
 }
+RUN_POLL_S = 2  # how often the page checks a detection that is still running
+QUICK_WAIT_S = 2  # a run that ends this fast (a cached result, a missing model) shows its result at once
+RUNNING = ("Detection is still running on this image ({elapsed} s so far). The result appears here when it "
+           "finishes; on a busy computer this can take a few minutes. It stops after {timeout} s.")
+SAVED_RESULT = "Showing the saved result for this image from an earlier run instead."
+NO_SAVED_RESULT = "There is no saved result for this image to show instead."
 
 
 def progress() -> None:
@@ -95,6 +101,10 @@ def detect_controls(site: SpillSite) -> bool:
     current = selection.current()
     run = selection.detection_run()
 
+    if selection.pending_detection() is not None:
+        _pending_detection(current)
+        return False
+
     if selection.detection_done():
         scored = False
         if run and run.ok:
@@ -113,6 +123,17 @@ def detect_controls(site: SpillSite) -> bool:
                 ["Incident location (the image is not geolocated)",
                  "Slick outline and area on the map: a placeholder at the selected spill"],
             )
+        elif run and run.saved_dir:  # the run failed or timed out: an earlier result for this image
+            _failure(run, SAVED_RESULT, lead="Detection couldn't run this time.")
+            scored = _image_score(current)
+            _provenance(
+                ["Radar image: a sample from the local dataset",
+                 "Oil mask and overlay: the saved U-Net result for this image (an earlier run)",
+                 *(["Score against the reference mask (validation report)"] if scored else [])],
+                ["Incident location (the image is not geolocated)",
+                 "Slick outline and area on the map: a placeholder at the selected spill"],
+            )
+            _run_button(current, "Run detection again", "flow_retry_detection", primary=False)
         else:
             if run and run.state == "checkpoint_missing":
                 _failure(run, "A simulated detection is shown instead.")
@@ -131,10 +152,7 @@ def detect_controls(site: SpillSite) -> bool:
 
     left, right = st.columns([2, 3], gap="large")
     with left:
-        raw, _warning = read_image(current.image_path)
-        shown = preview_png(raw) if raw else None
-        if shown:
-            st.image(shown, width="stretch", caption="Selected radar image (not geolocated to this spill)")
+        _selected_image(current)
     with right:
         st.html('<p class="gog-flow-note">The U-Net reads the selected radar image and marks the pixels '
                 "it takes for oil. This runs the trained model on this computer.</p>")
@@ -142,15 +160,55 @@ def detect_controls(site: SpillSite) -> bool:
             st.html('<p class="gog-flow-note">No trained model was found on this computer, so running '
                     "detection will show a simulated result instead.</p>")
         if run and not run.ok:
-            _failure(run)
+            _failure(run, NO_SAVED_RESULT if run.state in inference.FALLBACK_STATES else "",
+                     lead="Detection couldn't run." if run.state in inference.FALLBACK_STATES else "")
             st.button("Use simulated detection instead", icon=":material/science:", key="flow_detect_simulated",
                       on_click=selection.accept_simulated_detection)
-        if st.button("Run detection", type="primary", icon=":material/play_arrow:", key="flow_run_detection"):
-            with st.spinner("Running the detection model on this image..."):
-                result = inference.run_detection(current.image_path, current.image_id, fresh=True)
-            selection.record_detection(result)
-            st.rerun()
+        _run_button(current, "Run detection", "flow_run_detection")
     return False
+
+
+def _run_button(current: selection.Selection, label: str, key: str, primary: bool = True) -> None:
+    """Start the model in the background; the page then shows it running (``_pending_detection``)."""
+    if st.button(label, type="primary" if primary else "secondary", icon=":material/play_arrow:", key=key):
+        selection.start_detection(inference.start_detection(current.image_path, current.image_id, fresh=True))
+        st.rerun()
+
+
+def _selected_image(current: selection.Selection) -> None:
+    raw, _warning = read_image(current.image_path)
+    shown = preview_png(raw) if raw else None
+    if shown:
+        st.image(shown, width="stretch", caption="Selected radar image (not geolocated to this spill)")
+
+
+def _pending_detection(current: selection.Selection) -> None:
+    """A run is going on: wait briefly (fast results show at once), else say it is still running."""
+    with st.spinner("Running the detection model on this image..."):
+        result = selection.pending_detection().wait(QUICK_WAIT_S)
+    if result is not None:
+        selection.record_detection(result)
+        st.rerun()
+    left, right = st.columns([2, 3], gap="large")
+    with left:
+        _selected_image(current)
+    with right:
+        _still_running()
+        st.button("Use simulated detection instead", icon=":material/science:", key="flow_detect_simulated",
+                  on_click=selection.accept_simulated_detection)
+
+
+@st.fragment(run_every=RUN_POLL_S)
+def _still_running() -> None:
+    """Re-checked every RUN_POLL_S seconds; reloads the page once the run is over."""
+    job = selection.pending_detection()
+    result = job.wait(0) if job is not None else None
+    if job is None or result is not None:
+        if result is not None:
+            selection.record_detection(result)
+        st.rerun(scope="app")
+    text = RUNNING.format(elapsed=int(job.elapsed_s()), timeout=f"{inference.config.DETECTION_TIMEOUT_S:g}")
+    st.html(f'<div class="gog-running"><span class="gog-dot"></span>{ui.esc(text)}</div>')
 
 
 PRECISION_UNDEFINED = "No oil was predicted, so precision is undefined"
@@ -195,9 +253,10 @@ def _image_score(current: selection.Selection) -> bool:
     return True
 
 
-def _failure(run: inference.DetectionRun, follow_up: str = "") -> None:
+def _failure(run: inference.DetectionRun, follow_up: str = "", lead: str = "") -> None:
     """Short, viewer-safe message. Tracebacks and paths only with ?dev=1, collapsed."""
-    st.html(f'<div class="gog-notice">{ui.esc(run.message)} {ui.esc(follow_up)}</div>')
+    text = " ".join(part for part in (lead, run.message, follow_up) if part)
+    st.html(f'<div class="gog-notice">{ui.esc(text)}</div>')
     if run.detail and dev_mode():
         with st.expander("Technical details", icon=":material/terminal:"):
             st.code(run.detail, language=None, wrap_lines=True)

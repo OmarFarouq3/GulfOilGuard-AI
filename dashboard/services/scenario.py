@@ -68,10 +68,11 @@ def _simulated_outline(site: SpillSite, image_id: str) -> dict:
 
 
 def selected_detection(site: SpillSite, run: DetectionRun | None, simulated_accepted: bool) -> DetectionData | None:
-    """Model result for the selected image, else the accepted simulated detection, else None."""
+    """Model result for the selected image (or the saved one when the run failed), else the accepted
+    simulated detection, else None."""
     mask_dir = None
-    if run is not None and run.ok:
-        mask_dir = config.LIVE_DETECTION_DIR  # live runs never write into outputs/
+    if run is not None and run.result_dir is not None:
+        mask_dir = run.result_dir  # the live run's output, or an earlier result after a failed run
         data = load_scene(run.image_id, mask_dir)
         if data is None:  # result files were removed since the run
             return None

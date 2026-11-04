@@ -258,6 +258,27 @@ header[data-testid="stHeader"],
 }
 .gog-notice::before { content: "!"; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--gog-amber); color: #061521; font-weight: 800; font-size: 0.75rem; flex: none; }
 
+/* ---- Detection still running (components/flow.py) ---- */
+.gog-running {
+  display: flex; align-items: center; gap: 0.6rem; margin-top: 0.6rem;
+  border: 1px solid var(--gog-border-strong); background: rgba(45, 212, 191, 0.07);
+  color: var(--gog-text); border-radius: 12px; padding: 0.6rem 0.9rem; font-size: 0.88rem;
+}
+.gog-running .gog-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gog-teal); flex: none;
+  animation: gog-pulse 1.2s ease-in-out infinite; }
+@keyframes gog-pulse { 50% { opacity: 0.25; } }
+
+/* ---- Slow rerun: Streamlit's own indicator is hidden above, so say that the page is updating
+   while elements from the previous run are still on screen (data-stale). Shown after 0.6 s, so
+   quick reruns don't flash it. A half-updated page is never mistaken for a missing result. ---- */
+.stApp:has([data-stale="true"]) [data-testid="stMain"]::before {
+  content: "Updating\2026"; position: fixed; right: 1rem; bottom: 1rem; z-index: 1000;
+  padding: 0.35rem 0.8rem; border-radius: 999px; font-size: 0.82rem; color: var(--gog-text);
+  background: var(--gog-surface-solid); border: 1px solid var(--gog-border-strong); box-shadow: var(--gog-shadow);
+  animation: gog-updating-in 0.2s ease-out 0.6s both;
+}
+@keyframes gog-updating-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* ---- Map frame + legend ---- */
 iframe[title="streamlit_folium.st_folium"] { border-radius: var(--gog-radius); border: 1px solid var(--gog-border) !important; box-shadow: var(--gog-shadow); }
 .gog-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; padding: 0.6rem 0.2rem 0; color: var(--gog-muted); font-size: 0.82rem; }
