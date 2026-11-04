@@ -14,10 +14,12 @@ Exits non-zero on any mismatch. Checks:
 
 from __future__ import annotations
 
+import atexit
 import dataclasses
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +31,7 @@ FORBIDDEN = ("torch", "opendrift", "ortools")
 
 # Point the loaders at a temporary data folder before config is imported.
 SAMPLE_DIR = Path(tempfile.mkdtemp(prefix="gog_schema_check_"))
+atexit.register(shutil.rmtree, SAMPLE_DIR, True)  # removed again when the check ends
 os.environ["GULFOILGUARD_OUTPUTS"] = str(SAMPLE_DIR)
 sys.path.insert(0, str(DASHBOARD_DIR))
 logging.getLogger("streamlit").setLevel(logging.ERROR)  # quiet "no runtime" cache notices
@@ -56,6 +59,15 @@ result = subprocess.run([sys.executable, "-I", "-c", probe, str(REPO_ROOT)], cap
 check(result.returncode == 0, f"import succeeds ({result.stderr.strip() or 'no errors'})")
 check(result.stdout.strip() == "[]", f"no forbidden modules loaded: {result.stdout.strip()}")
 
+print("1b. importing services.inference in a clean interpreter (the U-Net runs in a subprocess)")
+probe = (
+    "import sys; sys.path.insert(0, sys.argv[1]); import services.inference; "
+    f"print(sorted({{m.split('.')[0] for m in sys.modules}} & {set(FORBIDDEN) | {'detection'}!r}))"
+)
+result = subprocess.run([sys.executable, "-I", "-c", probe, str(DASHBOARD_DIR)], capture_output=True, text=True)
+check(result.returncode == 0, f"import succeeds ({result.stderr.strip()[-200:] or 'no errors'})")
+check(result.stdout.strip() == "[]", f"no torch / opendrift / ortools / detection loaded: {result.stdout.strip()}")
+
 # 2. Dashboard data stack ---------------------------------------------------------------
 print("2. importing the dashboard data stack")
 from components import labels  # noqa: E402
@@ -63,8 +75,23 @@ from services import mock_data, schema  # noqa: E402
 from services.detection_loader import load_detection  # noqa: E402
 from services.drift_loader import load_drift  # noqa: E402
 from services.routing_loader import load_routing  # noqa: E402
+from services.spill_loader import load_spills  # noqa: E402
+from services import geo as geo_mod  # noqa: E402
+from services import image_picker, inference, scenario, selection  # noqa: E402, F401  (import guard)
 
 check(not forbidden_loaded(), f"no forbidden modules loaded: {forbidden_loaded()}")
+
+
+def assert_spills(label: str, spills) -> None:
+    """The spill catalogue validates with zero warnings into unique, simulated SpillSites."""
+    check(spills is not None and spills.has_content, f"{label} spills: has content")
+    if spills is not None:
+        check(not spills.warnings, f"{label} spills: no validation warnings {spills.warnings or ''}")
+        ids = [s.spill_id for s in spills.sites]
+        check(len(ids) == len(set(ids)), f"{label} spills: spill IDs unique")
+        check(all(isinstance(s.location, schema.GeoCoordinate) for s in spills.sites),
+              f"{label} spills: positions are GeoCoordinate")
+        check(all(s.synthetic for s in spills.sites), f"{label} spills: every site is labelled synthetic")
 
 
 def assert_conforms(label: str, detection, drift, routing) -> None:
@@ -103,12 +130,31 @@ def assert_conforms(label: str, detection, drift, routing) -> None:
 # 3. Demo scenario ----------------------------------------------------------------------
 print("3. demo scenario (in memory)")
 assert_conforms("demo", mock_data.detection(), mock_data.drift(), mock_data.routing())
+assert_spills("demo", mock_data.spills())
+
+print("3b. demo scenario positioned at a selected spill")
+site = mock_data.spills().sites[-1]
+moved_drift, moved_routing = scenario.selected_drift(site, True), scenario.selected_routing(site, True)
+origin = moved_drift.trajectory.initial_location
+check(abs(origin.latitude - site.location.latitude) < 1e-6 and abs(origin.longitude - site.location.longitude) < 1e-6,
+      "drift release point sits on the selected spill")
+outline = scenario.selected_detection(site, None, simulated_accepted=True)
+assert_conforms("anchored", outline, moved_drift, moved_routing)
+source_routing = mock_data.routing()
+check(all(abs(geo_mod.path_length_km([[c.longitude, c.latitude] for c in a.route.coordinates])
+              - geo_mod.path_length_km([[c.longitude, c.latitude] for c in b.route.coordinates])) < 0.05 * max(
+              1.0, b.route.estimated_distance_km or 1.0) for a, b in zip(moved_routing.routes, source_routing.routes)),
+      "moved routes keep their length (within 5 %)")
+check(moved_drift.synthetic and moved_routing.synthetic, "anchored drift and routing are labelled synthetic")
+check(outline is not None and outline.outline_simulated and outline.synthetic, "simulated outline is labelled synthetic")
+check(outline is not None and all(d.confidence is None for d in outline.detections), "simulated outline has no confidence")
 
 # 4. Sample files -----------------------------------------------------------------------
 print(f"4. sample files written to {SAMPLE_DIR}")
 written = mock_data.write_sample_outputs(SAMPLE_DIR)
-check(len(written) == 10, f"wrote {len(written)} files")
+check(len(written) == 11, f"wrote {len(written)} files")
 assert_conforms("sample", load_detection(), load_drift(), load_routing())
+assert_spills("sample", load_spills())
 
 # 5. Non-conforming files are rejected ---------------------------------------------------
 print("5. non-conforming files are rejected")
@@ -126,10 +172,11 @@ rewrite("routing/routes.geojson", lambda c: c["features"][0]["properties"].pop("
 rewrite("routing/targets.geojson", lambda c: c["features"][0]["properties"].update(oil_volume_m3=-5))
 rewrite("drift/meta.json", lambda c: c["positions"][0].update(timestamp="2026-03-14T06:42:00"))
 rewrite("detection/spill.geojson", lambda c: c["features"][0]["properties"].update(confidence=1.7))
-routing, drift, detection = load_routing(), load_drift(), load_detection()
+rewrite("spills.geojson", lambda c: c["features"][1]["properties"].update(spill_id="GOG-SIM-01"))
+routing, drift, detection, spills = load_routing(), load_drift(), load_detection(), load_spills()
 for needle, warnings in (("status", routing.warnings), ("assigned_target_ids", routing.warnings),
                          ("oil_volume_m3", routing.warnings), ("timezone-aware", drift.warnings),
-                         ("confidence", detection.warnings)):
+                         ("confidence", detection.warnings), ("duplicate spill_id", spills.warnings)):
     check(any(needle in w for w in warnings), f"rejects bad `{needle}`")
 check(routing.status is None and routing.output is None, "invalid status is not shown as a plan")
 

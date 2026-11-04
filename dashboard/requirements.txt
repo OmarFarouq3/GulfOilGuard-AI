@@ -2,7 +2,7 @@
 # the dashboard only reads result files written by the detection, drift and routing modules.
 streamlit>=1.66  # top-bar layout, keyed popover, segmented_control(required=)
 folium>=0.17
-streamlit-folium>=0.22
+streamlit-folium>=0.27  # last_object_clicked_count / _tooltip (Overview map clicks)
 plotly>=5.22
 pandas>=2.2
 numpy>=1.26

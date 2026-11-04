@@ -1,14 +1,16 @@
 """Dashboard configuration: output paths (the data contract), map defaults and colours.
 
-The dashboard never runs models. It only reads files written by the detection,
-drift and routing modules into ``outputs/``. See ``dashboard/README.md`` for the
-full data contract.
+Detect can run the U-Net in a subprocess; those live results go to ``runs/dashboard/`` (git-ignored),
+never into ``outputs/``, which holds the modules' saved results.
+Predict and Respond read files written by their modules. See ``dashboard/README.md``.
 
 The outputs folder resolves in this order:
 1. ``GULFOILGUARD_OUTPUTS`` environment variable
 2. ``outputs_dir`` in ``dashboard/settings.yaml`` (optional, relative paths are
    resolved against the repository root)
 3. ``<repo root>/outputs``
+
+Live detection runs go to ``GULFOILGUARD_RUNS`` if set, else ``<repo root>/runs/dashboard``.
 """
 
 from __future__ import annotations
@@ -40,6 +42,18 @@ def _resolve_outputs_dir() -> Path:
 
 OUTPUTS_DIR = _resolve_outputs_dir()
 
+
+def _resolve_runs_dir() -> Path:
+    """Where "Run detection" writes: GULFOILGUARD_RUNS, else <repo>/runs/dashboard (runs/ is git-ignored)."""
+    env_value = os.environ.get("GULFOILGUARD_RUNS")
+    return Path(env_value).expanduser().resolve() if env_value else REPO_ROOT / "runs" / "dashboard"
+
+
+# Live detection results, apart from the shared outputs/: a click never changes outputs/detection/
+# or what the next session shows from it.
+RUNS_DIR = _resolve_runs_dir()
+LIVE_DETECTION_DIR = RUNS_DIR / "detection"
+
 # --- Data contract -----------------------------------------------------------
 # Detection module
 DETECTION_DIR = OUTPUTS_DIR / "detection"
@@ -47,9 +61,22 @@ DETECTION_FILES = {
     "image": DETECTION_DIR / "image.png",  # optional: the SAR input scene
     "mask": DETECTION_DIR / "mask.png",
     "overlay": DETECTION_DIR / "overlay.png",
-    "metrics": DETECTION_DIR / "metrics.json",
+    "metrics": DETECTION_DIR / "metrics.json",  # detection/evaluate.py (scores nested under "metrics")
+    "summary": DETECTION_DIR / "summary.json",  # detection/report.py (scores nested under "micro"), fallback
     "spill": DETECTION_DIR / "spill.geojson",
 }
+
+# Evaluation report (detection/report.py writes here by default; read by services/report_loader.py)
+REPORT_DIR = OUTPUTS_DIR / "report"
+REPORT_FILES = {
+    "summary": REPORT_DIR / "summary.json",  # same format as DETECTION_FILES["summary"], last fallback
+    "per_image": REPORT_DIR / "per_image_metrics.csv",  # scores per image of the evaluated split
+    "gallery_best": REPORT_DIR / "gallery_best.png",
+    "gallery_median": REPORT_DIR / "gallery_median.png",
+    "gallery_worst": REPORT_DIR / "gallery_worst.png",
+}
+# The order in which evaluation files are read for scores, the report's split and checkpoint_sha256.
+EVALUATION_FILES = (DETECTION_FILES["metrics"], DETECTION_FILES["summary"], REPORT_FILES["summary"])
 
 # Drift module
 DRIFT_DIR = OUTPUTS_DIR / "drift"
@@ -66,12 +93,43 @@ ROUTING_FILES = {
     "targets": ROUTING_DIR / "targets.geojson",  # optional
 }
 
+# Per-site results: outputs/sites/<site id>/{drift,routing}/ in the same formats as above, one
+# folder per spill marker (folder name = marker id). When this folder has site folders, the
+# selected marker's folder is read instead of outputs/drift and outputs/routing.
+SITES_DIR = OUTPUTS_DIR / "sites"
+SITE_VALIDATION_FILE = "validation.json"  # optional, written by the team's per-site check
+
+
+def site_files(site_id: str) -> dict[str, dict[str, Path]]:
+    """DRIFT_FILES / ROUTING_FILES-style paths for one site folder, plus its validation report."""
+    base = SITES_DIR / site_id
+    return {
+        "drift": {"drift": base / "drift" / "drift.geojson", "meta": base / "drift" / "meta.json"},
+        "routing": {"routes": base / "routing" / "routes.geojson", "summary": base / "routing" / "summary.json",
+                    "targets": base / "routing" / "targets.geojson",
+                    "comparison": base / "routing" / "comparison.json"},  # optional; not read by the pages yet
+        "baseline": {"routes": base / "routing" / "baseline" / "routes.geojson",  # nearest-target plan
+                     "summary": base / "routing" / "baseline" / "summary.json",
+                     "targets": base / "routing" / "baseline" / "targets.geojson"},
+        "site": {"validation": base / SITE_VALIDATION_FILE},
+    }
+
+# Spill sites offered on the Overview map (optional; otherwise the simulated catalogue)
+SPILLS_FILE = OUTPUTS_DIR / "spills.geojson"
+
+# Detection runs (services/inference.py): the U-Net runs in a subprocess, never in Streamlit.
+# Where the checkpoint and the interpreter with torch are is resolved in services/settings.py
+# (environment, .env, then checkpoints/unet_best.pth and .venv-detect/); this is the last fallback.
+DETECTION_CHECKPOINT = REPO_ROOT / "runs" / "unet_refined_sar" / "best.pth"
+DETECTION_TIMEOUT_S = 300  # first torch import + model load on CPU can be slow
+
 DRIFT_HORIZONS_HOURS = (6, 12, 24)
+DRIFT_KEY_HOURS = (0, 6, 12, 24)  # quick-jump times on Predict; earlier steps on the map use only these
 DETECTION_METRICS = ("dice", "iou", "precision", "recall")
 
 # --- Map defaults --------------------------------------------------------------
 # Demo centre offshore Abu Dhabi, Arabian Gulf.
-MAP_CENTER = (24.5, 54.0)
+MAP_CENTER = (25.85, 55.65)
 MAP_ZOOM = 9
 
 # --- Colours (dark "ocean operations" palette; keep in sync with .streamlit/config.toml) ---

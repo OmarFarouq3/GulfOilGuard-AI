@@ -7,14 +7,72 @@ fails if the schema gains a status that has no wording here.
 
 from __future__ import annotations
 
+from typing import get_args
+
+from components.data import Status
 from services.schema import SOLVER_STATUSES, ResponseTarget, Vessel, VesselRoute, suffix_unit, unit
 
 KM = unit(VesselRoute, "estimated_distance_km")
 HOURS = unit(VesselRoute, "estimated_travel_hours")
+
+
+# One definition everywhere (decision D2, docs/integration_plan.md §5; optimization/dashboard_export.py):
+# finish_hours = estimated_travel_hours (sailing out, between patches and back to port) + cleanup_hours,
+# counted from dispatch. The response time is the largest finish_hours of the plan.
+RESPONSE_HINT = "Sailing out, cleanup and the trip back to port, until the last vessel is home"
+SAILING_HINT = "Longest sailing time of any vessel, trip back to port included, no cleanup"
+FALLBACK_HINT = "Longest sailing time, trip back to port included; the plan gives no cleanup time"
+RESPONSE_CAPTION = ("Response time is the completion time, counted from dispatch: sailing out, cleanup at the oil "
+                    "patches and the trip back to port, until the last vessel is home. Sailing time is the sailing "
+                    "only (out and back), without cleanup.")
+FALLBACK_CAPTION = ("Response time here is the longest sailing time of any vessel, trip back to port included: the "
+                    "plan gives no cleanup time, so it is not the completion time.")
+FINISH_HELP = "Sailing out, cleanup and the trip back to port, from dispatch (empty if the plan doesn't say)"
+SAILING_HELP = "Sailing only, from dispatch, trip back to port included (no cleanup)"
+COMPARE_RESPONSE_ROW = "Response time: sailing + cleanup + return to port, last vessel"
+COMPARE_SAILING_ROW = "Longest sailing time, return to port included, no cleanup"
+
+
+def response_time_tile(routing) -> tuple[str, float | None, str]:
+    """(label, hours, hint) of the headline response time (decision D2, docs/integration_plan.md §5).
+
+    The completion time (max ``finish_hours``: sailing, cleanup and the trip back to port); when the
+    routing files give no ``finish_hours``, the longest sailing time, and the label says so.
+    """
+    if routing is None:
+        return "Response time", None, RESPONSE_HINT
+    if routing.completion_hours is not None:
+        return "Response time", routing.completion_hours, RESPONSE_HINT
+    return "Response time (sailing only)", routing.sailing_time_hours, FALLBACK_HINT
+
+
 M3 = unit(ResponseTarget, "oil_volume_m3")
 M_PER_S = unit(Vessel, "speed_m_per_s")
 KM2 = "km²"  # area: the schema has no area field or unit (polygon areas are a dashboard extension)
 assert suffix_unit("wind_speed_m_per_s") == M_PER_S
+
+# Stage status (components.data.Status) -> (chip style, chip wording, timeline tooltip)
+STAGE_STATUS: dict[str, tuple[str, str, str]] = {
+    "live": ("gog-chip-live", "Saved results", "Results read from saved output files, not live data"),
+    "simulated": ("gog-chip-sim", "Simulated scenario", "Showing a simulated scenario"),
+    "mixed": ("gog-chip-mixed", "Real detection, simulated location",
+              "Real model output on a radar image; the incident location is simulated"),
+    "forecast": ("gog-chip-forecast", "Real forecast, simulated release",
+                 "A precomputed OpenDrift run on recorded wind and current data; the release point and time, "
+                 "the oil type and the amount are assumptions, not a real spill"),
+    "empty": ("gog-chip-empty", "No data yet", "No data yet"),
+}
+assert set(STAGE_STATUS) == set(get_args(Status)), "stage status wording out of sync with components.data.Status"
+
+
+def slick_tooltip(outline_simulated: bool) -> dict[str, str]:
+    """Map tooltip fields for detected slicks. A simulated outline shows its ``outline`` property
+    (services.scenario.SIMULATED_OUTLINE) and never names a scene, so it can't read as if it
+    was traced from that image."""
+    if outline_simulated:
+        return {"outline": "Outline", "area_km2": f"Simulated area ({KM2})"}
+    return {"image_id": "Scene", "area_km2": f"Area ({KM2})", "confidence": "Confidence"}
+
 
 # OptimizationOutput.status -> (chip style, viewer wording)
 STATUS_LABELS: dict[str, tuple[str, str]] = {

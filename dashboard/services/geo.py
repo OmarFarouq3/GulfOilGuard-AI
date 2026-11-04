@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
+from typing import Any
 
 from services.files import iter_positions
 
@@ -44,6 +45,37 @@ def centroid(feature: dict) -> tuple[float, float] | None:
         sum(p[1] for p in positions) / len(positions),
         sum(p[0] for p in positions) / len(positions),
     )
+
+
+def features_center(features: Iterable[dict]) -> tuple[float, float] | None:
+    """Mean of the features' centroids (lat, lon)."""
+    points = [c for f in features if (c := centroid(f))]
+    if not points:
+        return None
+    return sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)
+
+
+def offset_deg(origin: tuple[float, float], target: tuple[float, float]) -> tuple[float, float]:
+    """(dlat, dlon) that moves ``origin`` (lat, lon) onto ``target`` (lat, lon)."""
+    return target[0] - origin[0], target[1] - origin[1]
+
+
+def translate_coords(coords: Any, dlat: float, dlon: float) -> Any:
+    """Shift nested GeoJSON [lon, lat, ...] positions; returns new lists, extra dimensions kept.
+
+    A plain degree shift: shapes keep their size to within about 1 % over the Gulf's few
+    degrees of latitude, which is fine for repositioning a simulated scenario.
+    """
+    if isinstance(coords, (list, tuple)) and coords and isinstance(coords[0], (int, float)):
+        return [round(coords[0] + dlon, 6), round(coords[1] + dlat, 6), *coords[2:]]
+    return [translate_coords(c, dlat, dlon) for c in coords]
+
+
+def translate_features(features: Iterable[dict], dlat: float, dlon: float) -> list[dict]:
+    """Copies of GeoJSON features with their geometry shifted by (dlat, dlon)."""
+    return [{**f, "properties": dict(f.get("properties") or {}),
+             "geometry": {**f["geometry"], "coordinates": translate_coords(f["geometry"]["coordinates"], dlat, dlon)}}
+            for f in features]
 
 
 def _ring_area_km2(ring: list[list[float]]) -> float:

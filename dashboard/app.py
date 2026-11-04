@@ -3,8 +3,8 @@
 Run from the repository root:  streamlit run dashboard/app.py
 URL options: ?demo=1 starts the simulated scenario, ?dev=1 opens diagnostics.
 
-The dashboard only reads result files (see config.py and README.md). It never imports
-torch, opendrift or ortools.
+Detect can run the U-Net in a subprocess; the Streamlit process does not import
+torch, opendrift or ortools. See config.py and README.md for output paths.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from components import nav, ui
-from components.data import all_stages
+from components.data import all_stages, reconcile_selection
 
 st.set_page_config(
     page_title="GulfOilGuard-AI",
@@ -31,6 +31,7 @@ PAGES = {
 
 ui.load_styles()
 nav.init_state()
+reconcile_selection()  # one place decides whether the selection and its results are still valid
 current = st.navigation(list(PAGES.values()), position="hidden")
 nav.top_bar(PAGES, all_stages())
 current.run()

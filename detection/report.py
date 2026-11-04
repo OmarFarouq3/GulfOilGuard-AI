@@ -5,6 +5,7 @@ Run from repo root:
 """
 import argparse
 import csv
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -85,12 +86,14 @@ def main():
     a.output_dir.mkdir(parents=True, exist_ok=True)
 
     ds, probs, masks, thr = collect(a.checkpoint, a.image_dir, a.mask_dir, a.device, limit=a.limit)
+    split = a.image_dir.name.lower() if a.image_dir.name.lower() in {"train", "val", "test"} else None
 
     # 1) Per-image CSV
     rows = []
     for i, name in enumerate(ds.files):
         c = counts(probs[i], masks[i], thr)
-        rows.append({"file": name, "ref_oil_pixels": c[0] + c[2], **metrics_from_counts(c)})
+        rows.append({"file": name, **({"split": split} if split else {}),
+                     "ref_oil_pixels": c[0] + c[2], **metrics_from_counts(c)})
     with open(a.output_dir / "per_image_metrics.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=rows[0].keys())
         w.writeheader()
@@ -98,7 +101,9 @@ def main():
 
     # 2) Summary: micro (global) vs macro (per-image mean) on images that contain oil
     has_oil = [r for r in rows if r["ref_oil_pixels"] > 0]
-    summary = {"threshold": thr, "n_images": len(rows), "n_with_oil": len(has_oil),
+    digest = hashlib.sha256(a.checkpoint.read_bytes()).hexdigest()
+    summary = {"threshold": thr, "n_images": len(rows), "checkpoint_sha256": digest,
+               **({"split": split} if split else {}), "n_with_oil": len(has_oil),
                "n_empty_reference": len(rows) - len(has_oil),
                "micro": metrics_from_counts(counts(probs, masks, thr)),
                "macro_images_with_oil": {k: float(np.mean([r[k] for r in has_oil]))

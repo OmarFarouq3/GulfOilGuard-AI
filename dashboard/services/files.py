@@ -5,9 +5,9 @@ Every reader returns ``(value, warning)``:
 - malformed file -> ``(None, "readable warning")``
 - valid file     -> ``(value, None)``
 
-Results are cached with ``st.cache_data`` using the file's modification time as part
-of the key, so a new or overwritten output shows up on the next rerun without
-restarting Streamlit.
+Results are cached with ``st.cache_data`` using nanosecond modification and creation
+times plus file size. Replaced files then get a fresh key, including when several
+test or model outputs are written within the same clock tick.
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 import streamlit as st
@@ -31,6 +32,17 @@ def mtime(path: Path) -> float | None:
     """Return the file's modification time, or None if it does not exist."""
     try:
         return path.stat().st_mtime if path.is_file() else None
+    except OSError:
+        return None
+
+
+def file_stamp(path: Path) -> tuple[int, int, int] | None:
+    """Cache key for a file, precise enough for quick replacements on Windows."""
+    try:
+        stat = path.stat()
+        if not path.is_file():
+            return None
+        return stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size
     except OSError:
         return None
 
@@ -51,14 +63,55 @@ def display_path(path: Path) -> str:
     return str(path)
 
 
+_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def looks_like_path(token: str) -> bool:
+    r"""``C:\x``, ``\\server\x``, ``/home/x``, ``~/x``, ``./x``, ``a/b/c`` or ``dir/file.ext``; not ``train/val``."""
+    if "\\" in token or _DRIVE.match(token) or token.startswith(("/", "~", "./", "../")):
+        return True
+    return token.count("/") >= 2 or ("/" in token and "." in token.rsplit("/", 1)[-1])
+
+
+# A Windows drive or UNC path whose folders may contain spaces ("C:\Users\x\Hack for Earth\best.pth"):
+# folders up to the last separator, then a file name without spaces.
+_WINDOWS_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|\\\\)(?:[^\\/\n]*[\\/])*[^\s\\/]*")
+
+
+def hide_paths(value: str) -> str:
+    """Reduce every path in ``value`` to its file name; other words stay as they are."""
+    value = _WINDOWS_PATH.sub(lambda m: PureWindowsPath(m.group(0)).name or m.group(0), value)
+    return " ".join(PureWindowsPath(word).name or word if looks_like_path(word) else word
+                    for word in value.split(" "))
+
+
+# Internal teams and team members never reach the page. Files written by the pipeline may mention them
+# (run notes, plan messages, validation warnings); the app itself never does (tests/dashboard/test_no_team_names.py).
+PEOPLE = ("Ayham", "Obeid", "Maria", "Maqqavi", "Nihal", "Omar", "Haris", "Farouq")
+# A module name before "team" ("the cleanup team") goes with it; any other word ("by Team B") stays.
+_TEAM = r"(?:the\s+)?(?:(?:(?:detection|drift|routing|cleanup|optimi[sz]ation|dashboard|integration|response)\s+)?team(?:\s+[A-D])?|%s)"
+_POSSESSIVE = re.compile((r"\b" + _TEAM + r"'s\b") % "|".join(PEOPLE), re.IGNORECASE)
+_REFERENCE = re.compile((r"\b" + _TEAM + r"\b") % "|".join(PEOPLE), re.IGNORECASE)
+
+
+def neutral(value: str) -> str:
+    """Replace references to internal teams or team members: "Team B's run" -> "the run", "by Haris" -> "by the project"."""
+    return _REFERENCE.sub("the project", _POSSESSIVE.sub("the", value))
+
+
+def display_text(value: object) -> str:
+    """Free text read from a data file, as a viewer may see it: paths reduced to file names, no team or member names."""
+    return neutral(hide_paths(str(value)))
+
+
 # --- JSON ----------------------------------------------------------------------
-# The cached readers take the file's mtime as ``stamp``. It must not start with "_":
+# The cached readers take the file's stat tuple as ``stamp``. It must not start with "_":
 # st.cache_data leaves underscore-prefixed parameters out of the cache key, which would
 # keep serving the old contents after a file changes.
 
 
 @st.cache_data(show_spinner=False)
-def _read_json_cached(path_str: str, stamp: float) -> tuple[Any, str | None]:
+def _read_json_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[Any, str | None]:
     path = Path(path_str)
     try:
         return json.loads(path.read_text(encoding="utf-8")), None
@@ -70,7 +123,7 @@ def _read_json_cached(path_str: str, stamp: float) -> tuple[Any, str | None]:
 
 def read_json(path: Path) -> tuple[Any, str | None]:
     """Read a JSON file tolerantly (see module docstring)."""
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_json_cached(str(path), stamp)
@@ -115,7 +168,7 @@ def _geometry_problem(geometry: Any) -> str | None:
 
 
 @st.cache_data(show_spinner=False)
-def _read_geojson_cached(path_str: str, stamp: float) -> tuple[dict | None, str | None]:
+def _read_geojson_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[dict | None, str | None]:
     path = Path(path_str)
     data, warning = _read_json_cached(path_str, stamp)
     if warning:
@@ -164,7 +217,7 @@ def read_geojson(path: Path) -> tuple[dict | None, str | None]:
     A file may be returned together with a warning when only some features are bad.
     A file with no usable features returns None (plus a warning).
     """
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_geojson_cached(str(path), stamp)
@@ -174,7 +227,7 @@ def read_geojson(path: Path) -> tuple[dict | None, str | None]:
 
 
 @st.cache_data(show_spinner=False)
-def _read_image_cached(path_str: str, stamp: float) -> tuple[bytes | None, str | None]:
+def _read_image_cached(path_str: str, stamp: tuple[int, int, int]) -> tuple[bytes | None, str | None]:
     path = Path(path_str)
     try:
         raw = path.read_bytes()
@@ -187,7 +240,7 @@ def _read_image_cached(path_str: str, stamp: float) -> tuple[bytes | None, str |
 
 def read_image(path: Path) -> tuple[bytes | None, str | None]:
     """Read and verify an image file, returning its raw bytes."""
-    stamp = mtime(path)
+    stamp = file_stamp(path)
     if stamp is None:
         return None, None
     return _read_image_cached(str(path), stamp)

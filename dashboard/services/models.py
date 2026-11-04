@@ -8,9 +8,42 @@ Wherever shared/schemas.py defines a structure, the containers hold those datacl
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
-from services.schema import DetectionOutput, DriftOutput, OptimizationOutput, ResponseTarget, Vessel, VesselRoute
+from services.schema import (
+    DetectionOutput,
+    DriftOutput,
+    GeoCoordinate,
+    OptimizationOutput,
+    ResponseTarget,
+    Vessel,
+    VesselRoute,
+)
+
+
+@dataclass(frozen=True)
+class SpillSite:
+    """One incident the user can pick on the Overview map (not in schema)."""
+
+    spill_id: str
+    name: str
+    location: GeoCoordinate
+    synthetic: bool = False
+
+
+@dataclass
+class SpillData:
+    sites: list[SpillSite] = field(default_factory=list)
+    synthetic: bool = False
+    warnings: list[str] = field(default_factory=list)
+    is_mock: bool = False
+
+    @property
+    def has_content(self) -> bool:
+        return bool(self.sites)
+
+    def get(self, spill_id: str | None) -> SpillSite | None:
+        return next((s for s in self.sites if s.spill_id == spill_id), None)
 
 
 @dataclass
@@ -27,17 +60,19 @@ class DetectionScene:
 class DetectionData:
     scenes: list[DetectionScene] = field(default_factory=list)
     detections: list[DetectionOutput] = field(default_factory=list)  # one per georeferenced slick
-    metrics: dict[str, float] | None = None  # not in schema: dice, iou, precision, recall
-    per_class: dict[str, dict[str, float]] | None = None  # not in schema
-    metrics_info: dict[str, Any] = field(default_factory=dict)  # not in schema: model, split, ...
     spill: dict | None = None  # GeoJSON polygons for the map (schema has points only)
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # Diagnostics only; unlike warnings, not a viewer-facing issue
     is_mock: bool = False
+    # Selected-spill flow (not in schema): where the mask came from, and whether the outline on
+    # the map is a simulated placeholder (a real mask from a non-geolocated image has no position).
+    mask_source: Literal["model", "simulated"] | None = None
+    outline_simulated: bool = False
 
     @property
     def has_content(self) -> bool:
-        return bool(self.scenes or self.metrics or self.per_class or self.spill)
+        return bool(self.scenes or self.spill)
 
 
 @dataclass
@@ -48,6 +83,8 @@ class DriftData:
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
+    anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
+    model_run: bool = False  # meta.json names a real OpenDrift run (drift_loader.is_model_run)
 
     @property
     def has_content(self) -> bool:
@@ -63,6 +100,7 @@ class RouteEntry:
     route: VesselRoute
     vessel: Vessel | None = None  # when speed / capacity / availability are provided
     oil_collected_m3: float | None = None  # not in schema
+    finish_hours: float | None = None  # not in schema: sailing + cleaning, back in port (dashboard_export.py)
 
 
 @dataclass
@@ -75,6 +113,13 @@ class RoutingData:
     synthetic: bool = False
     warnings: list[str] = field(default_factory=list)
     is_mock: bool = False
+    anchored_to: str | None = None  # not in schema: spill_id the scenario was moved to
+    # Extensions written by optimization/dashboard_export.py (not in schema), all optional:
+    route_paths: dict[str, list[tuple[float, float]]] = field(default_factory=dict)  # vessel_id -> sea_path (lat, lon)
+    target_info: dict[str, dict[str, Any]] = field(default_factory=dict)  # target_id -> served_by, meet/position_hours
+    unserved_target_ids: list[str] = field(default_factory=list)
+    idle_vessel_ids: list[str] = field(default_factory=list)
+    scenario_id: str | None = None  # the drift run the plan was made for (+ "@dispatch...")
 
     @property
     def has_content(self) -> bool:
@@ -87,10 +132,25 @@ class RoutingData:
         return sum(known) if known else None
 
     @property
-    def response_time_hours(self) -> float | None:
-        """Until the last vessel finishes: max of VesselRoute.estimated_travel_hours."""
+    def sailing_time_hours(self) -> float | None:
+        """Longest sailing time of any vessel: max of VesselRoute.estimated_travel_hours (no cleaning)."""
         known = [r.route.estimated_travel_hours for r in self.routes if r.route.estimated_travel_hours is not None]
         return max(known) if known else None
+
+    @property
+    def completion_hours(self) -> float | None:
+        """When the last vessel is back in port, cleaning included: max of the ``finish_hours`` extension.
+
+        None unless every route gives ``finish_hours`` (a partial maximum would understate it).
+        """
+        known = [r.finish_hours for r in self.routes]
+        return max(known) if known and None not in known else None
+
+    @property
+    def response_time_hours(self) -> float | None:
+        """The headline response time (decision D2): completion time, else sailing time only."""
+        completion = self.completion_hours
+        return completion if completion is not None else self.sailing_time_hours
 
     @property
     def target_oil_m3(self) -> float | None:

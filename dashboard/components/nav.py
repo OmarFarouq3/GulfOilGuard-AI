@@ -10,18 +10,24 @@ import streamlit as st
 
 import config
 from components import illustrations
-from components.data import DEMO_STATE_KEY, Stage, demo_mode
-from services.detection_loader import load_detection
+from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode, spills_stage
+from components.labels import STAGE_STATUS
+from services import image_picker, report_loader, scenario, selection, settings
+from services.detection_loader import load_detection, load_galleries
 from services.drift_loader import load_drift
-from services.files import format_mtime
+from services.files import display_text, format_mtime, read_json_object
 from services.routing_loader import load_routing
+from services.selection import available_images
+from services.spill_loader import load_spills, site_ids
 
-STATUS_HELP = {
-    "live": "Live data available",
-    "simulated": "Showing a simulated scenario",
-    "empty": "No data yet",
-}
+STATUS_HELP = {status: help_text for status, (_css, _label, help_text) in STAGE_STATUS.items()}
 STEPS = (("detect", "01", "Detect"), ("predict", "02", "Predict"), ("respond", "03", "Respond"))
+# With a spill selected, the timeline doubles as its progress indicator.
+STEP_HELP = {
+    "done": "Done for the selected spill",
+    "ready": "Ready: open this step to run it",
+    "locked": "Locked: finish the previous step first",
+}
 
 
 def init_state() -> None:
@@ -43,12 +49,14 @@ def top_bar(pages: dict[str, st.Page], stages: dict[str, Stage]) -> None:
         with st.container(horizontal=True, key="gog-timeline", vertical_alignment="center", gap=None,
                           width="content"):
             st.page_link(pages["overview"], label="Overview", icon=":material/radar:")
+            progress = selection.step_states() if selection.active() else None
             for key, number, verb in STEPS:
                 st.html('<div class="gog-connector" aria-hidden="true"></div>', width="content")
                 status = stages[key].status
                 # Status dot is drawn by CSS from the container key (…-live / -simulated / -empty).
                 with st.container(key=f"gog-step-{key}-{status}", width="content"):
-                    st.page_link(pages[key], label=f"{number} {verb}", help=STATUS_HELP[status])
+                    st.page_link(pages[key], label=f"{number} {verb}",
+                                 help=STEP_HELP[progress[key]] if progress else STATUS_HELP[status])
         options_panel()
 
 
@@ -66,30 +74,113 @@ def options_panel() -> None:
         )
         st.button("Refresh data", icon=":material/refresh:", width="stretch",
                   help="Re-read results. Changed files are picked up automatically on every refresh.")
-        with st.expander("Diagnostics", icon=":material/terminal:", expanded=st.query_params.get("dev") == "1"):
+        with st.expander("Diagnostics", icon=":material/terminal:", expanded=dev_mode()):
             diagnostics()
 
 
-def diagnostics() -> None:
-    """Technical details for developers: data folder, file status, loader warnings."""
-    st.caption("Data folder")
-    st.code(str(config.OUTPUTS_DIR), language=None, wrap_lines=True)
-    rows = []
-    for module, files in (("detection", config.DETECTION_FILES), ("drift", config.DRIFT_FILES),
-                          ("routing", config.ROUTING_FILES)):
-        for path in files.values():
-            rows.append({"Module": module, "File": path.name, "Modified": format_mtime(path) or "missing"})
-    st.dataframe(rows, hide_index=True, width="stretch")
+# Optional detection files: the single default scene (runs write <image_id>_*) and the summary fallback.
+OPTIONAL_DETECTION = ("image", "mask", "overlay", "spill", "summary")
 
-    warnings = []
-    for loader in (load_detection, load_drift, load_routing):
+
+def shown_path(path) -> str:
+    """Repo-relative (outside the repo: file name only); the absolute path only with ?dev=1."""
+    return str(path) if dev_mode() else settings.display(path)
+
+
+def _validation(site_id: str) -> tuple[str, bool]:
+    """('S1: validation 52 OK, 7 WARN, 0 FAIL', any failed) from the site's validation.json (the team's check)."""
+    report, warning = read_json_object(config.site_files(site_id)["site"]["validation"])
+    counts = report.get("counts") if report else None
+    if warning or not isinstance(counts, dict):
+        return f"{site_id}: validation.json {'unreadable' if warning else 'missing'}", False
+    line = f"{site_id}: validation " + ", ".join(f"{counts.get(level, 0)} {level}" for level in ("OK", "WARN", "FAIL"))
+    return line, bool(counts.get("FAIL"))
+
+
+def site_diagnostics() -> list[str]:
+    """Site folders (outputs/sites/<id>/): file status and validation; returns their loader warnings."""
+    ids = site_ids()
+    markers = spills_stage().data
+    warnings: list[str] = []
+    if not ids:
+        return warnings
+    st.caption(f"Site folders ({shown_path(config.SITES_DIR)}): the selected marker's folder is read")
+    rows = []
+    for site_id in ids:
+        for group in ("drift", "routing", "site"):
+            for path in config.site_files(site_id)[group].values():
+                rows.append({"Site": site_id, "File": path.relative_to(config.SITES_DIR / site_id).as_posix(),
+                             "Modified": format_mtime(path) or "missing"})
+    st.dataframe(rows, hide_index=True, width="stretch")
+    validation = {site_id: _validation(site_id) for site_id in ids}
+    st.code("\n".join(line for line, _failed in validation.values()), language=None, wrap_lines=True)
+    for site_id in ids:
+        marker = markers.get(site_id)
+        if marker is None:
+            warnings.append(f"Site `{site_id}`: no marker on the map has this id, so its results are never shown.")
+            drift = load_drift(config.site_files(site_id)["drift"])
+        else:
+            drift = scenario.site_drift(marker)  # includes the release point vs marker check
+            if drift is None:
+                warnings.extend(scenario.site_drift_unreadable(marker))  # site_drift drops these
+        routing = load_routing(config.site_files(site_id)["routing"])
+        for data in (drift, routing):
+            if data is not None:
+                warnings.extend(data.warnings)
+        if marker is not None:
+            warnings.extend(scenario.site_comparison(marker)[2])  # comparison.json and baseline/
+        if validation[site_id][1]:
+            warnings.append(f"Site `{site_id}`: its validation.json reports failed checks.")
+    warnings += [f"Marker `{s.spill_id}` has no site folder: Predict and Respond show no data for it."
+                 for s in markers.sites if s.spill_id not in ids and not markers.is_mock]
+    return warnings
+
+
+def diagnostics() -> None:
+    """Technical details for developers: data folder, file status, loader warnings and notes."""
+    st.caption("Data folder")
+    st.code(shown_path(config.OUTPUTS_DIR), language=None, wrap_lines=True)
+    rows = []
+    # Per-site layout: drift and routing come from the site folders and markers from them too, so the
+    # single folders and spills.geojson are not expected (listed only if present), nor are the
+    # optional single-scene detection files.
+    sites = scenario.sites_mode(demo_mode())
+    for module, files in (("detection", config.DETECTION_FILES), ("report", config.REPORT_FILES),
+                          ("drift", config.DRIFT_FILES), ("routing", config.ROUTING_FILES)):
+        for key, path in files.items():
+            stamp = format_mtime(path)
+            if sites and not stamp and (module in ("drift", "routing")
+                                        or (module == "detection" and key in OPTIONAL_DETECTION)):
+                continue
+            if sites and stamp and module in ("drift", "routing"):
+                stamp += " (not used: per-site layout)"
+            rows.append({"Module": module, "File": f"{path.parent.name}/{path.name}", "Modified": stamp or "missing"})
+    if not sites or format_mtime(config.SPILLS_FILE):
+        rows.append({"Module": "spills", "File": config.SPILLS_FILE.name,
+                     "Modified": format_mtime(config.SPILLS_FILE) or "missing (simulated catalogue)"})
+    st.dataframe(rows, hide_index=True, width="stretch")
+    site_warnings = site_diagnostics()
+
+    st.caption(f"Radar image folder ({len(available_images())} readable images)")
+    st.code(shown_path(image_picker.image_dir()), language=None, wrap_lines=True)
+    st.caption("Detection setup (environment > .env > standard layout)")
+    checkpoint, python = settings.resolve_checkpoint(), settings.resolve_python()
+    st.code(f"checkpoint: {shown_path(checkpoint.path)}  [{checkpoint.source}"
+            f"{'' if checkpoint.path.is_file() else ', missing'}]\n"
+            f"python:     {shown_path(python.path)}  [{python.source}]", language=None, wrap_lines=True)
+
+    warnings = list(settings.env_file()[1])
+    warnings += report_loader.per_image_report().warnings + load_galleries()[1]
+    warnings += report_loader.check_checkpoint(checkpoint.path).warnings
+    for loader in (load_detection, load_drift, load_routing, load_spills):
         data = loader()
         if data is not None:
-            warnings.extend(data.warnings)
+            warnings.extend(data.warnings + getattr(data, "notes", []))
+    warnings += site_warnings
     st.caption("Loader warnings")
     if warnings:
         for message in warnings:
-            st.markdown(f"- {message}")
+            st.markdown(f"- {display_text(message)}")
     else:
         st.markdown(":green[No warnings]")
     st.caption(f"Demo scenario: {'on' if demo_mode() else 'off'}. URL options: ?demo=1, ?dev=1")

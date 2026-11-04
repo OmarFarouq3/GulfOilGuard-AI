@@ -8,6 +8,9 @@ Local data convention: `detection/images/{train,val}` and `detection/masks/{trai
 
 `model.py` implements U-Net, `train.py` trains and selects a checkpoint by validation Dice, and `evaluate.py` reloads checkpoints to calculate metrics and export predicted masks. See [the training guide](../docs/detection_training.md) for commands and [the model card](../docs/detection_model_card.md) for the trained baseline results and team handoff. Geographic locations require source CRS and transform metadata; image pixel indices cannot seed drift simulations.
 
+For the exploratory scene-grouped Sentinel-1 fine-tuning run and its limits at
+the four UAE demo sites, see [the georeferenced fine-tuning pilot](../docs/georeferenced_finetuning_pilot.md).
+
 ## U-Net (Ayham)
 
 `build_model()` creates an untrained model with four encoder levels, a bottleneck,
