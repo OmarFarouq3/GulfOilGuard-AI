@@ -144,9 +144,11 @@ def test_choosing_the_simulated_detection_while_running_drops_the_run(images, mo
     stub(monkeypatch, done, gate=gate)
     at = new_app()
     start(at, images[0])
+    job = at.session_state[selection.DETECT_JOB_KEY]
     button(at, "flow_detect_simulated").click()
     text = page_text(checked(at.run()))
     gate.set()
+    job.future.result(timeout=30)  # let the dropped run finish writing before the folders are cleaned
     assert RUNNING not in text and selection.DETECT_JOB_KEY not in at.session_state
     assert "Continue to Predict" in text
 
