@@ -156,3 +156,21 @@ def test_a_fresh_session_starts_with_no_incident(real_outputs):
     fresh = new_app()  # a reload or a second tab is a new session
     assert site_list(fresh).value == incident.NO_INCIDENT and selection.SPILL_KEY not in fresh.session_state
     assert "No incident selected yet" in tree_text(fresh)
+
+
+def test_the_predict_time_step_does_not_carry_over_to_another_site(real_outputs):
+    """A->B: B opens at its default step, not at the step last viewed for A (found in the browser check)."""
+    at = choose(overview(), "S3")
+    go(at, "views/detection.py", "flow_detect_simulated")
+    go(at, "views/drift.py", "flow_run_predict")
+    default = at.select_slider(key="drift_step").value
+    go(at, "views/drift.py", "drift_jump_24")
+    assert at.select_slider(key="drift_step").value == 24
+    go(at, "views/overview.py")
+    go(at, "views/drift.py")
+    assert at.select_slider(key="drift_step").value == 24  # same site: the step is kept
+    go(at, "views/overview.py")
+    choose(at, "S4")
+    go(at, "views/detection.py", "flow_detect_simulated")
+    go(at, "views/drift.py", "flow_run_predict")
+    assert at.select_slider(key="drift_step").value == default != 24

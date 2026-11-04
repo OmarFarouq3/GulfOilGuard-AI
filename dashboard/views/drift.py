@@ -62,7 +62,7 @@ def trajectory_point(hours: float) -> tuple[float, float] | None:
 
 
 STEP_KEY = "drift_step"
-SAVED_STEP_KEY = "drift_step_saved"  # not a widget key: survives leaving the page
+SAVED_STEP_KEY = "drift_step_saved"  # (anchored_to, hours): not a widget key, survives leaving the page
 NOT_AFLOAT_COLOR = "#8fa9b8"  # muted slate: never an oil colour
 NOT_AFLOAT_LABEL = "No longer afloat"
 DETAIL_LABELS = {"model": "Drift model", "oil_type": "Oil type", "release_volume_m3": f"Oil released ({M3})",
@@ -126,10 +126,12 @@ else:
     # One forecast time at a time: a slider through every step (the real run has 25 hourly
     # steps), plus buttons for the key times. The selected step lives in session_state.
     # Streamlit forgets a widget's value when its page is left, so the step is also kept in
-    # SAVED_STEP_KEY and restored when the user comes back.
+    # SAVED_STEP_KEY and restored when the user comes back, for the same site only: another site
+    # opens at its default step, never at the step last viewed for a different site.
+    owner = data.anchored_to
     if st.session_state.get(STEP_KEY) not in hours:
         saved = st.session_state.get(SAVED_STEP_KEY)
-        st.session_state[STEP_KEY] = saved if saved in hours else next(
+        st.session_state[STEP_KEY] = saved[1] if saved and saved[0] == owner and saved[1] in hours else next(
             (h for h in config.DRIFT_HORIZONS_HOURS if h in hours), hours[0])
     key_hours = [h for h in config.DRIFT_KEY_HOURS if h in hours]
     if key_hours and len(hours) > len(key_hours):
@@ -139,7 +141,7 @@ else:
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
     selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY,
                             help="Steps through the saved forecast; nothing is re-simulated.")
-    st.session_state[SAVED_STEP_KEY] = selected
+    st.session_state[SAVED_STEP_KEY] = (owner, selected)
 
     features = data.steps[selected]
     oil = [f for f in features if afloat(f)]  # oil still on the water
