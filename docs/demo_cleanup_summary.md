@@ -20,7 +20,7 @@ Everything shown is a **synthetic scenario**: 300 m³ of Generic Medium Crude re
 | S3, off Sharjah / Hamriyah | 200.3 | **81.8** | SAQR, Hamriyah | 196.1 / 195.6 | 11.48 / 11.48 | +3.7 % |
 | S4, off Ras Al Khaimah near Dhayah | 208.6 | 0 | SAQR, Hamriyah | 204.3 / 204.5 | **11.40 / 12.56** | +1.9 % |
 
-Validation: 0 FAIL at every site (S1 127 OK, 3 WARN; S2 113 OK, 3 WARN; S3 115 OK, 4 WARN; S4 111 OK, 3 WARN). Each site has its own OpenDrift run, not a copy of another site's: the most alike pair (S1 and S3) still ends up 2.1 km apart on average after 24 h.
+Validation: 0 FAIL at every site (S1 129 OK, 3 WARN; S2 115 OK, 3 WARN; S3 117 OK, 4 WARN; S4 113 OK, 3 WARN). Each site has its own OpenDrift run, not a copy of another site's: the most alike pair (S1 and S3) still ends up 2.1 km apart on average after 24 h.
 
 What each site shows:
 - **S1:** the same oil and time as the baseline, with **28 % less sailing distance**, and FALCON stays in port.

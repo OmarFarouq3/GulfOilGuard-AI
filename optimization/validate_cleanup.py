@@ -142,10 +142,15 @@ def check_provenance(meta: dict, at_zero: list[tuple[GeoCoordinate, float]], exp
     parts = _sim_id_parts(sim_id)
     if parts:
         lat, lon, start = parts
-        when = (meta.get("start_time") or "").replace("-", "").replace(":", "")[:13] + "Z"
-        r.check(g, abs(lat - release.latitude) < 0.005 and abs(lon - release.longitude) < 0.005 and when == start,
-                f"simulation id {sim_id} names the release point {release.latitude:g} N, {release.longitude:g} E "
-                f"and start {meta.get('start_time')} given in meta.json")
+        r.check(g, abs(lat - release.latitude) < 0.005 and abs(lon - release.longitude) < 0.005,
+                f"simulation id {sim_id} names the release point given in meta.json "
+                f"({release.latitude:g} N, {release.longitude:g} E)")
+        if meta.get("start_time"):
+            when = meta["start_time"].replace("-", "").replace(":", "")[:13] + "Z"
+            r.check(g, when == start, f"simulation id {sim_id} names the start time given in meta.json "
+                    f"({meta['start_time']})")
+        else:
+            r.warn(g, "meta.json has no start_time, so the simulation id's start time cannot be compared")
     else:
         r.warn(g, f"simulation id {sim_id!r} does not name a release point, so it cannot be compared")
     vol = sum(v for _, v in at_zero)
@@ -155,6 +160,8 @@ def check_provenance(meta: dict, at_zero: list[tuple[GeoCoordinate, float]], exp
         off = _km(centre, release)
         r.check(g, off <= RELEASE_TOL_KM, f"the particles at 0 h are centred {off * 1000:.0f} m from the release point "
                 "(they were released there, not moved from another run)")
+    else:
+        r.warn(g, "no oil afloat at 0 h in drift.geojson, so the particles cannot be checked against the release point")
     if expected is not None:
         off = _km(release, expected)
         r.check(g, off <= RELEASE_TOL_KM, f"release point {release.latitude:g} N, {release.longitude:g} E is the "
@@ -229,6 +236,12 @@ def check_drift(drift_dir: Path, r: Report, expected_release: GeoCoordinate | No
 
     # Oil that reached the coast is not a cleanup target (routing takes oil afloat only).
     reached = sorted(h for h, s in stranded.items() if s["particles"])
+    # meta.json counts the particles not afloat (stranded or other) per hour: drift.geojson must agree.
+    counted = {h: row["stranded_or_other"] for h, row in summary.items() if "stranded_or_other" in row}
+    if counted:
+        off = [h for h in hours if h in counted and counted[h] != stranded.get(h, {}).get("particles", 0)]
+        r.check(g, not off, "particles not afloat per step in drift.geojson equal meta.json stranded_or_other"
+                + ("" if not off else f": differ at {off}"))
     if reached:
         last = stranded[reached[-1]]
         r.warn(g, f"oil reaches the coast: {last['particles']} particles ({last['m3']:.1f} m3) stranded by "
@@ -272,6 +285,8 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
         sim = drift_info["meta"].get("simulation_id")
         r.check(g, plan_sim == sim, f"the plan was made from this drift run (comparison.json: {plan_sim}, "
                 f"meta.json: {sim})")
+    else:
+        r.warn(g, "comparison.json does not name its drift run; the targets are still checked against this drift below")
     forecast = load_drift(drift_dir, replace(DEFAULT_DRIFT_CONFIG, count_emulsion=emulsion))
     dispatch = float((comparison.get("drift") or {}).get("dispatch_hours", DEFAULT_DRIFT_CONFIG.dispatch_hours))
     if not comparison:

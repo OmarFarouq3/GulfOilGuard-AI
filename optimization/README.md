@@ -257,9 +257,11 @@ python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-di
 python -m optimization.validate_sites --fleet outputs/fleet/gulf_standard.json --write
 ```
 
-`--write` saves `validation.txt` and `validation.json` in each site folder, and `sites_summary.md` and `sites_summary.json` in `outputs/sites/`. `--details` prints every check of every site; without it only the FAILs and the table are printed. `--sites S1 S3` checks only those sites.
+`--write` saves `validation.txt` and `validation.json` in each site folder, and `sites_summary.md` and `sites_summary.json` in `outputs/sites/`. `--details` prints every check of every site; without it only the FAILs and the table are printed. `--sites S1 S3` checks only those sites. The sites are compared up to the last forecast hour they share, so a copy cut short is still caught; a pair with no particle id or hour in common is reported as not compared, and the command exits with code 1.
 
-**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state (for example the emulsion load of an older pure-oil plan, a patch wider than 1.5 km, an unserved target, a missing `comparison.json`). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice, a drift run that is not the site's own). The command exits with code 1 if anything fails.
+The validator has its own tests, `tests/test_validate_cleanup.py`: small made-up drift runs and plans, one per check, so each check is shown to catch its error and a bad input fails instead of crashing.
+
+**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state or something to look at (for example the emulsion load of an older pure-oil plan, a patch wider than 1.5 km, an unserved target, oil reaching the coast, a missing `comparison.json`, or an optimized plan that cleans clearly less oil than the baseline). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice, a drift run that is not the site's own). The command exits with code 1 if anything fails.
 
 **Change the depots or the fleet.** Edit `GULF_DEPOTS` or the scenario functions in `scenario.py`, then regenerate all four fixtures and check that every vessel is on water (needs the land file from step 0.2):
 

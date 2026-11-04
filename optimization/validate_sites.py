@@ -40,10 +40,8 @@ COPY_TOL_KM = 0.05  # every particle moves within 50 m of the same particle at a
 SIMILAR_KM = 0.5  # median closer than this: suspiciously similar (all runs use the same random seed)
 
 
-def _moves(drift_dir: Path) -> dict[str, tuple[float, float, float, float]]:
-    """Each particle's move from 0 h to the last step, by particle id: (north km, east km, dlat, dlon).
-
-    A copy shifted in degrees moves by the same degrees; one shifted in km by the same km."""
+def _positions(drift_dir: Path) -> dict[float, dict[str, tuple[float, float]]]:
+    """{hours: {particle id: (lat, lon)}} from drift.geojson, every status."""
     steps: dict[float, dict[str, tuple[float, float]]] = {}
     for f in json.loads((drift_dir / "drift.geojson").read_text(encoding="utf-8"))["features"]:
         geom, props = f.get("geometry") or {}, f.get("properties") or {}
@@ -54,9 +52,14 @@ def _moves(drift_dir: Path) -> dict[str, tuple[float, float, float, float]]:
         step = steps.setdefault(float(props["hours"]), {})
         for pid, c in zip(ids, pts):
             step[str(pid)] = (c[1], c[0])
-    if not steps:
-        return {}
-    first, last = steps[min(steps)], steps[max(steps)]
+    return steps
+
+
+def _moves(steps: dict, until: float) -> dict[str, tuple[float, float, float, float]]:
+    """Each particle's move from the first step to `until`, by particle id: (north km, east km, dlat, dlon).
+
+    A copy shifted in degrees moves by the same degrees; one shifted in km by the same km."""
+    first, last = steps[min(steps)], steps[until]
     out = {}
     for pid, (lat0, lon0) in first.items():
         if pid in last:
@@ -68,24 +71,32 @@ def _moves(drift_dir: Path) -> dict[str, tuple[float, float, float, float]]:
 
 
 def compare_sites(drift_dirs: dict[str, Path]) -> list[dict]:
-    """One row per pair of sites: how differently their particles moved."""
-    moves = {site: _moves(d) for site, d in drift_dirs.items()}
+    """One row per pair of sites: how differently their particles moved, up to the last hour both have."""
+    steps = {site: _positions(d) for site, d in drift_dirs.items()}
     rows = []
-    names = sorted(moves)
+    names = sorted(steps)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            shared = set(moves[a]) & set(moves[b])
-            if not shared:
+            common = set(steps[a]) & set(steps[b])
+            if not common:
+                rows.append({"sites": f"{a}-{b}", "particles": 0, "copy": False, "similar": False,
+                             "comparable": False, "why": "no forecast hour in common"})
                 continue
-            ma, mb = moves[a], moves[b]
+            until = max(common)
+            ma, mb = _moves(steps[a], until), _moves(steps[b], until)
+            shared = set(ma) & set(mb)
+            if not shared:
+                rows.append({"sites": f"{a}-{b}", "particles": 0, "copy": False, "similar": False,
+                             "comparable": False, "why": "no particle id in common"})
+                continue
             km = [hypot(ma[p][0] - mb[p][0], ma[p][1] - mb[p][1]) for p in shared]
             # the same move in degrees, measured in km at site a
             deg = [hypot((ma[p][2] - mb[p][2]) * 111.2, (ma[p][3] - mb[p][3]) * 111.2 * cos(radians(25.8)))
                    for p in shared]
             closest = min((km, deg), key=max)
-            rows.append({"sites": f"{a}-{b}", "particles": len(shared), "median_km": median(closest),
-                         "max_km": max(closest), "copy": max(closest) <= COPY_TOL_KM,
-                         "similar": median(closest) < SIMILAR_KM})
+            rows.append({"sites": f"{a}-{b}", "particles": len(shared), "until_hours": until,
+                         "median_km": median(closest), "max_km": max(closest), "copy": max(closest) <= COPY_TOL_KM,
+                         "similar": median(closest) < SIMILAR_KM, "comparable": True})
     return rows
 
 
@@ -111,7 +122,9 @@ def _summary_row(site: str, place: str, r, result: dict) -> dict:
 
 
 def _f(x, fmt="{:.1f}"):
-    return "n/a" if x is None else fmt.format(x)
+    if x is None:
+        return "n/a"
+    return fmt.format(x + 0.0).replace("-0.0 %", "0.0 %").replace("+0.0 %", "0.0 %")
 
 
 def summary_markdown(rows: list[dict], pairs: list[dict]) -> str:
@@ -140,15 +153,21 @@ def summary_markdown(rows: list[dict], pairs: list[dict]) -> str:
         lines += ["", f"{row['site']}: {row['stranded_end_m3']:.1f} m³ ({row['stranded_end_particles']} particles) "
                   "reaches the coast by 24 h, outside the cleanup plan (routing targets oil afloat only)."]
     if pairs:
-        copies = [p["sites"] for p in pairs if p["copy"]]
-        similar = [p["sites"] for p in pairs if p["similar"] and not p["copy"]]
-        least = min(pairs, key=lambda p: p["median_km"])
-        lines += ["", "Own drift run per site: " + (
+        compared = [p for p in pairs if p["comparable"]]
+        not_compared = [f"{p['sites']} ({p['why']})" for p in pairs if not p["comparable"]]
+        copies = [p["sites"] for p in compared if p["copy"]]
+        similar = [p["sites"] for p in compared if p["similar"] and not p["copy"]]
+        least = min(compared, key=lambda p: p["median_km"]) if compared else None
+        verdict = (
             f"**NO**, {', '.join(copies)} move identically (translated copies of one run)." if copies else
-            f"probably, but {', '.join(similar)} move very alike (median {least['median_km']:.2f} km apart after "
-            "24 h): check with Maqqavi." if similar else
-            f"yes. The most similar pair, {least['sites']}, still differs by {least['median_km']:.2f} km "
-            "(median) in how far and where its particles move in 24 h.")]
+            f"probably, but {', '.join(similar)} move very alike (median {least['median_km']:.2f} km apart): check "
+            "with Maqqavi." if similar else
+            f"yes. The most similar pair, {least['sites']}, still differs by {least['median_km']:.2f} km (median) in "
+            f"how far and where its particles move in {least['until_hours']:g} h." if least else
+            "**not checked**: no pair of sites could be compared.")
+        if not_compared:
+            verdict += f" **Not compared:** {', '.join(not_compared)}."
+        lines += ["", "Own drift run per site: " + verdict]
     return "\n".join(lines) + "\n"
 
 
@@ -191,7 +210,7 @@ def main() -> None:
             write_json(folder / "validation.json", r, result)
 
     pairs = compare_sites(drift_dirs)
-    failed |= any(p["copy"] for p in pairs)
+    failed |= any(p["copy"] or not p["comparable"] for p in pairs)
     table = summary_markdown(rows, pairs)
     print("\n" + table)
     if args.write:
