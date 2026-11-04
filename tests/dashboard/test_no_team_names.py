@@ -90,6 +90,17 @@ def test_no_team_or_member_name_on_any_page(real_outputs, case):
         assert "Loader warnings" in texts["views/overview.py"]  # Diagnostics was rendered and scanned
 
 
+@needs_real
+@pytest.mark.parametrize("demo", [False, True])
+def test_the_spill_list_and_the_offline_map_note_are_scanned(real_outputs, demo):
+    """The Overview's spill list (every option) and the note behind the map are part of what is checked."""
+    from components import incident
+    text = render_all(demo=demo)["views/overview.py"]
+    assert incident.MAP_OFFLINE in text and incident.NO_INCIDENT_LABEL in text
+    assert ("illustrative demo scenario" if demo else "precomputed run from a hypothetical release") in text
+    assert not hits(text), hits(text)
+
+
 SANITISER = {"PEOPLE", "_TEAM", "_POSSESSIVE", "_REFERENCE"}  # services/files.py: the names and patterns it removes
 
 

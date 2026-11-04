@@ -279,6 +279,21 @@ header[data-testid="stHeader"],
 }
 @keyframes gog-updating-in { from { opacity: 0; } to { opacity: 1; } }
 
+/* ---- Overview map: keeps its height offline (components/incident.py) ----
+   Without internet the map component never sizes itself and collapses to 2 px. The container keeps
+   the map's height, and the note behind the map is covered while the map paints; offline it shows. */
+.st-key-gog-overview-map { position: relative; min-height: 480px; }
+.st-key-gog-overview-map iframe { position: relative; z-index: 1; }
+.st-key-gog-overview-map [data-testid="stElementContainer"]:has(.gog-map-offline) {
+  position: absolute; inset: 0; z-index: 0;
+}
+.gog-map-offline {
+  height: 480px; display: grid; place-items: center; padding: 0 2rem; text-align: center;
+  border: 1px dashed var(--gog-border-strong); border-radius: var(--gog-radius); color: var(--gog-muted);
+  background: var(--gog-surface); font-size: 0.92rem;
+  animation: gog-updating-in 0.3s ease-out 3s both;  /* not during the first seconds a map takes to load */
+}
+
 /* ---- Map frame + legend ---- */
 iframe[title="streamlit_folium.st_folium"] { border-radius: var(--gog-radius); border: 1px solid var(--gog-border) !important; box-shadow: var(--gog-shadow); }
 .gog-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.1rem; padding: 0.6rem 0.2rem 0; color: var(--gog-muted); font-size: 0.82rem; }

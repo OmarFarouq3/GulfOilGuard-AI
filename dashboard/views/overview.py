@@ -60,7 +60,7 @@ if sites:  # one set of results per site: say which one these numbers are for
     site = selected_site()
     scope = (f"These numbers are for site {site.spill_id} ({ui.coordinates(site.location.latitude, site.location.longitude)}); "
              "they fill in as you run its steps." if site else
-             "Each site has its own forecast and plan: pick a site on the map to see its numbers.")
+             "Each site has its own forecast and plan: pick a site on the map or in the list below it to see its numbers.")
     st.html(f'<p class="gog-flow-note gog-kpi-scope">{ui.esc(scope)}</p>')
 ui.stat_tiles([
     ("Release footprint, simulated", ui.fmt(release_area), KM2,
@@ -75,9 +75,11 @@ ui.stat_tiles([
 # Without spill.geojson the radar scene has no location: Detect and Predict are not the same incident yet.
 located = detection_located()
 if located:
-    ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages.")
+    ui.section("Choose an incident", "Click a spill on the map (or choose it in the list below the map), then "
+               "follow it through the three stages.")
 else:
-    ui.section("Choose an incident", "Click a spill on the map, then follow it through the three stages. Its forecast "
+    ui.section("Choose an incident", "Click a spill on the map (or choose it in the list below the map), then "
+               "follow it through the three stages. Its forecast "
                "and response plan start from a synthetic release point there; the radar image assigned to it is a "
                "sample from the dataset, not taken at that point.")
 incident.picker(spills_stage())

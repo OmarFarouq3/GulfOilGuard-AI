@@ -280,7 +280,7 @@ def heading(at: AppTest) -> str:
 def test_overview_offers_the_site_markers_and_says_numbers_are_per_site(sites):
     sites("S1", "S2", "S3", "S4")
     at = new_app()
-    assert "pick a site on the map to see its numbers" in " ".join(bodies(at, "gog-kpi-scope"))
+    assert "pick a site on the map or in the list below it to see its numbers" in " ".join(bodies(at, "gog-kpi-scope"))
     assert ">—<" in bodies(at, "Spread at 24")[0]  # no single dataset behind the headline numbers
     go(at, "views/drift.py")
     assert FORECAST_CHIP not in heading(at) and SIMULATED_CHIP not in heading(at)  # no data until a site is picked
