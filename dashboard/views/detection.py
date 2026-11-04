@@ -5,6 +5,8 @@ With a spill selected on Overview, components.flow runs the U-Net on its radar i
 
 from __future__ import annotations
 
+import re
+
 import streamlit as st
 
 import config
@@ -51,9 +53,18 @@ STATIC_NOTE = "These overall scores don't change from image to image; the score 
 SPLIT_WORDS = {"val": "validation", "validation": "validation", "train": "training", "test": "test"}
 
 
+SIMULATED_SPLIT = re.compile(r"^(val|validation|train|training|test)(?: set)?\s*\(simulated\)$", re.IGNORECASE)
+
+
 def overall_caption(split: object, n_images: object) -> str:
     """Name the evaluated image set without implying a per-image average."""
     name = split.strip().lower() if isinstance(split, str) else ""
+    simulated = SIMULATED_SPLIT.match(name)
+    if simulated:  # the demo's illustrative scores ("Validation set (simulated)"): no model computed them
+        word = SPLIT_WORDS.get(simulated.group(1), "training" if simulated.group(1) == "training" else "")
+        known = isinstance(n_images, int) and not isinstance(n_images, bool) and n_images > 0
+        count = f"{n_images:,} " if known else ""
+        return f"Simulated scores from 0 to 1 for {count}{word} images: illustrative values, not computed by the model."
     word = SPLIT_WORDS.get(name, split.strip() if name else "")
     known = isinstance(n_images, int) and not isinstance(n_images, bool) and n_images > 0
     images = f"{n_images:,} {word} images" if known else f"all evaluated {word} images"
@@ -172,13 +183,16 @@ else:
     split = str(data.metrics_info.get("split") or "").strip().lower()
     scored_on = ("the labelled validation images, which were also used to choose the checkpoint, so they are not an "
                  "independent test" if split in ("val", "validation") else "a labelled evaluation set")
+    accuracy_note = ("in this simulated scenario are illustrative values, not scores computed by the model."
+                     if SIMULATED_SPLIT.match(split) else
+                     f"describe the model on {scored_on}; they are not a guarantee for every new scene.")
     with st.expander("How to read this", icon=":material/help:"):
         st.markdown(
             f"""
 - **Dark means oil.** Oil damps the small waves that reflect radar back to the satellite, so slicks look dark.
 - **Look-alikes** also look dark: very calm water, algae and natural films, rain cells and ship wakes. They cause false alarms (lower precision).
 - **Thin or broken slicks**, and strong wind that breaks slicks up, cause missed oil (lower recall).
-- **Accuracy scores** describe the model on {scored_on}; they are not a guarantee for every new scene.
+- **Accuracy scores** {accuracy_note}
 - **Location** is a separate step: a correct outline with wrong scene geometry still lands in the wrong place.
 """
         )

@@ -17,7 +17,7 @@ streamlit run dashboard/app.py
 
 macOS/Linux: `python3 -m venv .venv && source .venv/bin/activate`, then use the same last two commands.
 
-`dashboard/requirements.txt` is deliberately lightweight (Streamlit 1.66 or newer). You do **not** need the root `requirements.txt` (torch, opendrift, ortools) to run the dashboard. Launch from the repo root so `.streamlit/config.toml` (theme, hidden Streamlit chrome) is picked up.
+`dashboard/requirements.txt` is deliberately lightweight (Streamlit 1.66 or newer). You do **not** need the root `requirements.txt` (torch, opendrift, ortools) to run the dashboard. **Launch from the repo root**, not from `dashboard/`, so `.streamlit/config.toml` (theme, hidden Streamlit chrome) is picked up; started from `dashboard/`, Streamlit falls back to its light theme and headings become unreadable on the dark page.
 
 ### Real detection (optional)
 
