@@ -23,7 +23,7 @@ STATE_WORDS = {"done": "Done", "ready": "Ready", "locked": "Locked"}
 LOCKED_REASON = {
     "detect": "Pick a spill on Overview first.",
     "predict": "Run detection on the selected image first, or continue with the simulated detection.",
-    "respond": "Run the drift forecast first.",
+    "respond": "Show the drift forecast first.",
 }
 
 
@@ -208,6 +208,39 @@ def _failure(run: inference.DetectionRun, follow_up: str = "") -> None:
 
 # --- Predict / Respond ---------------------------------------------------------------------
 
+PRECOMPUTED_DRIFT = "Precomputed result from the Team B drift run"
+PRECOMPUTED_PLAN = "Precomputed result from the Team C routing plan"
+
+
+def _utc(timestamp: object) -> str | None:
+    return f"{timestamp[:16].replace('T', ' ')} UTC" if isinstance(timestamp, str) and len(timestamp) >= 16 else None
+
+
+def precomputed_drift_note(data) -> None:
+    """Predict shows a saved drift run; nothing here re-runs the model (the controls only step through it)."""
+    if data.is_mock:
+        text = "Precomputed demo scenario (simulated). Nothing is re-simulated here."
+    else:
+        run = data.trajectory.simulation_id if data.trajectory else (data.meta or {}).get("simulation_id")
+        release = _utc((data.meta or {}).get("start_time"))
+        details = ", ".join(x for x in (f"run {run}" if run else None, f"released {release}" if release else None) if x)
+        text = f"{PRECOMPUTED_DRIFT}{f' ({details})' if details else ''}. Nothing is re-simulated here."
+    st.html(f'<p class="gog-flow-note gog-precomputed">{ui.esc(text)} The time controls only step through '
+            f'the saved forecast.</p>')
+
+
+def precomputed_plan_note(data, drift=None) -> None:
+    """Respond shows a saved routing plan; nothing here re-runs the optimiser."""
+    if data.is_mock:
+        text = "Precomputed demo plan (simulated). Nothing is re-optimised here."
+    else:
+        release = _utc((drift.meta or {}).get("start_time")) if drift is not None and not drift.is_mock else None
+        details = ", ".join(x for x in (f"scenario {data.scenario_id}" if data.scenario_id else None,
+                                        f"release {release}" if release else None) if x)
+        text = f"{PRECOMPUTED_PLAN}{f' ({details})' if details else ''}. Nothing is re-optimised here."
+    st.html(f'<p class="gog-flow-note gog-precomputed">{ui.esc(text)} The controls only change what is '
+            f'shown.</p>')
+
 
 def predict_controls(site: SpillSite, demo: bool) -> None:
     progress()
@@ -237,9 +270,9 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
         simulated_parts = ["Drift paths, oil footprint and particles (moved scenario)",
                            "Wind and current inputs (those of the source scenario)"]
     if not selection.predict_done():
-        later = "" if scenario.sites_mode(demo) else " The drift model itself is not run for this incident yet."
+        later = " Nothing is re-simulated here: the button shows the saved forecast."
         st.html(f'<p class="gog-flow-note">{ui.esc(note + later)}</p>')
-        st.button("Run drift forecast", type="primary", icon=":material/play_arrow:", key="flow_run_predict",
+        st.button("Show the drift forecast", type="primary", icon=":material/visibility:", key="flow_run_predict",
                   on_click=selection.complete_predict)
         return
     st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')
@@ -282,9 +315,9 @@ def respond_controls(site: SpillSite) -> None:
             simulated_parts = ["Release point and time behind the forecast (test inputs)",
                                "Fleet, cleanup rate and other assumptions listed in the plan"]
     if not selection.respond_done():
-        later = "" if scenario.sites_mode(demo_mode()) else " The optimiser itself is not run for this incident yet."
+        later = " Nothing is re-optimised here: the button shows the saved plan."
         st.html(f'<p class="gog-flow-note">{ui.esc(note + later)}</p>')
-        st.button("Plan the response", type="primary", icon=":material/play_arrow:", key="flow_run_respond",
+        st.button("Show the response plan", type="primary", icon=":material/visibility:", key="flow_run_respond",
                   on_click=selection.complete_respond)
         return
     st.html(f'<div class="{"gog-flow-note" if real_parts else "gog-sim-note"}">{ui.esc(note)}</div>')

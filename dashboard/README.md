@@ -1,6 +1,6 @@
 # GulfOilGuard-AI dashboard
 
-Streamlit dashboard for GulfOilGuard-AI. The Detect flow runs the trained U-Net in a separate Python process and reads its generated image, mask and overlay from `outputs/detection/`. Predict and Respond read result files from `outputs/`. The Streamlit process does not import `torch`, `opendrift` or `ortools`.
+Streamlit dashboard for GulfOilGuard-AI. The Detect flow runs the trained U-Net in a separate Python process and reads its generated image, mask and overlay from `outputs/detection/`. Predict and Respond show precomputed results: they read the saved drift runs and routing plans from `outputs/` and never re-run OpenDrift or the optimiser (their **Show the drift forecast** / **Show the response plan** buttons and time controls only change what is shown). The Streamlit process does not import `torch`, `opendrift` or `ortools`.
 
 Until a module writes its files, its page shows an empty state that explains what the section will show. Once the files appear, the page renders them on the next rerun with no restart and no code change.
 

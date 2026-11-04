@@ -71,7 +71,8 @@ def oil_step(hours: list[float], default: float) -> float:
             for h in key_hours:
                 st.button(step_label(h), key=f"respond_jump_{h:g}", type="tertiary",
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
-    shown = st.select_slider("Predicted oil shown", options=hours, format_func=step_label, key=STEP_KEY)
+    shown = st.select_slider("Predicted oil shown", options=hours, format_func=step_label, key=STEP_KEY,
+                             help="Steps through the saved forecast; the plan is not re-optimised.")
     st.session_state[SAVED_STEP_KEY] = (owner, shown)
     return shown
 
@@ -103,6 +104,7 @@ if data is None:
             ["Vessel routes", "Visiting order", "Fleet totals", "Estimated oil recovery"],
         )
 else:
+    flow.precomputed_plan_note(data, drift)
     site_plan = bool(site and data.anchored_to == site.spill_id and scenario.sites_mode(demo_mode()))
     comparison, baseline, _warnings = scenario.site_comparison(site) if site_plan else (None, None, [])  # Diagnostics
     if data.status:

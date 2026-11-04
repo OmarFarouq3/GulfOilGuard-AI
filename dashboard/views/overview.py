@@ -101,6 +101,10 @@ FLOW = (
     ("respond", "views/cleanup.py", "03", "Respond",
      "An optimiser assigns vessels to the predicted oil patches and plans the fastest collection routes."),
 )
+# Only Detect computes anything live (the U-Net, in a subprocess); Predict and Respond read saved files.
+PRECOMPUTED = ("Predict and Respond show precomputed results from the team's saved drift runs (Team B) and routing "
+               "plans (Team C); nothing is re-simulated or re-optimised in the dashboard. Detect can run the "
+               "detection model on the selected image.")
 for column, (key, page, number, verb, text) in zip(st.columns(3), FLOW):
     with column.container(key=f"gog-stage-{key}", height="stretch"):
         st.html(
@@ -109,6 +113,7 @@ for column, (key, page, number, verb, text) in zip(st.columns(3), FLOW):
         )
         st.page_link(page, label=f"Open {verb.lower()}", icon=":material/arrow_forward:",
                      icon_position="right")
+st.caption(PRECOMPUTED)
 
 # --- Reliability -----------------------------------------------------------------
 ui.section(

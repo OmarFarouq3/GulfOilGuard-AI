@@ -40,7 +40,7 @@ def real_sites():
 
 
 def respond(spill: str, demo: bool = False):
-    """The Respond page for ``spill`` with Detect and Predict done, after 'Plan the response'."""
+    """The Respond page for ``spill`` with Detect and Predict done, after 'Show the response plan'."""
     at = new_app(spill, demo=demo)
     at.session_state[selection.PREDICT_DONE_KEY] = True
     at.run()

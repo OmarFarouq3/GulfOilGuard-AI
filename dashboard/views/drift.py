@@ -119,6 +119,7 @@ if data is None:
             ["Drift at 6, 12 and 24 h", "Oil footprint over time", "Wind and current inputs"],
         )
 else:
+    flow.precomputed_drift_note(data)
     hours = data.hours
     # One forecast time at a time: a slider through every step (the real run has 25 hourly
     # steps), plus buttons for the key times. The selected step lives in session_state.
@@ -134,7 +135,8 @@ else:
             for h in key_hours:
                 st.button(step_label(h), key=f"drift_jump_{h:g}", type="tertiary",
                           on_click=st.session_state.__setitem__, args=(STEP_KEY, h))
-    selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY)
+    selected = st.select_slider("Forecast time", options=hours, format_func=step_label, key=STEP_KEY,
+                            help="Steps through the saved forecast; nothing is re-simulated.")
     st.session_state[SAVED_STEP_KEY] = selected
 
     features = data.steps[selected]
