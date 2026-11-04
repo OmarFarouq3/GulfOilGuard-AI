@@ -69,9 +69,11 @@ def site_at(spill: str, page: str):
 def test_predict_says_precomputed_with_run_and_release(sites):
     sites("S2")
     text = " ".join(page_text(site_at("S2", "views/drift.py")).split())
-    assert ("Precomputed result from the saved drift run (run openoil-25.70N-55.40E-20261023T1200Z, released "
-            "2026-10-23 12:00 UTC). Nothing is re-simulated here. The time controls only step through the saved "
-            "forecast.") in text
+    assert ("Precomputed OpenDrift run openoil-25.70N-55.40E-20261023T1200Z from a hypothetical release point at "
+            "25.700° N, 55.400° E, released 2026-10-23 12:00 UTC, for 24 h. Driven by ERA5 hourly 10 m wind data and "
+            "Copernicus Marine GLOBAL_ANALYSISFORECAST_PHY_001_024 currents. Assumed: the release point and time, and "
+            "the oil (Generic Medium Crude, 300 m³); this is not an observed spill. Nothing is re-simulated here. "
+            "The time controls only step through the saved run.") in text
 
 
 def test_respond_says_precomputed_with_scenario_and_keeps_the_simulated_label(sites):
@@ -79,7 +81,9 @@ def test_respond_says_precomputed_with_scenario_and_keeps_the_simulated_label(si
     at = site_at("S2", "views/cleanup.py")
     text = " ".join(page_text(at).split())
     assert ("Precomputed result from the saved routing plan (scenario openoil-25.70N-55.40E-20261023T1200Z@dispatch6h, "
-            "release 2026-10-23 12:00 UTC). Nothing is re-optimised here.") in text
+            "release 2026-10-23 12:00 UTC), optimised on the drift run from the hypothetical release point at "
+            "25.700° N, 55.400° E. The fleet, its home ports, the dispatch time and the cleanup rate are assumptions "
+            "(see Plan assumptions). Nothing is re-optimised here.") in text
     assert "Simulated" in heading(at) or "Real forecast" in heading(at)  # the existing label stays
 
 

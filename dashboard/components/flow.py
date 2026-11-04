@@ -12,7 +12,7 @@ from components import charts, ui
 from components.data import demo_mode, dev_mode
 from components.labels import KM
 from services import image_picker, inference, mock_data, report_loader, scenario, selection
-from services.files import read_image
+from services.files import display_text, read_image
 from services.imaging import preview_png
 from services.models import SpillSite
 
@@ -272,17 +272,58 @@ def _utc(timestamp: object) -> str | None:
     return f"{timestamp[:16].replace('T', ' ')} UTC" if isinstance(timestamp, str) and len(timestamp) >= 16 else None
 
 
+def _short(value: object, cut: str) -> str | None:
+    """'ERA5 hourly 10 m wind (Copernicus …)' -> 'ERA5 hourly 10 m wind' (text before ``cut``)."""
+    return value.split(cut)[0].strip() or None if isinstance(value, str) and value.strip() else None
+
+
+def drift_release(data) -> str | None:
+    """'25.850° N, 55.650° E': the run's release point (DriftOutput.initial_location), else None."""
+    location = data.trajectory.initial_location if data is not None and data.trajectory else None
+    return ui.coordinates(location.latitude, location.longitude) if location else None
+
+
+def drift_provenance(data) -> str | None:
+    """What a real drift run is, from its own meta.json: run id, hypothetical release, forcing, assumptions.
+
+    None for the demo scenario or files that are not an OpenDrift run (their notes say so instead).
+    The four demo sites are separate OpenDrift runs (docs/dashboard_provenance_audit.md).
+    """
+    if data is None or data.is_mock or not data.model_run:
+        return None
+    meta = data.meta or {}
+    run = data.trajectory.simulation_id if data.trajectory else meta.get("simulation_id")
+    where, release = drift_release(data), _utc(meta.get("start_time"))
+    hours = data.trajectory.duration_hours if data.trajectory else meta.get("duration_hours")
+    text = (f"Precomputed OpenDrift run{f' {run}' if run else ''} from a hypothetical release point"
+            f"{f' at {where}' if where else ''}{f', released {release}' if release else ''}"
+            f"{f', for {hours:g} h' if isinstance(hours, (int, float)) else ''}.")
+    wind, currents = _short(meta.get("wind_source"), " ("), _short(meta.get("current_source"), ":")
+    forcing = [f"{wind} data" if wind else None, f"{currents} currents" if currents else None]
+    if any(forcing):
+        text += f" Driven by {' and '.join(x for x in forcing if x)}."
+    oil, volume = meta.get("oil_type"), meta.get("release_volume_m3")
+    oil_text = ", ".join(x for x in (str(oil).title() if isinstance(oil, str) and oil.strip() else None,
+                                     f"{volume:g} m³" if isinstance(volume, (int, float)) else None) if x)
+    text += (f" Assumed: the release point and time{f', and the oil ({oil_text})' if oil_text else ''};"
+             " this is not an observed spill.")
+    return display_text(text)
+
+
 def precomputed_drift_note(data) -> None:
     """Predict shows a saved drift run; nothing here re-runs the model (the controls only step through it)."""
+    provenance = drift_provenance(data)
     if data.is_mock:
         text = "Precomputed demo scenario (simulated). Nothing is re-simulated here."
+    elif provenance:
+        text = f"{provenance} Nothing is re-simulated here."
     else:
         run = data.trajectory.simulation_id if data.trajectory else (data.meta or {}).get("simulation_id")
         release = _utc((data.meta or {}).get("start_time"))
         details = ", ".join(x for x in (f"run {run}" if run else None, f"released {release}" if release else None) if x)
         text = f"{PRECOMPUTED_DRIFT}{f' ({details})' if details else ''}. Nothing is re-simulated here."
     st.html(f'<p class="gog-flow-note gog-precomputed">{ui.esc(text)} The time controls only step through '
-            f'the saved forecast.</p>')
+            f'the saved run.</p>')
 
 
 def precomputed_plan_note(data, drift=None) -> None:
@@ -293,7 +334,11 @@ def precomputed_plan_note(data, drift=None) -> None:
         release = _utc((drift.meta or {}).get("start_time")) if drift is not None and not drift.is_mock else None
         details = ", ".join(x for x in (f"scenario {data.scenario_id}" if data.scenario_id else None,
                                         f"release {release}" if release else None) if x)
-        text = f"{PRECOMPUTED_PLAN}{f' ({details})' if details else ''}. Nothing is re-optimised here."
+        text = f"{PRECOMPUTED_PLAN}{f' ({details})' if details else ''}"
+        where = drift_release(drift) if drift_provenance(drift) else None
+        text += (f", optimised on the drift run from the hypothetical release point at {where}. The fleet, its home "
+                 "ports, the dispatch time and the cleanup rate are assumptions (see Plan assumptions)." if where else ".")
+        text += " Nothing is re-optimised here."
     st.html(f'<p class="gog-flow-note gog-precomputed">{ui.esc(text)} The controls only change what is '
             f'shown.</p>')
 
@@ -307,10 +352,10 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
     if scenario.sites_mode(demo):
         note, real_parts, simulated_parts = _site_drift_note(site)
     elif real is not None and scenario.forecast_applies(real, site):
-        note = ("Real OpenDrift forecast, made for this release point. The release point and time are test "
-                "inputs, not a detection.")
-        real_parts = ["Drift paths, oil footprint and particles (OpenDrift run)", "Wind and current inputs"]
-        simulated_parts = ["Release point and time (test inputs, not a detection)"]
+        note = ("OpenDrift run made for this release point (not moved from elsewhere). The release point and "
+                "time, the oil type and the amount are assumptions, not a detection.")
+        real_parts = RUN_PARTS
+        simulated_parts = ASSUMED_PARTS
     else:
         source = mock_data.drift() if real is not None else scenario.source_drift(demo)
         moved = scenario.shift_km(source, site)
@@ -336,6 +381,11 @@ def predict_controls(site: SpillSite, demo: bool) -> None:
         _provenance(real_parts, simulated_parts)
 
 
+RUN_PARTS = ["Drift paths, oil footprint and particles (OpenDrift run)",
+             "Wind and current data the run used (sources under Run details)"]
+ASSUMED_PARTS = ["Release point and time (hypothetical, not a detection)", "Oil type and amount (assumptions)"]
+
+
 def _site_drift_note(site: SpillSite) -> tuple[str, list[str], list[str]]:
     """Note and Real / Simulated lists for a spill in the per-site layout (outputs/sites/<id>/)."""
     data = scenario.site_drift(site)
@@ -345,10 +395,9 @@ def _site_drift_note(site: SpillSite) -> tuple[str, list[str], list[str]]:
                     "shown. Details are under Diagnostics in the options panel.", [], [])
         return f"There is no drift forecast for site {site.spill_id} yet.", [], []
     if data.model_run:
-        return (f"Real OpenDrift forecast for site {site.spill_id}, made for its release point. The release "
-                "point and time are test inputs, not a detection.",
-                ["Drift paths, oil footprint and particles (OpenDrift run)", "Wind and current inputs"],
-                ["Release point and time (test inputs, not a detection)"])
+        return (f"OpenDrift run for site {site.spill_id}, made for its own release point (not moved from another "
+                "site). The release point and time, the oil type and the amount are assumptions, not a detection.",
+                RUN_PARTS, ASSUMED_PARTS)
     return (f"The drift results for site {site.spill_id} are not shown as a real forecast: they are not an "
             "OpenDrift run made for this release point.", [],
             ["Drift paths, oil footprint and particles", "Wind and current inputs"])
@@ -368,11 +417,11 @@ def respond_controls(site: SpillSite) -> None:
         if scenario.site_routing(site) is None:
             note, simulated_parts = f"There is no response plan for site {site.spill_id} yet.", []
         else:
-            note = (f"Response plan for site {site.spill_id}: the optimiser's plan for this site's drift "
-                    "forecast, not moved. It starts from a test release point, not a detection.")
+            note = (f"Precomputed response plan for site {site.spill_id}, optimised on this site's own drift run "
+                    "(not moved from another site). It starts from a hypothetical release point, not a detection.")
             real_parts = ["Vessel routes and visiting order (optimiser plan for this site)"]
-            simulated_parts = ["Release point and time behind the forecast (test inputs)",
-                               "Fleet, cleanup rate and other assumptions listed in the plan"]
+            simulated_parts = ["Release point and time behind the drift run (hypothetical)",
+                               "Fleet, home ports, cleanup rate and other assumptions listed in the plan"]
     if not selection.respond_done():
         later = " Nothing is re-optimised here: the button shows the saved plan."
         st.html(f'<p class="gog-flow-note">{ui.esc(note + later)}</p>')

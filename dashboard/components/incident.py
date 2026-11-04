@@ -45,7 +45,7 @@ def picker(stage: Stage) -> None:
             st.html(f'<div class="gog-map-offline" aria-hidden="true">{ui.esc(MAP_OFFLINE)}</div>')
             clicked = maps.render(m, points, key="overview_map", height=480,
                                   returned_objects=selection.MAP_CLICK_OBJECTS)
-        if scenario.sites_mode(demo_mode()):  # each marker is a forecast site with a test release point
+        if scenario.sites_mode(demo_mode()):  # each marker is a site with its own drift run from a hypothetical release point
             site_label = "Forecast site (simulated release point)"
         else:
             site_label = "Simulated spill site" if stage.status == "simulated" else "Reported spill"
@@ -107,12 +107,15 @@ def _selected(site: SpillSite, simulated: bool) -> None:
         trajectory = forecast.data.trajectory if forecast.data else None
         if trajectory:
             location = trajectory.initial_location
-            details["Simulation"] = trajectory.simulation_id
+            details["Drift run"] = trajectory.simulation_id
             details["Release point"] = ui.coordinates(location.latitude, location.longitude)
         else:
-            details["Forecast"] = "None for this site yet"
+            details["Drift run"] = "None for this site yet"
     st.html(f'<div class="gog-incident-head"><h4>{ui.esc(site.name)}</h4>{chip}</div>')
     ui.details_table(details)
+    provenance = flow.drift_provenance(site_forecast(site).data) if scenario.sites_mode(demo_mode()) else None
+    if provenance:
+        st.html(f'<p class="gog-flow-note gog-site-provenance">{ui.esc(provenance)}</p>')
     flow.progress()
 
     current = selection.current()

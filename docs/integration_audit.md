@@ -67,7 +67,7 @@ Read-only audit, 3 Nov 2026, on branch `dashboard` at `4b6d9c7` after `git fetch
 
 ### How simulated data is labelled in the UI
 
-- One status per page, wording in `dashboard/components/labels.py` (`STAGE_STATUS`): **"Live data"**, **"Simulated scenario"** (demo on, or any file with `"synthetic": true`), **"Real detection, simulated location"** (Detect only: a real U-Net mask on a real image, location and outline simulated), **"No data yet"**. The chip is next to each page title, and the top-bar timeline dot uses the same states.
+- One status per page, wording in `dashboard/components/labels.py` (`STAGE_STATUS`): **"Saved results"** (was "Live data" until 4 Nov 2026; these are saved files, not live data), **"Simulated scenario"** (demo on, or any file with `"synthetic": true`), **"Real detection, simulated location"** (Detect only: a real U-Net mask on a real image, location and outline simulated), **"No data yet"**. The chip is next to each page title, and the top-bar timeline dot uses the same states.
 - Overview: a "Simulated scenario" chip on the hero and on the headline numbers ("These numbers come from a simulated scenario, not from observations") when any stage is simulated; spill sites are "Simulated spill site" in the legend.
 - Detect: a Real / Simulated box lists which parts are real (radar image, U-Net mask, per-image score) and which are simulated (location, outline on the map); "Simulated outline at the selected spill" above the map.
 - Predict: tile "Simulated particles"; "How to read this" says the dots are simulated oil parcels. Respond: a status chip from `summary.json`.

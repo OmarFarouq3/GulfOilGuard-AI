@@ -290,7 +290,8 @@ def test_stranding_at_24_h_on_the_selected_site(sites):
     sites("S1", "S3", gone={"S3": {12: {"stranded": 1}, 24: {"stranded": 4}}})
     at = go(new_app("S3"), "views/drift.py", "flow_run_predict")
     assert FORECAST_CHIP in heading(at)
-    assert "Real OpenDrift forecast for site S3" in " ".join(bodies(at, "gog-flow-note"))
+    assert "OpenDrift run for site S3, made for its own release point (not moved from another site)" in \
+        " ".join(bodies(at, "gog-flow-note"))
     expected = {0: (10, 0), 6: (10, 0), 12: (9, 1), 24: (6, 4)}
     for hours, (afloat, gone) in expected.items():
         next(b for b in at.button if b.key == f"drift_jump_{hours}").click()
@@ -308,7 +309,8 @@ def test_selected_site_drives_predict_respond_and_the_headline(sites):
     details = " ".join(h.proto.body for e in at.expander if e.label == "Run details" for h in e.get("html"))
     assert "openoil-25.70N-55.40E" in details and "openoil-25.85N" not in details
     go(at, "views/cleanup.py", "flow_run_respond")
-    assert "Response plan for site S2" in " ".join(bodies(at, "Response plan for site"))
+    assert "Precomputed response plan for site S2, optimised on this site" in \
+        " ".join(bodies(at, "response plan for site"))
     assert "V-S2" in page_text(at) and "V-S1" not in page_text(at)
     go(at, "views/overview.py")
     assert "These numbers are for site S2" in " ".join(bodies(at, "gog-kpi-scope"))

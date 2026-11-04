@@ -53,12 +53,13 @@ assert suffix_unit("wind_speed_m_per_s") == M_PER_S
 
 # Stage status (components.data.Status) -> (chip style, chip wording, timeline tooltip)
 STAGE_STATUS: dict[str, tuple[str, str, str]] = {
-    "live": ("gog-chip-live", "Live data", "Live data available"),
+    "live": ("gog-chip-live", "Saved results", "Results read from saved output files, not live data"),
     "simulated": ("gog-chip-sim", "Simulated scenario", "Showing a simulated scenario"),
     "mixed": ("gog-chip-mixed", "Real detection, simulated location",
               "Real model output on a radar image; the incident location is simulated"),
     "forecast": ("gog-chip-forecast", "Real forecast, simulated release",
-                 "Real OpenDrift forecast on real wind and current data; the release point is simulated"),
+                 "A precomputed OpenDrift run on recorded wind and current data; the release point and time, "
+                 "the oil type and the amount are assumptions, not a real spill"),
     "empty": ("gog-chip-empty", "No data yet", "No data yet"),
 }
 assert set(STAGE_STATUS) == set(get_args(Status)), "stage status wording out of sync with components.data.Status"

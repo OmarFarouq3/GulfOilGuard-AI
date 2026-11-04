@@ -23,8 +23,10 @@ data = stage.data
 ui.page_heading(
     "Step 02 · Predict",
     "Forecast where the oil will go",
-    "Winds and ocean currents drive a drift simulation of the slick over the next 24 hours." if detection_located()
-    else "Winds and ocean currents drive a drift simulation of oil released at the spill site over the next 24 hours.",
+    "Winds and ocean currents drive a drift simulation of the slick for 24 hours after the release."
+    if detection_located()
+    else "Winds and ocean currents drive a drift simulation of oil released at the spill site, for 24 hours after "
+         "the release.",
     stage,
 )
 site = selected_site()
