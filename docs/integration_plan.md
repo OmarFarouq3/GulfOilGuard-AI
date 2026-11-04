@@ -88,7 +88,7 @@ Summary of the table below (end-to-end test, `docs/e2e_test_report.md`): **resol
 - Implemented in PR #19 and #20: the particles are in `outputs/drift/drift.geojson` (`MultiPoint` features with `hours`, `timestamp`, `particle_ids` and `"kind": "particles"`), which the dashboard already reads, and Team C builds the targets from them. `check_outputs.py` reports the particle count per hour.
 - `meta.json` keeps the single centre track as `DriftOutput`; its timestamps stay strictly increasing.
 
-**D2. Response time (I6).** The main response metric is the estimated cleanup completion time: sailing plus cleanup, the largest `finish_hours` over all vessels (7.54 h in the S1 plan). Sailing time is shown separately (2.70 h in the S1 plan), and both carry clear labels. The pitch quotes the completion time.
+**D2. Response time (I6).** The main response metric is the estimated cleanup completion time: sailing out, cleanup and the trip back to port (from dispatch), the largest `finish_hours` over all vessels (7.54 h in the S1 plan). Sailing time is shown separately (2.70 h in the S1 plan), and both carry clear labels. The pitch quotes the completion time.
 
 **D3. Release time (I9).** The first 24-hour Gulf simulation starts on **23 Oct 2026 at 12:00 UTC** from the synthetic point 25.85°N, 55.65°E, so the forecast steps are 23 Oct 12:00, 23 Oct 18:00, 24 Oct 00:00 and 24 Oct 12:00 UTC. Omar first agreed 20 Oct 12:00 UTC and changed it to 23 Oct on 3 Nov, because the drift run, the routing plan and its validation already used 23 Oct. Both are synthetic test dates inside the data window (19 Oct 00:00 – 26 Oct 23:00 UTC).
 

@@ -16,18 +16,36 @@ KM = unit(VesselRoute, "estimated_distance_km")
 HOURS = unit(VesselRoute, "estimated_travel_hours")
 
 
+# One definition everywhere (decision D2, docs/integration_plan.md §5; optimization/dashboard_export.py):
+# finish_hours = estimated_travel_hours (sailing out, between patches and back to port) + cleanup_hours,
+# counted from dispatch. The response time is the largest finish_hours of the plan.
+RESPONSE_HINT = "Sailing out, cleanup and the trip back to port, until the last vessel is home"
+SAILING_HINT = "Longest sailing time of any vessel, trip back to port included, no cleanup"
+FALLBACK_HINT = "Longest sailing time, trip back to port included; the plan gives no cleanup time"
+RESPONSE_CAPTION = ("Response time is the completion time, counted from dispatch: sailing out, cleanup at the oil "
+                    "patches and the trip back to port, until the last vessel is home. Sailing time is the sailing "
+                    "only (out and back), without cleanup.")
+FALLBACK_CAPTION = ("Response time here is the longest sailing time of any vessel, trip back to port included: the "
+                    "plan gives no cleanup time, so it is not the completion time.")
+FINISH_HELP = "Sailing out, cleanup and the trip back to port, from dispatch (empty if the plan doesn't say)"
+SAILING_HELP = "Sailing only, from dispatch, trip back to port included (no cleanup)"
+COMPARE_RESPONSE_ROW = "Response time: sailing + cleanup + return to port, last vessel"
+COMPARE_SAILING_ROW = "Longest sailing time, return to port included, no cleanup"
+
+
 def response_time_tile(routing) -> tuple[str, float | None, str]:
     """(label, hours, hint) of the headline response time (decision D2, docs/integration_plan.md §5).
 
-    Completion time, cleaning included (max ``finish_hours``); when the routing files give no
-    ``finish_hours``, the longest sailing time, and the label says so.
+    The completion time (max ``finish_hours``: sailing, cleanup and the trip back to port); when the
+    routing files give no ``finish_hours``, the longest sailing time, and the label says so.
     """
     if routing is None:
-        return "Response time", None, "Until the last vessel is back in port, cleaning included"
+        return "Response time", None, RESPONSE_HINT
     if routing.completion_hours is not None:
-        return "Response time", routing.completion_hours, "Until the last vessel is back in port, cleaning included"
-    return "Response time (sailing only)", routing.sailing_time_hours, \
-        "Longest sailing time; the plan gives no cleaning time"
+        return "Response time", routing.completion_hours, RESPONSE_HINT
+    return "Response time (sailing only)", routing.sailing_time_hours, FALLBACK_HINT
+
+
 M3 = unit(ResponseTarget, "oil_volume_m3")
 M_PER_S = unit(Vessel, "speed_m_per_s")
 KM2 = "km²"  # area: the schema has no area field or unit (polygon areas are a dashboard extension)

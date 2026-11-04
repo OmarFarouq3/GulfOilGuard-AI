@@ -193,8 +193,8 @@ The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with poin
 | `vessel_id` | `VesselRoute.vessel_id` / `Vessel.vessel_id` | required, unique |
 | `assigned_target_ids` | `VesselRoute.assigned_target_ids` | required list of target IDs in visiting order |
 | `estimated_distance_km` | `VesselRoute.estimated_distance_km` | optional, nonnegative |
-| `estimated_travel_hours` | `VesselRoute.estimated_travel_hours` | optional, nonnegative; sailing time from dispatch, including the trip back to port |
-| `finish_hours` | *extension* | optional, sailing + cleaning: when the vessel is back in port; must not be below `estimated_travel_hours` |
+| `estimated_travel_hours` | `VesselRoute.estimated_travel_hours` | optional, nonnegative; sailing only, from dispatch: out, between patches and back to port (no cleanup) |
+| `finish_hours` | *extension* | optional, from dispatch: sailing out + cleanup + the trip back to port, i.e. `estimated_travel_hours` + `cleanup_hours`, when the vessel is home; must not be below `estimated_travel_hours` |
 | `speed_m_per_s`, `capacity_m3`, `available_hours` | `Vessel` | optional, but all three together; `Vessel.location` = first route coordinate |
 | `oil_collected_m3` | *extension* | optional, nonnegative; warned if above `capacity_m3` |
 
@@ -202,7 +202,7 @@ The "Spread at 24 h" and "Oil footprint" tiles need polygon envelopes; with poin
 {"status": "feasible", "message": "Solved in 2.1 s with OR-Tools RoutingModel"}
 ```
 
-`status` must be one of `optimal`, `feasible`, `infeasible`, `not_solved`, `error` (read from `OptimizationOutput.status`). Fleet totals are derived, not read: vessels = number of routes, response time = the completion time, max `finish_hours` (decision D2), or, when a route has no `finish_hours`, max `estimated_travel_hours` labelled "Response time (sailing only)"; sailing time = max `estimated_travel_hours`, shown separately, distance = sum of `estimated_distance_km`, oil to collect = sum of target `oil_volume_m3`.
+`status` must be one of `optimal`, `feasible`, `infeasible`, `not_solved`, `error` (read from `OptimizationOutput.status`). Fleet totals are derived, not read: vessels = number of routes, response time = the completion time, max `finish_hours` (sailing out, cleanup and the trip back to port; decision D2), on the optimised and the baseline side alike, or, when a route has no `finish_hours`, max `estimated_travel_hours` labelled "Response time (sailing only)"; sailing time = max `estimated_travel_hours`, shown separately, distance = sum of `estimated_distance_km`, oil to collect = sum of target `oil_volume_m3`.
 
 `targets.geojson` feature properties: `target_id` (`ResponseTarget.target_id`, required, unique), `oil_volume_m3` (`ResponseTarget.oil_volume_m3`, required, nonnegative), optional `source_hours` (*extension*: the drift step the targets came from, used to pick the oil layer under the routes). Every `assigned_target_ids` entry should exist in `targets.geojson`.
 
