@@ -121,6 +121,8 @@ def site_diagnostics() -> list[str]:
             drift = load_drift(config.site_files(site_id)["drift"])
         else:
             drift = scenario.site_drift(marker)  # includes the release point vs marker check
+            if drift is None:
+                warnings.extend(scenario.site_drift_unreadable(marker))  # site_drift drops these
         routing = load_routing(config.site_files(site_id)["routing"])
         for data in (drift, routing):
             if data is not None:

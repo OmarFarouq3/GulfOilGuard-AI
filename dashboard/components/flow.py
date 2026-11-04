@@ -284,6 +284,9 @@ def _site_drift_note(site: SpillSite) -> tuple[str, list[str], list[str]]:
     """Note and Real / Simulated lists for a spill in the per-site layout (outputs/sites/<id>/)."""
     data = scenario.site_drift(site)
     if data is None:
+        if scenario.site_drift_unreadable(site):
+            return (f"The drift forecast file for site {site.spill_id} could not be read, so no forecast is "
+                    "shown. Details are under Diagnostics in the options panel.", [], [])
         return f"There is no drift forecast for site {site.spill_id} yet.", [], []
     if data.model_run:
         return (f"Real OpenDrift forecast for site {site.spill_id}, made for its release point. The release "

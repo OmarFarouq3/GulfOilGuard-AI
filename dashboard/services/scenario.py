@@ -168,6 +168,18 @@ def site_drift(site: SpillSite) -> DriftData | None:
     return dataclasses.replace(data, anchored_to=site.spill_id)
 
 
+def site_drift_unreadable(site: SpillSite) -> list[str]:
+    """Why this site's drift files give no forecast although they exist (unreadable or invalid); [] otherwise.
+
+    ``site_drift`` returns None both for a site with no drift files and for files that could not be read;
+    these are the loader's warnings for the second case, for Diagnostics and Predict's note.
+    """
+    data = load_drift(config.site_files(site.spill_id)["drift"])
+    if data is None or data.has_content:
+        return []
+    return [f"Site `{site.spill_id}`: {w}" for w in data.warnings]
+
+
 def site_routing(site: SpillSite) -> RoutingData | None:
     """The routing files of this spill's site folder, unmoved; None if it has none."""
     data = load_routing(config.site_files(site.spill_id)["routing"])
