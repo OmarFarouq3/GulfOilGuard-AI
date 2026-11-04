@@ -23,7 +23,8 @@ Hi Maria, the fixes for your e2e report (E1–E7) are on branch `fix/e2e-report-
    - The app text no longer names teams or people. Predict and Respond say "Precomputed result from the saved drift run / routing plan".
    - Run detection now writes to `runs/dashboard/` instead of `outputs/detection/`. While it runs, the page says "still running".
 5. **Launch it from the repo root** (`streamlit run dashboard/app.py`). From inside `dashboard/`, the theme isn't picked up.
-6. **The maps need the internet.** With no network from the start, the maps don't render, so no spill can be selected. Please test online.
+6. **The maps need the internet**, but the flow no longer does. Offline, choose a site in the new **Spill site** list under the Overview map; Detect, Predict and Respond then work without maps. Please test both online and offline.
+7. **What the four sites are.** I audited them (`docs/dashboard_provenance_audit.md`): four separate, precomputed OpenDrift runs from hypothetical release points, not S1 moved around. The pages now say that, with each site's run id, release point, time, forcing and assumed oil read from its `meta.json`.
 
 ## To Team B (drift)
 
