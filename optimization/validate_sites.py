@@ -129,6 +129,16 @@ def summary_markdown(rows: list[dict], pairs: list[dict]) -> str:
             f"{_f(row['optimized_oil_recovered_m3'])} / {_f(row['baseline_oil_recovered_m3'])} | "
             f"{_f(row['optimized_response_hours'], '{:.2f}')} / {_f(row['baseline_response_hours'], '{:.2f}')} | "
             f"{_f(row['distance_change_percent'], '{:+.1f} %')} | {row['result']} |")
+    worse = [row for row in rows if None not in (row["optimized_oil_recovered_m3"], row["baseline_oil_recovered_m3"])
+             and row["optimized_oil_recovered_m3"] < row["baseline_oil_recovered_m3"] * 0.99]
+    for row in worse:
+        lines += ["", f"**{row['site']}: the optimized plan cleans less oil than the baseline** "
+                  f"({row['optimized_oil_recovered_m3']:.1f} vs {row['baseline_oil_recovered_m3']:.1f} m³; unserved: "
+                  f"{', '.join(row['unserved']) or 'none'}). Show the baseline plan there, or fix the optimizer."]
+    stranded = [row for row in rows if row["stranded_end_m3"]]
+    for row in stranded:
+        lines += ["", f"{row['site']}: {row['stranded_end_m3']:.1f} m³ ({row['stranded_end_particles']} particles) "
+                  "reaches the coast by 24 h, outside the cleanup plan (routing targets oil afloat only)."]
     if pairs:
         copies = [p["sites"] for p in pairs if p["copy"]]
         similar = [p["sites"] for p in pairs if p["similar"] and not p["copy"]]

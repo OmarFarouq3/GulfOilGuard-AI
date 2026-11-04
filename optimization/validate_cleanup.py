@@ -42,7 +42,7 @@ from datetime import datetime, timedelta
 from math import cos, hypot, isnan, radians
 from pathlib import Path
 
-from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, REPO_ROOT
+from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, GULF_REGION, REPO_ROOT
 from optimization.drift_targets import build_tracks, load_drift
 from optimization.scenario import GULF_DEPOTS
 from optimization.scenario_io import load_scenario
@@ -52,6 +52,8 @@ KNOTS_PER_M_PER_S = 1.943844
 VOLUME_TOL = 0.01  # m3: files round volumes to 3 decimals
 SPREAD_WARN_KM = 1.5  # a patch wider than this is not one skimming position
 RELEASE_TOL_KM = 1.0  # OpenDrift releases inside a 500 m circle around the release point
+GRID_CELL_KM = GULF_REGION.cell_deg * 111.2  # sea-grid distances run between cell centres: up to a cell off per leg
+LESS_OIL_TOL = 0.01  # share: an optimized plan cleaning 1 % less oil than the baseline is flagged
 EMULSION_TOL = 0.001  # share: meet_hours is rounded to 0.01 h, which moves the water fraction a little
 TIME_TOL = 0.02  # h: meet_hours is rounded to 0.01 h
 
@@ -464,13 +466,17 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
         r.check(g, abs(sailing - p["estimated_travel_hours"]) < 0.01,
                 f"{vid}: sailing {p['estimated_travel_hours']:.2f} h = {km:.1f} km / "
                 f"{v.speed_m_per_s * KNOTS_PER_M_PER_S:.1f} kn (rechecked {sailing:.2f} h)")
-        # The distance cannot be shorter than straight lines through the stops; the drawn sea path
-        # (grid cell centres) is a little longer than the routed distance, so it is an upper bound.
+        # The distance cannot be much shorter than straight lines through the stops: sea-grid distances
+        # run between cell centres, so each leg may come out up to about one cell (2.2 km) short. The
+        # drawn sea path (cell centres, zigzag) is a little longer than the routed distance: an upper bound.
         straight = _line_km(f["geometry"]["coordinates"])
         drawn = _line_km(p["sea_path"]) if p.get("sea_path") else None
-        r.check(g, km >= 0.99 * straight and (drawn is None or km <= drawn * 1.01),
-                f"{vid}: {km:.1f} km is between the straight line through its stops ({straight:.1f} km)"
-                + ("" if drawn is None else f" and its drawn sea path ({drawn:.1f} km)"), level_if_not="WARN")
+        legs = max(1, len(coords) - 1)
+        low = straight - legs * GRID_CELL_KM if drawn is not None else 0.99 * straight
+        r.check(g, km >= low and (drawn is None or km <= drawn * 1.01),
+                f"{vid}: {km:.1f} km is between the straight line through its stops ({straight:.1f} km"
+                + (f", less up to {GRID_CELL_KM:.1f} km per leg for the sea grid" if drawn is not None and km < straight else "")
+                + ")" + ("" if drawn is None else f" and its drawn sea path ({drawn:.1f} km)"), level_if_not="WARN")
         # finish_hours must be sailing + cleanup, both as rechecked above.
         finish = p["estimated_travel_hours"] + cleanup
         r.check(g, abs(finish - p["finish_hours"]) <= max(0.01, EMULSION_TOL * finish),
@@ -611,6 +617,12 @@ def check_comparison(comparison: dict, optimized: dict, baseline: dict | None, r
         r.ok(g, f"{label}: optimized {shown(o)} vs baseline {shown(b)}{extra} (recalculated)")
     r.ok(g, "same targets covered by both plans" if mine["same_targets_covered"] else
          "the plans cover different targets, so read coverage before distance and time")
+    # A feasible plan can still be a poor one: the optimizer should never clean clearly less than nearest-first.
+    o, b = mine["optimized_oil_recovered_m3"], mine["baseline_oil_recovered_m3"]
+    r.check(g, o >= b * (1 - LESS_OIL_TOL), f"the optimized plan cleans at least as much oil as the baseline "
+            f"({o:.1f} vs {b:.1f} m3)" + ("" if o >= b * (1 - LESS_OIL_TOL) else
+            f": it cleans {b - o:.1f} m3 ({(b - o) / b:.0%}) LESS. Show the baseline plan for this scenario, "
+            "or fix the optimizer"), level_if_not="WARN")
     return {"reported": m, "recalculated": mine}
 
 

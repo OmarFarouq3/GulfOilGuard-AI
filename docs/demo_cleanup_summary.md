@@ -1,8 +1,10 @@
 # Cleanup results and limitations, for the demo (Nihal)
 
-DRAFT, 4 Nov 2026. The per-site numbers are filled in from Haris's final runs once he shares them (`python -m optimization.validate_sites --write` makes the table). The full checks are in `docs/cleanup_scenario_validation.md`.
+4 Nov 2026. These are the final runs of the four demo sites: Maqqavi's drift, Haris's routing with emulsion counted, and the current fleet (`outputs/sites/S1` to `S4`, shared by Maqqavi). Each run is checked with `python -m optimization.validate_sites --write`. The full checks are in each site's `validation.txt`, and the method in `docs/cleanup_scenario_validation.md`.
 
 Everything shown is a **synthetic scenario**: 300 m³ of Generic Medium Crude released at four agreed test points on 23 Oct 2026, 12:00 UTC. It is not a detected spill.
+
+**S3 is not final:** its optimized plan cleans less oil than the baseline (see below). Haris is looking at it. Until it is fixed, show the baseline plan for S3.
 
 ## What the cleanup step does
 
@@ -13,21 +15,28 @@ Everything shown is a **synthetic scenario**: 300 m³ of Generic Medium Crude re
 
 ## Results per site
 
-| Site | Afloat at dispatch (m³) | Stranded by 24 h (m³) | Vessels used | Oil cleaned, optimized / baseline (m³) | Back in port, optimized / baseline (h) | Distance change |
+| Site | Oil afloat when vessels leave (m³) | Oil reaching the coast by 24 h (m³) | Vessels used (optimized) | Oil cleaned, optimized / baseline (m³) | Last vessel back in port, optimized / baseline (h after leaving) | Distance, optimized vs baseline |
 | --- | ---: | ---: | --- | --- | --- | ---: |
-| S1, off Ras Al Khaimah | | | | | | |
-| S2, off Umm Al Quwain | | | | | | |
-| S3, off Sharjah / Hamriyah | | | | | | |
-| S4, off Ras Al Khaimah near Dhayah | | | | | | |
+| S1, off Ras Al Khaimah | 204.0 | 0 | SAQR, Hamriyah | 199.2 / 199.6 | 10.50 / 10.59 | **−28.0 %** |
+| S2, off Umm Al Quwain | 194.3 | 0 | SAQR, Hamriyah | 188.4 / 188.5 | 11.82 / 11.85 | −0.0 % |
+| S3, off Sharjah / Hamriyah | 200.3 | **81.8** | SAQR, Hamriyah | **129.0 / 195.6** | 10.76 / 11.48 | +6.0 % |
+| S4, off Ras Al Khaimah near Dhayah | 208.6 | 0 | SAQR, Hamriyah | 204.3 / 204.5 | **11.40 / 12.56** | +1.9 % |
 
-For reference, S1 with the current fleet (my local re-run, to be replaced by Haris's final run): 204 m³ afloat at dispatch, cleaned by SAQR and the Hamriyah reserve. 199 m³ cleaned by both plans; the last vessel is back 10.5 h after dispatch in both. The optimized plan sails **28 % less** distance and keeps FALCON in port.
+Validation: 0 FAIL at every site (S1 127 OK, 3 WARN; S2 113 OK, 3 WARN; S3 112 OK, 5 WARN; S4 111 OK, 3 WARN). Each site has its own OpenDrift run, not a copy of another site's: the most alike pair (S1 and S3) still ends up 2.1 km apart on average after 24 h.
+
+What each site shows:
+- **S1:** the same oil and time as the baseline, with **28 % less sailing distance**, and FALCON stays in port.
+- **S2:** the optimized plan and the baseline are practically the same. When the patches line up along one route, nearest-first is already good.
+- **S3:** the spill is close to the coast. Oil starts reaching the Ajman–Hamriyah shore 11 h after the release, and 82 m³ (444 of the 1,000 particles) is ashore by 24 h, outside any vessel cleanup. Here **the optimized plan cleans 129 m³ against the baseline's 196 m³**. It leaves half of the largest patch (69 m³) unserved, although both vessels had nearly enough tank room left. This is a known optimizer issue (Haris); show the baseline plan for S3.
+- **S4:** about the same oil, and the last vessel is back **1.2 h sooner** than with the baseline.
 
 ## Main messages
 
-- **The plan is checked independently.** A separate validator rebuilds every patch from the raw OpenDrift particles. It recalculates every volume, tank, time and comparison figure. Nothing is double-counted, and no vessel goes over its tank or its hours.
-- **On the real drift, the optimizer's gain is efficiency, not more oil.** Both plans reach almost all the oil. The optimized plan sails less and keeps a vessel free. One large patch decides the response time.
-- **Moving targets matter.** Patches drift about 1.5 km (up to 3 km) between dispatch and the vessel's arrival. A plan aimed at where the oil was would miss them.
-- **Emulsion matters.** Weathered oil takes up about 50 % water, so 1 m³ of oil fills about 2 m³ of tank. Counting that changes which vessels are needed.
+- **The plan is checked independently.** A separate validator rebuilds every patch from the raw OpenDrift particles and recalculates every volume, tank, time and comparison figure. At all four sites nothing is double-counted, and no vessel goes over its tank, its hours or its meeting order.
+- **The optimizer's gain is efficiency, not more oil.** At S1, S2 and S4 both plans reach almost all the oil afloat. The optimized plan sails up to 28 % less (S1) or finishes up to 1.2 h sooner (S4). At S3 it does worse, which the validation caught.
+- **Moving targets matter.** Patches drift 1.1 to 1.7 km on average (up to 4.4 km at S4) between dispatch and the vessel's arrival. A plan aimed at where the oil was would miss them.
+- **Emulsion matters.** Weathered oil takes up about 50 % water, so 1 m³ of oil fills about 2 m³ of tank. Counting that is why the largest patch is split between two vessels at S1, S2 and S3, and why the Hamriyah reserve is used at every site.
+- **Near the coast, time matters most.** At S3, by 24 h, 82 m³ is ashore against 102 m³ still afloat. A vessel cleanup alone does not cover a near-shore spill.
 
 ## Limitations to state
 
@@ -39,5 +48,6 @@ For reference, S1 with the current fleet (my local re-run, to be replaced by Har
 | Water content is the slick average per hour | Every patch gets the same water fraction at the same hour. |
 | Vessels leave 6 h after the release and can work around the clock | Both are demo assumptions. Operating hours are the response team's decision. |
 | Routes use a 2.2 km sea grid | Distances are approximate, not navigation routes. The Port Saqr base is a staging point 1.4 km out on its approach. |
-| Oil that reaches the coast is not a cleanup target | At S3, part of the oil strands on the Ajman–Hamriyah coast from hour 20. Shoreline cleanup is outside this plan. |
+| Oil that reaches the coast is not a cleanup target | At S3, 82 m³ strands on the coast from hour 11. Shoreline cleanup is outside this plan. |
+| The optimizer does not always beat nearest-first | At S3 it cleans 34 % less. The validator flags this, and the baseline should be shown there until it is fixed. |
 | Vessels and depots are illustrative | Not real vessel specifications. |
