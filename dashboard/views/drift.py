@@ -15,7 +15,7 @@ from components.data import demo_mode, detection_located, drift_stage, selected_
 from components.labels import HOURS, KM, KM2, M3, M_PER_S
 from services import schema, selection
 from services.drift_loader import afloat
-from services.files import as_float, iter_positions
+from services.files import as_float, display_text, iter_positions
 from services.geo import centroid, haversine_km, polygon_area_km2
 
 stage = drift_stage()
@@ -216,7 +216,7 @@ else:
             with st.expander("Run details", icon=":material/info:"):
                 ui.details_table(details)
                 if isinstance(meta.get("note"), str):
-                    st.caption(meta["note"])
+                    st.caption(display_text(meta["note"]))
     else:
         ui.inline_empty("Wind and current conditions will appear here.")
 

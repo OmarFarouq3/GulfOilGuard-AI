@@ -16,7 +16,7 @@ from typing import Any
 
 import config
 from services import schema
-from services.files import read_geojson, read_json_object, validate_geojson
+from services.files import display_text, read_geojson, read_json_object, validate_geojson
 from services.models import SpillData, SpillSite
 
 SPILL_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]+")
@@ -38,7 +38,7 @@ def parse_spills(collection: dict | None, data: SpillData, name: str = "spills.g
             spill_id = schema.text(props.get("spill_id"), "spill_id")
             if not SPILL_ID_PATTERN.fullmatch(spill_id):
                 raise schema.SchemaError(f"`spill_id` may only use letters, digits, _ and -, got {spill_id!r}")
-            label = schema.text(props["name"], "name") if props.get("name") is not None else spill_id
+            label = display_text(schema.text(props["name"], "name")) if props.get("name") is not None else spill_id
             location = schema.geo(geometry["coordinates"])
         except schema.SchemaError as exc:
             data.warnings.append(f"`{name}` feature {i}: {exc}; skipped.")

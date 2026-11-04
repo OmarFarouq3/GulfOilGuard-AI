@@ -174,6 +174,20 @@ def display(path: Path, root: Path | None = None) -> str:
         return Path(path).name
 
 
+def shown_folder(path: Path, root: Path | None = None) -> str:
+    """A folder the operator must find: repo-relative inside the repo, else the full path with the home
+    folder written as ``~`` (the OS user name is never shown)."""
+    path = Path(path)
+    try:
+        return path.resolve().relative_to(Path(root or ROOT).resolve()).as_posix() or "."
+    except ValueError:
+        pass
+    try:
+        return str(Path("~") / path.resolve().relative_to(Path.home().resolve()))
+    except ValueError:
+        return str(path)
+
+
 def describe(checks: tuple[Check, ...], *, full: bool = False, last_state: str | None = None,
              root: Path | None = None, separator: str = "; ") -> str:
     """'GOG_CHECKPOINT environment variable: not set; standard layout checkpoints/unet_best.pth: missing'.

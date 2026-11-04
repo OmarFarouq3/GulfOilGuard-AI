@@ -69,7 +69,7 @@ def site_at(spill: str, page: str):
 def test_predict_says_precomputed_with_run_and_release(sites):
     sites("S2")
     text = " ".join(page_text(site_at("S2", "views/drift.py")).split())
-    assert ("Precomputed result from the Team B drift run (run openoil-25.70N-55.40E-20261023T1200Z, released "
+    assert ("Precomputed result from the saved drift run (run openoil-25.70N-55.40E-20261023T1200Z, released "
             "2026-10-23 12:00 UTC). Nothing is re-simulated here. The time controls only step through the saved "
             "forecast.") in text
 
@@ -78,7 +78,7 @@ def test_respond_says_precomputed_with_scenario_and_keeps_the_simulated_label(si
     sites("S2")
     at = site_at("S2", "views/cleanup.py")
     text = " ".join(page_text(at).split())
-    assert ("Precomputed result from the Team C routing plan (scenario openoil-25.70N-55.40E-20261023T1200Z@dispatch6h, "
+    assert ("Precomputed result from the saved routing plan (scenario openoil-25.70N-55.40E-20261023T1200Z@dispatch6h, "
             "release 2026-10-23 12:00 UTC). Nothing is re-optimised here.") in text
     assert "Simulated" in heading(at) or "Real forecast" in heading(at)  # the existing label stays
 

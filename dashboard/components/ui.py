@@ -14,6 +14,7 @@ import streamlit as st
 from components import illustrations
 from components.data import Stage
 from components.labels import STAGE_STATUS
+from services.files import display_text
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 EMPTY_VALUE = "—"
@@ -145,7 +146,8 @@ def table(headers: list[str], rows: list[list | tuple], numeric: tuple[int, ...]
 
 def details_table(rows: dict[str, object]) -> None:
     """Compact two-column key/value list for model details."""
-    body = "".join(f"<dt>{esc(k)}</dt><dd>{esc(v)}</dd>" for k, v in rows.items())
+    body = "".join(f"<dt>{esc(k)}</dt><dd>{esc(display_text(v) if isinstance(v, str) else v)}</dd>"
+                   for k, v in rows.items())
     st.html(f'<dl class="gog-details">{body}</dl>')
 
 

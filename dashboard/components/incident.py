@@ -10,7 +10,7 @@ import streamlit as st
 import config
 from components import flow, maps, ui
 from components.data import Stage, demo_mode, site_forecast
-from services import image_picker, scenario, selection
+from services import image_picker, scenario, selection, settings
 from services.files import read_image
 from services.imaging import preview_png
 from services.models import SpillSite
@@ -112,7 +112,7 @@ def _images_missing() -> None:
     st.html(
         f"""<div class="gog-inline-empty gog-images-missing"><b>No radar images found.</b> Add <code>.png</code> or
               <code>.jpg</code> radar images (subfolders are fine) to
-              <code class="gog-path">{ui.esc(image_picker.image_dir())}</code>
+              <code class="gog-path">{ui.esc(settings.shown_folder(image_picker.image_dir()))}</code>
               or point the <code>{image_picker.IMAGE_DIR_ENV}</code> environment variable at another folder,
               then refresh. The folder is not in git, so every machine needs its own copy. For a demo,
               <code>{image_picker.IMAGE_DIR_ENV}</code> can point at <code>assets/images/val</code>.</div>"""

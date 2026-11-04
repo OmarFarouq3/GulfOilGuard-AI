@@ -85,6 +85,25 @@ def hide_paths(value: str) -> str:
                     for word in value.split(" "))
 
 
+# Internal teams and team members never reach the page. Files written by the pipeline may mention them
+# (run notes, plan messages, validation warnings); the app itself never does (tests/dashboard/test_no_team_names.py).
+PEOPLE = ("Ayham", "Obeid", "Maria", "Maqqavi", "Nihal", "Omar", "Haris", "Farouq")
+# A module name before "team" ("the cleanup team") goes with it; any other word ("by Team B") stays.
+_TEAM = r"(?:the\s+)?(?:(?:(?:detection|drift|routing|cleanup|optimi[sz]ation|dashboard|integration|response)\s+)?team(?:\s+[A-D])?|%s)"
+_POSSESSIVE = re.compile((r"\b" + _TEAM + r"'s\b") % "|".join(PEOPLE), re.IGNORECASE)
+_REFERENCE = re.compile((r"\b" + _TEAM + r"\b") % "|".join(PEOPLE), re.IGNORECASE)
+
+
+def neutral(value: str) -> str:
+    """Replace references to internal teams or team members: "Team B's run" -> "the run", "by Haris" -> "by the project"."""
+    return _REFERENCE.sub("the project", _POSSESSIVE.sub("the", value))
+
+
+def display_text(value: object) -> str:
+    """Free text read from a data file, as a viewer may see it: paths reduced to file names, no team or member names."""
+    return neutral(hide_paths(str(value)))
+
+
 # --- JSON ----------------------------------------------------------------------
 # The cached readers take the file's stat tuple as ``stamp``. It must not start with "_":
 # st.cache_data leaves underscore-prefixed parameters out of the cache key, which would

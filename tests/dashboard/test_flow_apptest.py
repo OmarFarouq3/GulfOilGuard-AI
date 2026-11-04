@@ -7,6 +7,8 @@ replacing services.inference.run_detection, which AppTest's script run shares wi
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from dashboard_testkit import APP, make_image_dir, page_text
@@ -148,7 +150,10 @@ def test_overview_without_images_shows_the_empty_state_card(tmp_path, monkeypatc
     cards = html_bodies(at, "gog-images-missing")
     assert len(cards) == 1
     card = cards[0]
-    assert "No radar images found" in card and str(directory) in card and "GOG_IMAGE_DIR" in card
+    from services import settings
+    shown = settings.shown_folder(directory)  # under the home folder: "~\...", never the OS user name
+    assert "No radar images found" in card and shown in card and "GOG_IMAGE_DIR" in card
+    assert str(Path.home()) not in card
     assert ".png" in card and ".jpg" in card and "assets/images/val" in card
     assert not [p for p in at.get("page_link") if p.proto.label == "Continue to Detect"]
     open_page(at, DETECT)

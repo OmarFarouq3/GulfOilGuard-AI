@@ -208,8 +208,8 @@ def _failure(run: inference.DetectionRun, follow_up: str = "") -> None:
 
 # --- Predict / Respond ---------------------------------------------------------------------
 
-PRECOMPUTED_DRIFT = "Precomputed result from the Team B drift run"
-PRECOMPUTED_PLAN = "Precomputed result from the Team C routing plan"
+PRECOMPUTED_DRIFT = "Precomputed result from the saved drift run"
+PRECOMPUTED_PLAN = "Precomputed result from the saved routing plan"
 
 
 def _utc(timestamp: object) -> str | None:

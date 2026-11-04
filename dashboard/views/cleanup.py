@@ -23,6 +23,7 @@ from components.labels import (COMPARE_RESPONSE_ROW, COMPARE_SAILING_ROW, FALLBA
                                response_time_tile)
 from services import scenario
 from services.drift_loader import afloat
+from services.files import display_text
 
 stage = routing_stage()
 data = stage.data
@@ -91,7 +92,7 @@ def stops(entry) -> list[tuple[float, float]]:
 def unserved_reasons(message: str | None) -> str | None:
     """The plan's own words after 'unserved:' in its message, if it gives them."""
     found = re.search(r"unserved: (.+?)(?:; |$)", message or "")
-    return found.group(1) if found else None
+    return display_text(found.group(1)) if found else None
 
 
 if data is None:
@@ -114,7 +115,8 @@ else:
         dispatch = comparison.get("dispatch_hours") if comparison else None
         when = (f" (+{dispatch:g} {HOURS} after the release" + (f", {comparison['dispatch_time'][:16].replace('T', ' ')} UTC"
                 if comparison.get("dispatch_time") else "") + ")") if dispatch is not None else ""
-        fleet = f" (fleet file {comparison['fleet']}.json)" if comparison and comparison.get("fleet") else ""
+        fleet = (f" (fleet file {display_text(comparison['fleet'])}.json)"
+                 if comparison and comparison.get("fleet") else "")
         st.caption(f"Assumptions, not observations: the vessels and their start positions, taken as home "
                    f"ports{fleet}, and the dispatch time{when}.")
 
@@ -315,12 +317,13 @@ else:
     # --- What the files say about themselves --------------------------------------------
     if data.message:
         with st.expander("Plan assumptions", icon=":material/rule:"):
-            st.markdown("\n".join(f"- {part.strip()}" for part in data.message.split("; ") if part.strip()))
+            st.markdown("\n".join(f"- {display_text(part.strip())}" for part in data.message.split("; ")
+                                   if part.strip()))
     warnings = scenario.site_validation_warnings(site) if site_plan else []
     if warnings:
-        with st.expander("Warnings from the cleanup team's checks", icon=":material/warning:"):
+        with st.expander("Warnings from the plan's own checks", icon=":material/warning:"):
             st.caption("As written in the site's validation report.")
-            st.markdown("\n".join(f"- {w}" for w in warnings))  # st.markdown renders no HTML: shown as written
+            st.markdown("\n".join(f"- {display_text(w)}" for w in warnings))  # st.markdown renders no HTML
 
     with st.expander("How to read this", icon=":material/help:"):
         st.markdown(
