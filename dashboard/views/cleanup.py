@@ -250,18 +250,19 @@ else:
             columns["capacity"]: e.vessel.capacity_m3 if e.vessel else None,
             columns["oil"]: e.oil_collected_m3,
         } for e in data.routes])
+        # Pixel widths sized to each header, so all nine fit at a 1,150 px window without cutting "Time to finish (h)".
         st.dataframe(table, hide_index=True, width="stretch", alt="Vessel assignments", column_config={
-            "Vessel": st.column_config.TextColumn(width="medium"),
-            "Visiting order": st.column_config.TextColumn(width="medium"),
-            "Stops": st.column_config.NumberColumn(width="small"),
-            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width="small"),
+            "Vessel": st.column_config.TextColumn(width=140),
+            "Visiting order": st.column_config.TextColumn(width=230),
+            "Stops": st.column_config.NumberColumn(width=60),
+            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width=110),
             columns["finish"]: st.column_config.NumberColumn(
-                format="%.1f", width="small", help="Back in port with cleaning included (empty if the plan doesn't say)"),
+                format="%.1f", width=130, help="Back in port with cleaning included (empty if the plan doesn't say)"),
             columns["time"]: st.column_config.NumberColumn(
-                format="%.1f", width="small", help="Sailing time from dispatch, including the trip back to port"),
-            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width="small"),
-            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width="small"),
-            columns["oil"]: st.column_config.NumberColumn(format="%.0f", width="small",
+                format="%.1f", width=95, help="Sailing time from dispatch, including the trip back to port"),
+            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width=100),
+            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width=110),
+            columns["oil"]: st.column_config.NumberColumn(format="%.0f", width=80,
                                                           help="Estimated oil recovered by this vessel, in m³"),
         })
         if data.idle_vessel_ids:
