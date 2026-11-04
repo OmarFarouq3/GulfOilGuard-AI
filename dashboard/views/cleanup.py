@@ -251,18 +251,18 @@ else:
             columns["capacity"]: e.vessel.capacity_m3 if e.vessel else None,
             columns["oil"]: e.oil_collected_m3,
         } for e in data.routes])
-        # Pixel widths sized to each header, so all nine fit at a 1,150 px window without cutting "Time to finish (h)".
+        # Pixel widths sized to the headers and the real vessel ids (HAMRIYAH-OSRV-RESERVE), so all nine fit at 1,150 px.
         st.dataframe(table, hide_index=True, width="stretch", alt="Vessel assignments", column_config={
-            "Vessel": st.column_config.TextColumn(width=140),
-            "Visiting order": st.column_config.TextColumn(width=230),
-            "Stops": st.column_config.NumberColumn(width=60),
-            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width=110),
+            "Vessel": st.column_config.TextColumn(width=200),
+            "Visiting order": st.column_config.TextColumn(width=210),
+            "Stops": st.column_config.NumberColumn(width=55),
+            columns["distance"]: st.column_config.NumberColumn(format="%.1f", width=105),
             columns["finish"]: st.column_config.NumberColumn(
                 format="%.1f", width=130, help=FINISH_HELP),
             columns["time"]: st.column_config.NumberColumn(
                 format="%.1f", width=95, help=SAILING_HELP),
-            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width=100),
-            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width=110),
+            columns["speed"]: st.column_config.NumberColumn(format="%.1f", width=95),
+            columns["capacity"]: st.column_config.NumberColumn(format="%.0f", width=105),
             columns["oil"]: st.column_config.NumberColumn(format="%.0f", width=80,
                                                           help="Estimated oil recovered by this vessel, in m³"),
         })
