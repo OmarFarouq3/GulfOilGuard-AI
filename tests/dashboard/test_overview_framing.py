@@ -118,3 +118,12 @@ def test_detect_does_not_assume_validation_for_another_split():
         assert "a labelled evaluation set" in how and "choose the checkpoint" not in how
     finally:
         config.DETECTION_FILES["metrics"].unlink(missing_ok=True)
+
+
+def test_overview_cards_match_the_pages_they_open():
+    """Detect reads SAR scenes from more than one sensor (PALSAR too), and site plans follow sea paths, not
+    straight lines: the Overview cards must not say "Sentinel-1" only or "straight lines"."""
+    at = new_app()
+    text = " ".join(bodies(at, "gog-stage-num") + bodies(at, "gog-chain-step"))
+    assert "scans SAR (radar) imagery" in text and "Sentinel-1" not in text
+    assert "approximate, not checked navigation" in text and "straight lines" not in text

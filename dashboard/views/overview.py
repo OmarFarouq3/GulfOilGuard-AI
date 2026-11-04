@@ -93,7 +93,7 @@ else:
 
 FLOW = (
     ("detect", "views/detection.py", "01", "Detect",
-     "A deep-learning model scans Sentinel-1 radar imagery and outlines dark oil slicks on the sea surface."),
+     "A deep-learning model scans SAR (radar) imagery and outlines dark oil slicks on the sea surface."),
     ("predict", "views/drift.py", "02", "Predict",
      "Winds and ocean currents drive a drift simulation that forecasts where the oil goes over 24 hours." if located
      else "Winds and ocean currents drive a drift simulation that forecasts where oil released at a synthetic "
@@ -121,7 +121,7 @@ CHAIN = (
      "Moderate"),
     ("Drift", "Depends on wind and current data and the oil type. Uncertainty grows with every hour.", 70,
      "Higher"),
-    ("Response", "Routes are straight lines to predicted patches; real navigation needs local checks.", 90,
+    ("Response", "Routes to predicted patches are approximate, not checked navigation; real navigation needs local checks.", 90,
      "Highest"),
 )
 steps = "".join(
