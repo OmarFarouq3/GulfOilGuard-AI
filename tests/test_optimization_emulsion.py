@@ -123,6 +123,40 @@ def test_cleanup_time_is_for_the_emulsion():
     assert voyage.clock == pytest.approx(stop.meet_hours + 2.0)
 
 
+def growing_track(target_id, km, oil):
+    """A patch that stays put while it takes up water: 0 % at 0 h, 50 % at 10 h."""
+    return PatchTrack(target_id, (0.0, 10.0), (east(km), east(km)), (oil, oil), (0.0, 0.5))
+
+
+def test_a_patch_that_outgrew_the_tank_is_kept_as_missed_with_the_time_it_was_reached():
+    # at 0 h the two need 20 + 60 = 80 of 85 m3; by the time V1 gets to T02 it needs ~69
+    first, second = growing_track("T01", 10, 20.0), growing_track("T02", 20, 60.0)
+    plan = OptimizationOutput((VesselRoute("V1", ("T01", "T02"), (east(0), east(10), east(20), east(0))),), "feasible")
+    (voyage,) = sail((vessel(capacity=85.0),), plan, (first, second), 0.0, StraightLineDistance())
+    assert [s.target_id for s in voyage.stops] == ["T01"]
+    (cleaned,) = voyage.stops
+    after_t01 = cleaned.meet_hours + tank_m3(cleaned.target) / 30
+    assert voyage.missed["T02"] == pytest.approx(after_t01 + 1.0, abs=1e-3)  # 10 km at 10 km/h
+    assert tank_m3(second.target_at(voyage.missed["T02"])) > voyage.tank
+
+
+def test_a_stop_that_no_longer_fits_when_sailed_makes_the_solver_plan_again():
+    pytest.importorskip("ortools")
+    from optimization.moving_targets import solve_moving
+
+    # Round 1 sees both patches at 0 h (80 m3, fits 85) but T02 has grown past the tank by the
+    # time it is reached. The plan must not stop there: round 2 sees T02 as it really is,
+    # so it can only take one patch and takes the bigger oil.
+    tracks = (growing_track("T01", 10, 20.0), growing_track("T02", 20, 60.0))
+    vessels = (vessel(capacity=85.0),)
+    result = solve_moving(vessels, tracks, 0.0, StraightLineDistance())
+    assert result.rounds == 2
+    assert set(result.meet_hours) == {"T02"}
+    assert sum(t.oil_volume_m3 for t in result.targets if t.target_id in result.meet_hours) == pytest.approx(60.0)
+    assert "every planned stop fit" in result.plan.message
+    assert check_plan(result.plan, vessels, result.targets) == []
+
+
 def test_check_plan_counts_emulsion_against_capacity():
     target = EmulsionTarget("T01", east(10), 50.0, emulsion_m3=100.0, water_fraction=0.5)
     route = VesselRoute("V1", ("T01",), (east(0), east(10), east(0)), 20.0, 2.0)
