@@ -4,8 +4,8 @@
     {
       "vessel_id": "RAK-FRV-FALCON",
       "location": {
-        "latitude": 25.975,
-        "longitude": 56.055
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 11.32,
       "capacity_m3": 60.0,
@@ -14,8 +14,8 @@
     {
       "vessel_id": "RAK-OSRV-SAQR",
       "location": {
-        "latitude": 25.975,
-        "longitude": 56.055
+        "latitude": 25.985,
+        "longitude": 56.035
       },
       "speed_m_per_s": 7.72,
       "capacity_m3": 250.0,
@@ -24,8 +24,8 @@
     {
       "vessel_id": "HAMRIYAH-OSRV-RESERVE",
       "location": {
-        "latitude": 25.465,
-        "longitude": 55.485
+        "latitude": 25.4773,
+        "longitude": 55.4798
       },
       "speed_m_per_s": 7.2,
       "capacity_m3": 300.0,
