@@ -1,0 +1,15 @@
+{
+  "fingerprint": {
+    "image": "C:\\Users\\obeid\\Documents\\UOS\\Hack for Earth Competition\\GulfOilGuard-AI\\assets\\images\\val\\palsar_667.png",
+    "image_mtime": 1793647619.9993763,
+    "checkpoint": "C:\\Users\\obeid\\Documents\\UOS\\Hack for Earth Competition\\GulfOilGuard-AI\\checkpoints\\unet_best.pth",
+    "checkpoint_mtime": 1793651112.545464
+  },
+  "info": {
+    "threshold": 0.5,
+    "image_size": 256,
+    "epoch": 12,
+    "oil_fraction": 0.7296600341796875,
+    "checkpoint": "unet_best.pth"
+  }
+}

@@ -1,0 +1,40 @@
+Drift forecast: openoil-25.98N-55.85E-20261023T1200Z  (SYNTHETIC)
+  25 steps from 0 to 24 h; vessels leave at 6 h
+  patches cut into cells at dispatch, then followed by their particle ids
+  oil afloat at dispatch 208.6 m3 -> 6 moving targets holding 208.6 m3 (0.0 m3 in small patches not targeted)
+  assumption: tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  emulsion: water fraction 39% at dispatch, 62% at 24 h, so 1 m3 of oil fills 1.65 to 2.64 m3 of tank
+Fleet: gulf_standard, 3 vessels
+
+OPTIMIZED PLAN (OR-Tools, re-planned for moving oil)
+  Status:  feasible
+  Message: sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); planned 3 round(s), stopped because the solver aimed within 2 km and every planned stop fit; kept round 1 (the best as sailed), where the solver aimed 1.4 km on average (4.4 km at most) from where the patches were met; moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  RAK-FRV-FALCON: (no targets)  |  0.0 km, 0.00 h sailing, tank 0.0 / 60 m3
+  RAK-OSRV-SAQR: T03 -> T04 -> T01 -> T05  |  27.2 km, 0.98 h sailing, tank 214.3 / 250 m3
+  HAMRIYAH-OSRV-RESERVE: T02  |  160.4 km, 6.19 h sailing, tank 156.4 / 300 m3
+  Rule check: passed
+
+BASELINE (nearest interception first)
+  Status:  feasible
+  Message: baseline: nearest (interception) target first; sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  RAK-FRV-FALCON: (no targets)  |  0.0 km, 0.00 h sailing, tank 0.0 / 60 m3
+  RAK-OSRV-SAQR: T02 -> T03 -> T04 -> T05  |  26.7 km, 0.96 h sailing, tank 174.6 / 250 m3
+  HAMRIYAH-OSRV-RESERVE: T01  |  157.5 km, 6.07 h sailing, tank 194.5 / 300 m3
+  Rule check: passed
+
+COMPARISON (oil as each plan finds it)
+                                    optimized   baseline
+  Oil recovered (m3)                      204        204
+  Response time, back in port (h)       11.40      12.56
+  Targets covered                           5          5
+  Distance (km)                         187.6      184.1
+  Sailing time, all vessels (h)          7.17       7.03
+  Longest single route (h)               6.19       6.07
+  Distance per target (km)               37.5       36.8
+  Oil change: -0.1% (of 205 m3 in all targets)   Response time change: -9.2%
+  Distance change: +1.9%   Sailing time change: +1.9%
+  Share of the oil afloat at dispatch recovered: optimized 98%, baseline 98%
+  Last patch cleaned 8.21 h after dispatch (baseline 9.44 h); the response time above adds the trip back to port.
+  Patches drifted 1.4 km on average (max 4.4 km) between dispatch and the vessel reaching them: how far off a plan with frozen oil would aim.
+
+Wrote dashboard files, comparison.json and baseline/ to outputs/sites/S4/routing (labelled as a simulated scenario)

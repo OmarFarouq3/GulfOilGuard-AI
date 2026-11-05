@@ -1,0 +1,159 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.42023969683389,
+          25.44880462398883
+        ]
+      },
+      "properties": {
+        "target_id": "T01-1",
+        "oil_volume_m3": 68.7468509646458,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 139.99475244504168,
+        "water_fraction": 0.5089326580892092,
+        "source_hours": 10,
+        "meet_hours": 6.39,
+        "meet_time": "2026-10-23T18:23:00Z",
+        "drifted_km": 0.21,
+        "position_hours": 6.39
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.429525231121815,
+          25.443546362460374
+        ]
+      },
+      "properties": {
+        "target_id": "T01-2",
+        "oil_volume_m3": 67.45312151562077,
+        "served_by": "RAK-OSRV-SAQR",
+        "emulsion_m3": 149.98955365096737,
+        "water_fraction": 0.5502812037657816,
+        "source_hours": 10,
+        "meet_hours": 9.26,
+        "meet_time": "2026-10-23T21:15:00Z",
+        "drifted_km": 1.3,
+        "position_hours": 9.26
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.43058637387598,
+          25.454373740768393
+        ]
+      },
+      "properties": {
+        "target_id": "T02",
+        "oil_volume_m3": 36.349914136990236,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 84.31134623170252,
+        "water_fraction": 0.5688609450370508,
+        "source_hours": 10,
+        "meet_hours": 13.26,
+        "meet_time": "2026-10-24T01:16:00Z",
+        "drifted_km": 2.61,
+        "position_hours": 13.26
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.43898282591932,
+          25.43835454726664
+        ]
+      },
+      "properties": {
+        "target_id": "T03",
+        "oil_volume_m3": 13.76808798299107,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 31.28950245804422,
+        "water_fraction": 0.5599774077119775,
+        "source_hours": 10,
+        "meet_hours": 12.14,
+        "meet_time": "2026-10-24T00:08:00Z",
+        "drifted_km": 2.11,
+        "position_hours": 12.14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.422360027119375,
+          25.434388426894916
+        ]
+      },
+      "properties": {
+        "target_id": "T04",
+        "oil_volume_m3": 9.156520198690215,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 20.626433822974395,
+        "water_fraction": 0.5560783663683354,
+        "source_hours": 10,
+        "meet_hours": 11.27,
+        "meet_time": "2026-10-23T23:16:00Z",
+        "drifted_km": 1.78,
+        "position_hours": 11.27
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.417591638750295,
+          25.471330494351157
+        ]
+      },
+      "properties": {
+        "target_id": "T05",
+        "oil_volume_m3": 0.5995297775404941,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 1.2120153605714161,
+        "water_fraction": 0.5053447365074316,
+        "source_hours": 10,
+        "meet_hours": 6.23,
+        "meet_time": "2026-10-23T18:14:00Z",
+        "drifted_km": 0.18,
+        "position_hours": 6.23
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.4444,
+          25.44756
+        ]
+      },
+      "properties": {
+        "target_id": "T06",
+        "oil_volume_m3": 0.20027199999999998,
+        "served_by": null,
+        "emulsion_m3": 0.40054399999999996,
+        "water_fraction": 0.5,
+        "source_hours": 10,
+        "meet_hours": null,
+        "meet_time": null,
+        "drifted_km": 0.0,
+        "position_hours": 6
+      }
+    }
+  ]
+}

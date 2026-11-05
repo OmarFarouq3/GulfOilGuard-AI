@@ -233,8 +233,10 @@ detection/masks/
 
 # Trained models and checkpoints
 models/
-checkpoints/
+checkpoints/*
 *.pth
+# The trained U-Net (30 MB) is tracked so Detect runs on a fresh clone; other checkpoints stay local.
+!checkpoints/unet_best.pth
 *.pt
 *.h5
 *.ckpt
@@ -263,13 +265,21 @@ __pycache__/
 # Operating system files
 .DS_Store
 Thumbs.db
+desktop.ini
 __MACOSX/
 ._*
 
 # Training outputs
+# runs/ also holds the dashboard's live Run detection results (runs/dashboard/, config.LIVE_DETECTION_DIR)
 runs/
 logs/
-outputs/
+# outputs/ is tracked (real S1-S4 results); only backups, incoming copies and temporary files stay out.
+outputs/_backup*/
+outputs/_incoming/
+outputs/**/*.bak
+outputs/**/*_backup*
+outputs/**/*_old*
+outputs/**/tmp*/
 wandb/
 lightning_logs/
 
@@ -299,5 +309,7 @@ secrets/
 *.pem
 
 # Local radar image dataset (repo root only; dashboard/assets/ stays tracked)
-/assets/
-# /assets/ is local-only, except the ten sample images in assets/images/train that were committed earlier.
+/assets/*
+# /assets/ is local-only, except the ten sample images in assets/images/train that were committed earlier
+# and the app icon below. "/assets/*" (not "/assets/") so that a sub-folder can be un-ignored.
+!/assets/icon/

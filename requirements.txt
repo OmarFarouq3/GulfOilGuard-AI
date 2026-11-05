@@ -1,3 +1,6 @@
+# Full pipeline (detection, drift, routing) plus the dashboard. The dashboard's own dependencies
+# (streamlit, folium, streamlit-folium, pyyaml, ...) live in dashboard/requirements.txt.
+-r dashboard/requirements.txt
 torch
 numpy
 pandas
@@ -10,3 +13,5 @@ scipy
 streamlit
 plotly
 pytest
+bottleneck
+pyshp

@@ -1,0 +1,182 @@
+{
+  "sites": [
+    {
+      "site": "S1",
+      "place": "off Ras Al Khaimah",
+      "release": {
+        "latitude": 25.85,
+        "longitude": 55.65
+      },
+      "result": "129 OK, 3 WARN, 0 FAIL",
+      "fail": 0,
+      "afloat_at_dispatch_m3": 204.048,
+      "stranded_end_m3": 0.0,
+      "stranded_end_particles": 0,
+      "targets": 7,
+      "vessels": [
+        "RAK-OSRV-SAQR",
+        "HAMRIYAH-OSRV-RESERVE"
+      ],
+      "unserved": [
+        "T06"
+      ],
+      "optimized_oil_recovered_m3": 199.2061133995424,
+      "baseline_oil_recovered_m3": 199.60650941897453,
+      "optimized_response_hours": 10.501789136585248,
+      "baseline_response_hours": 10.588251134446145,
+      "optimized_distance_km": 184.5839115689967,
+      "baseline_distance_km": 256.4756196263478,
+      "distance_change_percent": -28.030620673453527,
+      "travel_hours_change_percent": -19.313800209153413
+    },
+    {
+      "site": "S2",
+      "place": "off Umm Al Quwain",
+      "release": {
+        "latitude": 25.7,
+        "longitude": 55.4
+      },
+      "result": "115 OK, 3 WARN, 0 FAIL",
+      "fail": 0,
+      "afloat_at_dispatch_m3": 194.28,
+      "stranded_end_m3": 0.0,
+      "stranded_end_particles": 0,
+      "targets": 6,
+      "vessels": [
+        "RAK-OSRV-SAQR",
+        "HAMRIYAH-OSRV-RESERVE"
+      ],
+      "unserved": [
+        "T05"
+      ],
+      "optimized_oil_recovered_m3": 188.35918966078052,
+      "baseline_oil_recovered_m3": 188.46228899872057,
+      "optimized_response_hours": 11.823873517219221,
+      "baseline_response_hours": 11.84647763648039,
+      "optimized_distance_km": 191.44851907715622,
+      "baseline_distance_km": 191.44885572154342,
+      "distance_change_percent": -0.00017584037571557584,
+      "travel_hours_change_percent": -0.00018472854049365214
+    },
+    {
+      "site": "S3",
+      "place": "off Sharjah / Hamriyah",
+      "release": {
+        "latitude": 25.45,
+        "longitude": 55.35
+      },
+      "result": "117 OK, 4 WARN, 0 FAIL",
+      "fail": 0,
+      "afloat_at_dispatch_m3": 200.272,
+      "stranded_end_m3": 81.819,
+      "stranded_end_particles": 444,
+      "targets": 7,
+      "vessels": [
+        "RAK-OSRV-SAQR",
+        "HAMRIYAH-OSRV-RESERVE"
+      ],
+      "unserved": [
+        "T06"
+      ],
+      "optimized_oil_recovered_m3": 196.07402457647856,
+      "baseline_oil_recovered_m3": 195.5721888877689,
+      "optimized_response_hours": 11.484576103668426,
+      "baseline_response_hours": 11.484576103668426,
+      "optimized_distance_km": 206.55067415237716,
+      "baseline_distance_km": 199.15752172077757,
+      "distance_change_percent": 3.712213512058521,
+      "travel_hours_change_percent": 3.953174085229958
+    },
+    {
+      "site": "S4",
+      "place": "off Ras Al Khaimah near Dhayah",
+      "release": {
+        "latitude": 25.98,
+        "longitude": 55.85
+      },
+      "result": "113 OK, 3 WARN, 0 FAIL",
+      "fail": 0,
+      "afloat_at_dispatch_m3": 208.592,
+      "stranded_end_m3": 0.0,
+      "stranded_end_particles": 0,
+      "targets": 6,
+      "vessels": [
+        "RAK-OSRV-SAQR",
+        "HAMRIYAH-OSRV-RESERVE"
+      ],
+      "unserved": [
+        "T06"
+      ],
+      "optimized_oil_recovered_m3": 204.26674028304978,
+      "baseline_oil_recovered_m3": 204.46706884983473,
+      "optimized_response_hours": 11.404887522576736,
+      "baseline_response_hours": 12.557204500226703,
+      "optimized_distance_km": 187.6250550182879,
+      "baseline_distance_km": 184.11293935773608,
+      "distance_change_percent": 1.9075876322454905,
+      "travel_hours_change_percent": 1.9070684023281488
+    }
+  ],
+  "site_pairs": [
+    {
+      "sites": "S1-S2",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 2.2201862306138036,
+      "max_km": 4.2283991122249684,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    },
+    {
+      "sites": "S1-S3",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 2.1375177477166107,
+      "max_km": 8.102664164844684,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    },
+    {
+      "sites": "S1-S4",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 5.562933860586346,
+      "max_km": 7.578797496962258,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    },
+    {
+      "sites": "S2-S3",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 2.9087277628642565,
+      "max_km": 6.644544604579573,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    },
+    {
+      "sites": "S2-S4",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 6.004329047617501,
+      "max_km": 9.855676970933805,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    },
+    {
+      "sites": "S3-S4",
+      "particles": 1000,
+      "until_hours": 24.0,
+      "median_km": 6.729798750601478,
+      "max_km": 12.903521456673673,
+      "copy": false,
+      "similar": false,
+      "comparable": true
+    }
+  ]
+}

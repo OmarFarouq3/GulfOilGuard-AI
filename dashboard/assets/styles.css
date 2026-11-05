@@ -57,7 +57,7 @@ header[data-testid="stHeader"],
   justify-content: space-between;
 }
 .gog-brand { display: flex; align-items: center; gap: 0.6rem; }
-.gog-logo { width: 30px; height: 30px; flex: none; }
+.gog-logo { width: 30px; height: 30px; flex: none; border-radius: 7px; }
 .gog-brand-name { font-family: var(--gog-heading-font); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; line-height: 1.1; }
 .gog-brand-name span { color: var(--gog-teal); }
 .gog-brand-tag { color: var(--gog-muted); font-size: 0.72rem; letter-spacing: 0.04em; }

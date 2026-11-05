@@ -407,7 +407,7 @@ class SeaGridDistance:
 
 
 # ---------------------------------------------------------------------------
-# The default provider used by optimize_routes
+# The default provider used by routing_model.solve_routes
 # ---------------------------------------------------------------------------
 
 

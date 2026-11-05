@@ -100,6 +100,7 @@ HERO_WAVES = """
 </svg>
 """
 
+# Top-bar fallback when assets/icon/icon.jpeg can't be read (components/app_icon.py).
 LOGO = """
 <svg viewBox="0 0 32 32" class="gog-logo" aria-hidden="true">
   <path d="M16 3 C16 3 6 14 6 20 a10 10 0 0 0 20 0 C26 14 16 3 16 3 Z" fill="#0f2a3d" stroke="#2dd4bf" stroke-width="2"/>
