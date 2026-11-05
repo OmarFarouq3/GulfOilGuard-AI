@@ -1,0 +1,147 @@
+{
+  "scenario_id": "openoil-25.70N-55.40E-20261023T1200Z@dispatch6h",
+  "synthetic": true,
+  "optimized": {
+    "status": "feasible",
+    "message": "sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); planned 2 round(s), stopped because the solver aimed within 2 km and every planned stop fit; kept round 1 (the best as sailed), where the solver aimed 1.7 km on average (2.9 km at most) from where the patches were met; moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T05 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil",
+    "assignments": {
+      "RAK-FRV-FALCON": [],
+      "RAK-OSRV-SAQR": [
+        "T03",
+        "T02"
+      ],
+      "HAMRIYAH-OSRV-RESERVE": [
+        "T01-2",
+        "T01-1",
+        "T04"
+      ]
+    },
+    "rule_violations": []
+  },
+  "baseline": {
+    "status": "feasible",
+    "message": "baseline: nearest (interception) target first; sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T05 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil",
+    "assignments": {
+      "RAK-FRV-FALCON": [],
+      "RAK-OSRV-SAQR": [
+        "T02",
+        "T03"
+      ],
+      "HAMRIYAH-OSRV-RESERVE": [
+        "T04",
+        "T01-1",
+        "T01-2"
+      ]
+    },
+    "rule_violations": []
+  },
+  "metrics": {
+    "total_oil_m3": 188.7477496607805,
+    "optimized_oil_recovered_m3": 188.35918966078052,
+    "baseline_oil_recovered_m3": 188.46228899872057,
+    "oil_recovered_change_percent": -0.054705553290160476,
+    "optimized_response_hours": 11.824947449286963,
+    "baseline_response_hours": 11.846383468938303,
+    "response_hours_change_percent": -0.18094990515498496,
+    "optimized_distance_km": 191.44851907715622,
+    "baseline_distance_km": 191.44885572154342,
+    "distance_change_percent": -0.00017584037571557584,
+    "optimized_travel_hours": 7.030748769650853,
+    "baseline_travel_hours": 7.030761757474433,
+    "travel_hours_change_percent": -0.00018472854049365214,
+    "optimized_longest_route_hours": 4.920678935793856,
+    "baseline_longest_route_hours": 4.920678935793856,
+    "optimized_targets_covered": 5.0,
+    "baseline_targets_covered": 5.0,
+    "targets_covered_difference": 0.0,
+    "same_targets_covered": 1.0,
+    "optimized_distance_km_per_target": 38.289703815431245,
+    "baseline_distance_km_per_target": 38.28977114430869
+  },
+  "drift": {
+    "simulation_id": "openoil-25.70N-55.40E-20261023T1200Z",
+    "drift_dir": "outputs/sites/S2/drift",
+    "follow": "particle_id",
+    "dispatch_hours": 6,
+    "dispatch_time": "2026-10-23T18:00:00Z",
+    "forecast_steps_hours": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24
+    ],
+    "oil_afloat_at_dispatch_m3": 194.28,
+    "targeted_oil_at_dispatch_m3": 194.28,
+    "untargeted_oil_m3": 0,
+    "cell_deg": 0.03,
+    "tank_basis": "emulsion",
+    "water_fraction_by_hour": {
+      "0": 0.0,
+      "1": 0.085,
+      "2": 0.236,
+      "3": 0.355,
+      "4": 0.441,
+      "5": 0.501,
+      "6": 0.546,
+      "7": 0.577,
+      "8": 0.599,
+      "9": 0.615,
+      "10": 0.624,
+      "11": 0.625,
+      "12": 0.628,
+      "13": 0.635,
+      "14": 0.645,
+      "15": 0.657,
+      "16": 0.668,
+      "17": 0.678,
+      "18": 0.686,
+      "19": 0.692,
+      "20": 0.698,
+      "21": 0.705,
+      "22": 0.712,
+      "23": 0.718,
+      "24": 0.723
+    },
+    "assumptions": [
+      "patches cut into cells at dispatch, then followed by their particle ids",
+      "tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil"
+    ]
+  },
+  "fleet": "gulf_standard",
+  "replan_rounds": 1,
+  "last_patch_cleaned_hours_after_dispatch": {
+    "optimized": 10.77,
+    "baseline": 10.76
+  },
+  "patch_drift_before_meeting_km": {
+    "optimized": {
+      "mean_km": 1.7,
+      "max_km": 2.85
+    },
+    "baseline": {
+      "mean_km": 1.7,
+      "max_km": 3.23
+    }
+  }
+}

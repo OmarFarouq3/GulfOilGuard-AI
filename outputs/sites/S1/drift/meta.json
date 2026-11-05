@@ -1,0 +1,487 @@
+{
+  "simulation_id": "openoil-25.85N-55.65E-20261023T1200Z",
+  "synthetic": true,
+  "note": "SYNTHETIC scenario: the release point and time are agreed test inputs, not a detection result. Weathering depends on an assumed water temperature, salinity and diffusivity (no data for them).",
+  "initial_location": {
+    "latitude": 25.85,
+    "longitude": 55.65
+  },
+  "positions": [
+    {
+      "timestamp": "2026-10-23T12:00:00Z",
+      "coordinate": {
+        "latitude": 25.85006,
+        "longitude": 55.64977
+      }
+    },
+    {
+      "timestamp": "2026-10-23T13:00:00Z",
+      "coordinate": {
+        "latitude": 25.85486,
+        "longitude": 55.66785
+      }
+    },
+    {
+      "timestamp": "2026-10-23T14:00:00Z",
+      "coordinate": {
+        "latitude": 25.85852,
+        "longitude": 55.6859
+      }
+    },
+    {
+      "timestamp": "2026-10-23T15:00:00Z",
+      "coordinate": {
+        "latitude": 25.86011,
+        "longitude": 55.70159
+      }
+    },
+    {
+      "timestamp": "2026-10-23T16:00:00Z",
+      "coordinate": {
+        "latitude": 25.85971,
+        "longitude": 55.71374
+      }
+    },
+    {
+      "timestamp": "2026-10-23T17:00:00Z",
+      "coordinate": {
+        "latitude": 25.85751,
+        "longitude": 55.72194
+      }
+    },
+    {
+      "timestamp": "2026-10-23T18:00:00Z",
+      "coordinate": {
+        "latitude": 25.85433,
+        "longitude": 55.72682
+      }
+    },
+    {
+      "timestamp": "2026-10-23T19:00:00Z",
+      "coordinate": {
+        "latitude": 25.85108,
+        "longitude": 55.72989
+      }
+    },
+    {
+      "timestamp": "2026-10-23T20:00:00Z",
+      "coordinate": {
+        "latitude": 25.84895,
+        "longitude": 55.73262
+      }
+    },
+    {
+      "timestamp": "2026-10-23T21:00:00Z",
+      "coordinate": {
+        "latitude": 25.84891,
+        "longitude": 55.73638
+      }
+    },
+    {
+      "timestamp": "2026-10-23T22:00:00Z",
+      "coordinate": {
+        "latitude": 25.8508,
+        "longitude": 55.74144
+      }
+    },
+    {
+      "timestamp": "2026-10-23T23:00:00Z",
+      "coordinate": {
+        "latitude": 25.85391,
+        "longitude": 55.74696
+      }
+    },
+    {
+      "timestamp": "2026-10-24T00:00:00Z",
+      "coordinate": {
+        "latitude": 25.85796,
+        "longitude": 55.75245
+      }
+    },
+    {
+      "timestamp": "2026-10-24T01:00:00Z",
+      "coordinate": {
+        "latitude": 25.86185,
+        "longitude": 55.75708
+      }
+    },
+    {
+      "timestamp": "2026-10-24T02:00:00Z",
+      "coordinate": {
+        "latitude": 25.86435,
+        "longitude": 55.75964
+      }
+    },
+    {
+      "timestamp": "2026-10-24T03:00:00Z",
+      "coordinate": {
+        "latitude": 25.86478,
+        "longitude": 55.75917
+      }
+    },
+    {
+      "timestamp": "2026-10-24T04:00:00Z",
+      "coordinate": {
+        "latitude": 25.86271,
+        "longitude": 55.7552
+      }
+    },
+    {
+      "timestamp": "2026-10-24T05:00:00Z",
+      "coordinate": {
+        "latitude": 25.85876,
+        "longitude": 55.74821
+      }
+    },
+    {
+      "timestamp": "2026-10-24T06:00:00Z",
+      "coordinate": {
+        "latitude": 25.85383,
+        "longitude": 55.73961
+      }
+    },
+    {
+      "timestamp": "2026-10-24T07:00:00Z",
+      "coordinate": {
+        "latitude": 25.84933,
+        "longitude": 55.73224
+      }
+    },
+    {
+      "timestamp": "2026-10-24T08:00:00Z",
+      "coordinate": {
+        "latitude": 25.84568,
+        "longitude": 55.72856
+      }
+    },
+    {
+      "timestamp": "2026-10-24T09:00:00Z",
+      "coordinate": {
+        "latitude": 25.84407,
+        "longitude": 55.73006
+      }
+    },
+    {
+      "timestamp": "2026-10-24T10:00:00Z",
+      "coordinate": {
+        "latitude": 25.84516,
+        "longitude": 55.73775
+      }
+    },
+    {
+      "timestamp": "2026-10-24T11:00:00Z",
+      "coordinate": {
+        "latitude": 25.84917,
+        "longitude": 55.75119
+      }
+    },
+    {
+      "timestamp": "2026-10-24T12:00:00Z",
+      "coordinate": {
+        "latitude": 25.85557,
+        "longitude": 55.7694
+      }
+    }
+  ],
+  "duration_hours": 24.0,
+  "start_time": "2026-10-23T12:00:00Z",
+  "model": "OpenDrift 1.14.11 OpenOil",
+  "oil_type": "GENERIC MEDIUM CRUDE",
+  "n_particles": 1000,
+  "release_volume_m3": 300.0,
+  "oil_volume_basis": "pure oil (mass / density); recovered emulsion would be larger by 1 / (1 - water_fraction)",
+  "wind_source": "ERA5 hourly 10 m wind (Copernicus Climate Change Service)",
+  "current_source": "Copernicus Marine GLOBAL_ANALYSISFORECAST_PHY_001_024: currents + tide, wave (Stokes) drift",
+  "wind_speed_m_per_s": 3.587,
+  "wind_from_deg": 241.7,
+  "current_speed_m_per_s": 0.21,
+  "current_to_deg": 126.6,
+  "assumptions": {
+    "release": "instantaneous, at the surface, inside a circle of radius 500 m",
+    "vertical_mixing": false,
+    "sea_water_temperature_c": 28.0,
+    "sea_water_salinity_psu": 40.0,
+    "horizontal_diffusivity_m2_per_s": 10.0,
+    "random_seed": 42,
+    "time_step_s": 900,
+    "output_step_s": 3600
+  },
+  "oil_afloat_m3_at_end": 183.57,
+  "summary_by_hour": [
+    {
+      "hours": 0.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 300.0,
+      "centre_east_km": -0.02,
+      "centre_north_km": 0.01,
+      "sd_east_km": 0.49,
+      "sd_north_km": 0.48,
+      "mean_water_fraction": 0.0
+    },
+    {
+      "hours": 1.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 228.3,
+      "centre_east_km": 1.79,
+      "centre_north_km": 0.54,
+      "sd_east_km": 0.55,
+      "sd_north_km": 0.58,
+      "mean_water_fraction": 0.077
+    },
+    {
+      "hours": 2.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 220.15,
+      "centre_east_km": 3.6,
+      "centre_north_km": 0.94,
+      "sd_east_km": 0.62,
+      "sd_north_km": 0.65,
+      "mean_water_fraction": 0.209
+    },
+    {
+      "hours": 3.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 214.04,
+      "centre_east_km": 5.17,
+      "centre_north_km": 1.12,
+      "sd_east_km": 0.67,
+      "sd_north_km": 0.71,
+      "mean_water_fraction": 0.31
+    },
+    {
+      "hours": 4.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 209.67,
+      "centre_east_km": 6.39,
+      "centre_north_km": 1.07,
+      "sd_east_km": 0.71,
+      "sd_north_km": 0.76,
+      "mean_water_fraction": 0.38
+    },
+    {
+      "hours": 5.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 206.52,
+      "centre_east_km": 7.21,
+      "centre_north_km": 0.83,
+      "sd_east_km": 0.75,
+      "sd_north_km": 0.82,
+      "mean_water_fraction": 0.429
+    },
+    {
+      "hours": 6.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 204.05,
+      "centre_east_km": 7.7,
+      "centre_north_km": 0.48,
+      "sd_east_km": 0.8,
+      "sd_north_km": 0.86,
+      "mean_water_fraction": 0.465
+    },
+    {
+      "hours": 7.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 202.12,
+      "centre_east_km": 8.0,
+      "centre_north_km": 0.12,
+      "sd_east_km": 0.84,
+      "sd_north_km": 0.89,
+      "mean_water_fraction": 0.491
+    },
+    {
+      "hours": 8.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 200.57,
+      "centre_east_km": 8.28,
+      "centre_north_km": -0.12,
+      "sd_east_km": 0.91,
+      "sd_north_km": 0.94,
+      "mean_water_fraction": 0.51
+    },
+    {
+      "hours": 9.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 199.28,
+      "centre_east_km": 8.65,
+      "centre_north_km": -0.12,
+      "sd_east_km": 0.93,
+      "sd_north_km": 0.99,
+      "mean_water_fraction": 0.524
+    },
+    {
+      "hours": 10.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 198.3,
+      "centre_east_km": 9.16,
+      "centre_north_km": 0.09,
+      "sd_east_km": 0.97,
+      "sd_north_km": 1.02,
+      "mean_water_fraction": 0.533
+    },
+    {
+      "hours": 11.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 197.71,
+      "centre_east_km": 9.71,
+      "centre_north_km": 0.43,
+      "sd_east_km": 1.01,
+      "sd_north_km": 1.04,
+      "mean_water_fraction": 0.537
+    },
+    {
+      "hours": 12.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 196.94,
+      "centre_east_km": 10.26,
+      "centre_north_km": 0.88,
+      "sd_east_km": 1.06,
+      "sd_north_km": 1.07,
+      "mean_water_fraction": 0.544
+    },
+    {
+      "hours": 13.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 195.88,
+      "centre_east_km": 10.73,
+      "centre_north_km": 1.31,
+      "sd_east_km": 1.1,
+      "sd_north_km": 1.1,
+      "mean_water_fraction": 0.556
+    },
+    {
+      "hours": 14.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 194.63,
+      "centre_east_km": 10.98,
+      "centre_north_km": 1.59,
+      "sd_east_km": 1.13,
+      "sd_north_km": 1.13,
+      "mean_water_fraction": 0.571
+    },
+    {
+      "hours": 15.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 193.37,
+      "centre_east_km": 10.94,
+      "centre_north_km": 1.63,
+      "sd_east_km": 1.18,
+      "sd_north_km": 1.17,
+      "mean_water_fraction": 0.586
+    },
+    {
+      "hours": 16.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 192.2,
+      "centre_east_km": 10.54,
+      "centre_north_km": 1.4,
+      "sd_east_km": 1.21,
+      "sd_north_km": 1.21,
+      "mean_water_fraction": 0.599
+    },
+    {
+      "hours": 17.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 191.12,
+      "centre_east_km": 9.84,
+      "centre_north_km": 0.97,
+      "sd_east_km": 1.27,
+      "sd_north_km": 1.24,
+      "mean_water_fraction": 0.611
+    },
+    {
+      "hours": 18.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 190.13,
+      "centre_east_km": 8.98,
+      "centre_north_km": 0.42,
+      "sd_east_km": 1.33,
+      "sd_north_km": 1.26,
+      "mean_water_fraction": 0.621
+    },
+    {
+      "hours": 19.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 189.15,
+      "centre_east_km": 8.24,
+      "centre_north_km": -0.07,
+      "sd_east_km": 1.39,
+      "sd_north_km": 1.3,
+      "mean_water_fraction": 0.631
+    },
+    {
+      "hours": 20.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 188.12,
+      "centre_east_km": 7.87,
+      "centre_north_km": -0.48,
+      "sd_east_km": 1.44,
+      "sd_north_km": 1.36,
+      "mean_water_fraction": 0.643
+    },
+    {
+      "hours": 21.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 187.0,
+      "centre_east_km": 8.02,
+      "centre_north_km": -0.65,
+      "sd_east_km": 1.49,
+      "sd_north_km": 1.41,
+      "mean_water_fraction": 0.656
+    },
+    {
+      "hours": 22.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 185.84,
+      "centre_east_km": 8.79,
+      "centre_north_km": -0.53,
+      "sd_east_km": 1.57,
+      "sd_north_km": 1.46,
+      "mean_water_fraction": 0.67
+    },
+    {
+      "hours": 23.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 184.73,
+      "centre_east_km": 10.14,
+      "centre_north_km": -0.09,
+      "sd_east_km": 1.63,
+      "sd_north_km": 1.52,
+      "mean_water_fraction": 0.683
+    },
+    {
+      "hours": 24.0,
+      "active": 1000,
+      "stranded_or_other": 0,
+      "oil_afloat_m3": 183.57,
+      "centre_east_km": 11.96,
+      "centre_north_km": 0.62,
+      "sd_east_km": 1.67,
+      "sd_north_km": 1.58,
+      "mean_water_fraction": 0.695
+    }
+  ]
+}

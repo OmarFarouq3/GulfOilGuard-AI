@@ -1,0 +1,13 @@
+{
+  "status": "feasible",
+  "message": "baseline: nearest (interception) target first; sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T05 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil",
+  "synthetic": true,
+  "scenario_id": "openoil-25.70N-55.40E-20261023T1200Z@dispatch6h",
+  "idle_vessel_ids": [
+    "RAK-FRV-FALCON"
+  ],
+  "unserved_target_ids": [
+    "T05"
+  ],
+  "source_hours": 10
+}

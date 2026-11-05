@@ -1,0 +1,15 @@
+{
+  "fingerprint": {
+    "image": "C:\\Users\\obeid\\Documents\\UOS\\Hack for Earth Competition\\GulfOilGuard-AI\\assets\\images\\val\\sentinel_552.png",
+    "image_mtime": 1793647629.0235271,
+    "checkpoint": "C:\\Users\\obeid\\Documents\\UOS\\Hack for Earth Competition\\GulfOilGuard-AI\\checkpoints\\unet_best.pth",
+    "checkpoint_mtime": 1793651112.545464
+  },
+  "info": {
+    "threshold": 0.5,
+    "image_size": 256,
+    "epoch": 12,
+    "oil_fraction": 0.251434326171875,
+    "checkpoint": "unet_best.pth"
+  }
+}

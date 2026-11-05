@@ -1,0 +1,1040 @@
+{
+  "checks": [
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "meta.json is labelled synthetic (release point is a test point)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "meta.json gives the release point (openoil-25.85N-55.65E-20261023T1200Z)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "simulation id openoil-25.85N-55.65E-20261023T1200Z names the release point given in meta.json (25.85 N, 55.65 E)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "simulation id openoil-25.85N-55.65E-20261023T1200Z names the start time given in meta.json (2026-10-23T12:00:00Z)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "the particles at 0 h are centred 24 m from the release point (they were released there, not moved from another run)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "release point 25.85 N, 55.65 E is the site's (25.85 N, 55.65 E, 0 m apart)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "forecast steps 0, 6, 12, 24 h present (25 steps, 0 to 24 h)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "every particle appears once per step (no oil counted twice)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "all 1000 released particles accounted for at every step (any status)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "timestamps equal start_time 2026-10-23T12:00:00Z + hours"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "oil afloat per step in drift.geojson equals meta.json summary_by_hour"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "oil afloat only goes down (300.0 -> 183.6 m3)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "oil afloat at 0 h (300.0) equals release_volume_m3 (300)"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "particles not afloat per step in drift.geojson equal meta.json stranded_or_other"
+    },
+    {
+      "group": "A drift",
+      "level": "OK",
+      "text": "no oil stranded on the coast during the forecast"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "tank basis of the plan: emulsion"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "the plan was made from this drift run (comparison.json: openoil-25.85N-55.65E-20261023T1200Z, meta.json: openoil-25.85N-55.65E-20261023T1200Z)"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "patches follow the oil by particle id (follow = particle_id)"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at dispatch (6 h): targeted 204.05 + untargeted 0.00 = afloat 204.05 m3 (each particle in one patch only)"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "100.0% of the oil afloat at dispatch is in a target"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T01 is split into 2 parts (it would fill more than the largest tank, 300 m3, as emulsion at some step) that move together, 73.6 m3 oil each at dispatch"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "targets.geojson holds 7 target(s)"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "targets.geojson has the same 7 target ids as the patches rebuilt from drift.geojson"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T01-1: 71.94 m3 at 8.8 h, 25.8459 N 55.7347 E matches the drift (off by 2 m, 0.002 m3); served by HAMRIYAH-OSRV-RESERVE"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T01-2: 72.68 m3 at 7.33 h, 25.8474 N 55.7300 E matches the drift (off by 0 m, 0.001 m3); served by RAK-OSRV-SAQR"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T02: 42.49 m3 at 12.23 h, 25.8688 N 55.7569 E matches the drift (off by 2 m, 0.001 m3); served by RAK-OSRV-SAQR"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T03: 5.41 m3 at 8.05 h, 25.8498 N 55.7489 E matches the drift (off by 2 m, 0.000 m3); served by HAMRIYAH-OSRV-RESERVE"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T04: 4.09 m3 at 13.92 h, 25.8532 N 55.7348 E matches the drift (off by 1 m, 0.000 m3); served by HAMRIYAH-OSRV-RESERVE"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T05: 2.60 m3 at 8.5 h, 25.8605 N 55.7529 E matches the drift (off by 0 m, 0.000 m3); served by HAMRIYAH-OSRV-RESERVE"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "T06: 0.41 m3 at 6 h, 25.8699 N 55.7087 E matches the drift (off by 0 m, 0.000 m3); served by None"
+    },
+    {
+      "group": "B targets",
+      "level": "WARN",
+      "text": "patch size where it is met: 90 % of a patch's oil lies within 0.1 to 2.4 km of the point the vessel aims at; 3 patch(es) wider than 1.5 km, so 'one skimming position' is an assumption"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 6 h all targets hold 204.0 m3 <= 204.0 m3 afloat"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 7 h all targets hold 202.1 m3 <= 202.1 m3 afloat"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 8 h all targets hold 200.6 m3 <= 200.6 m3 afloat"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 9 h all targets hold 199.3 m3 <= 199.3 m3 afloat"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 12 h all targets hold 196.9 m3 <= 196.9 m3 afloat"
+    },
+    {
+      "group": "B targets",
+      "level": "OK",
+      "text": "at 14 h all targets hold 194.6 m3 <= 194.6 m3 afloat"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON is based at port_saqr_rak (0 m from its point in GULF_DEPOTS)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: the router used its port as given (not moved off land)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: 22.0 kn transit, 60 m3 tank, 10 h shift"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR is based at port_saqr_rak (0 m from its point in GULF_DEPOTS)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: the router used its port as given (not moved off land)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: 15.0 kn transit, 250 m3 tank, 16 h shift"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE is based at hamriyah_sharjah (0 m from its point in GULF_DEPOTS)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: the router used its port as given (not moved off land)"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: 14.0 kn transit, 300 m3 tank, 20 h shift"
+    },
+    {
+      "group": "C fleet",
+      "level": "OK",
+      "text": "fleet includes Port Saqr and Hamriyah vessels"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: starts and ends at its home port, 2 stop(s) ['T01-2', 'T02']"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: recovers 115.2 m3 pure oil (oil_collected_m3 115.2)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T01-2: emulsion 144.57 m3 = 72.68 m3 oil / (1 - 0.497 water) at 7.33 h (rechecked 144.57 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T02: emulsion 93.73 m3 = 42.49 m3 oil / (1 - 0.547 water) at 12.23 h (rechecked 93.74 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: emulsion_collected_m3 238.3 equals its targets' emulsion (rechecked 238.3 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: tank 238.3 m3 emulsion of 250 m3 (95%)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: cleanup 7.94 h = 238.3 m3 emulsion / 30 m3/h"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: sailing 2.56 h = 71.1 km / 15.0 kn (rechecked 2.56 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: 71.1 km is between the straight line through its stops (68.4 km) and its drawn sea path (77.4 km)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: finish_hours 10.50 h = sailing 2.56 h + cleanup 7.94 h (rechecked 10.50 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: finishes in 10.50 h of a 16 h shift (71.1 km, trip back to port included)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: meetings in order, 7.33, 12.23 h after release; first after dispatch (6 h), each after the previous stop is cleaned, last cleaned at 15.35 h, before the vessel is back (16.50 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: starts and ends at its home port, 4 stop(s) ['T03', 'T05', 'T01-1', 'T04']"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: recovers 84.0 m3 pure oil (oil_collected_m3 84.0)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T03: emulsion 11.06 m3 = 5.41 m3 oil / (1 - 0.511 water) at 8.05 h (rechecked 11.06 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T05: emulsion 5.38 m3 = 2.60 m3 oil / (1 - 0.517 water) at 8.5 h (rechecked 5.38 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T01-1: emulsion 150.22 m3 = 71.94 m3 oil / (1 - 0.521 water) at 8.8 h (rechecked 150.24 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "T04: emulsion 9.51 m3 = 4.09 m3 oil / (1 - 0.570 water) at 13.92 h (rechecked 9.51 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: emulsion_collected_m3 176.2 equals its targets' emulsion (rechecked 176.2 m3)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: tank 176.2 m3 emulsion of 300 m3 (59%)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: cleanup 5.87 h = 176.2 m3 emulsion / 30 m3/h"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: sailing 4.38 h = 113.5 km / 14.0 kn (rechecked 4.38 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: 113.5 km is between the straight line through its stops (102.9 km) and its drawn sea path (118.0 km)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: finish_hours 10.25 h = sailing 4.38 h + cleanup 5.87 h (rechecked 10.25 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: finishes in 10.25 h of a 20 h shift (113.5 km, trip back to port included)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: meetings in order, 8.05, 8.5, 8.8, 13.92 h after release; first after dispatch (6 h), each after the previous stop is cleaned, last cleaned at 14.24 h, before the vessel is back (16.25 h)"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "every target is in a route or listed unserved (not in a route: ['T06']; summary.json unserved: ['T06'])"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "targets in no route have no served_by"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "WARN",
+      "text": "unserved targets: ['T06'] (0.4 m3). unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip))"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "every vessel either has a route or is listed idle (idle: ['RAK-FRV-FALCON'])"
+    },
+    {
+      "group": "D routes (optimized)",
+      "level": "OK",
+      "text": "every meeting is inside the forecast window"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: starts and ends at its home port, 3 stop(s) ['T05', 'T03', 'T04']"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: recovers 12.3 m3 pure oil (oil_collected_m3 12.3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T05: emulsion 5.13 m3 = 2.63 m3 oil / (1 - 0.487 water) at 6.83 h (rechecked 5.13 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T03: emulsion 10.74 m3 = 5.45 m3 oil / (1 - 0.492 water) at 7.06 h (rechecked 10.74 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T04: emulsion 8.47 m3 = 4.23 m3 oil / (1 - 0.501 water) at 7.51 h (rechecked 8.47 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: emulsion_collected_m3 24.3 equals its targets' emulsion (rechecked 24.3 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: tank 24.3 m3 emulsion of 60 m3 (41%)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: cleanup 0.81 h = 24.3 m3 emulsion / 30 m3/h"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: sailing 1.94 h = 79.1 km / 22.0 kn (rechecked 1.94 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: 79.1 km is between the straight line through its stops (73.2 km) and its drawn sea path (85.2 km)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: finish_hours 2.75 h = sailing 1.94 h + cleanup 0.81 h (rechecked 2.75 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: finishes in 2.75 h of a 10 h shift (79.1 km, trip back to port included)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-FRV-FALCON: meetings in order, 6.83, 7.06, 7.51 h after release; first after dispatch (6 h), each after the previous stop is cleaned, last cleaned at 7.79 h, before the vessel is back (8.75 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: starts and ends at its home port, 2 stop(s) ['T02', 'T01-1']"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: recovers 115.0 m3 pure oil (oil_collected_m3 115.0)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T02: emulsion 86.53 m3 = 43.56 m3 oil / (1 - 0.497 water) at 7.29 h (rechecked 86.52 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T01-1: emulsion 153.30 m3 = 71.43 m3 oil / (1 - 0.534 water) at 10.26 h (rechecked 153.30 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: emulsion_collected_m3 239.8 equals its targets' emulsion (rechecked 239.8 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: tank 239.8 m3 emulsion of 250 m3 (96%)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: cleanup 7.99 h = 239.8 m3 emulsion / 30 m3/h"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: sailing 2.59 h = 72.1 km / 15.0 kn (rechecked 2.59 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: 72.1 km is between the straight line through its stops (67.9 km) and its drawn sea path (79.2 km)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: finish_hours 10.59 h = sailing 2.59 h + cleanup 7.99 h (rechecked 10.59 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: finishes in 10.59 h of a 16 h shift (72.1 km, trip back to port included)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "RAK-OSRV-SAQR: meetings in order, 7.29, 10.26 h after release; first after dispatch (6 h), each after the previous stop is cleaned, last cleaned at 15.37 h, before the vessel is back (16.59 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: starts and ends at its home port, 1 stop(s) ['T01-2']"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: recovers 72.3 m3 pure oil (oil_collected_m3 72.3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "T01-2: emulsion 147.61 m3 = 72.30 m3 oil / (1 - 0.510 water) at 8.02 h (rechecked 147.63 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: emulsion_collected_m3 147.6 equals its targets' emulsion (rechecked 147.6 m3)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: tank 147.6 m3 emulsion of 300 m3 (49%)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: cleanup 4.92 h = 147.6 m3 emulsion / 30 m3/h"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: sailing 4.06 h = 105.3 km / 14.0 kn (rechecked 4.06 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: 105.3 km is between the straight line through its stops (96.3 km) and its drawn sea path (108.0 km)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: finish_hours 8.98 h = sailing 4.06 h + cleanup 4.92 h (rechecked 8.98 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: finishes in 8.98 h of a 20 h shift (105.3 km, trip back to port included)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "HAMRIYAH-OSRV-RESERVE: meetings in order, 8.02 h after release; first after dispatch (6 h), each after the previous stop is cleaned, last cleaned at 12.94 h, before the vessel is back (14.98 h)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "every target is in a route or listed unserved (not in a route: ['T06']; summary.json unserved: ['T06'])"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "targets in no route have no served_by"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "WARN",
+      "text": "unserved targets: ['T06'] (0.4 m3). unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip))"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "every vessel either has a route or is listed idle (idle: none)"
+    },
+    {
+      "group": "D routes (baseline)",
+      "level": "OK",
+      "text": "every meeting is inside the forecast window"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "optimized: comparison.json lists no rule violations"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "baseline: comparison.json lists no rule violations"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "all 21 metrics in comparison.json recalculated from the route and target files and equal"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "oil in all targets: 199.6 m3 (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "oil recovered: optimized 199.21 m3 vs baseline 199.61 m3, -0.2 % (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "response time, last vessel back in port: optimized 10.50 h vs baseline 10.59 h, -0.8 % (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "distance: optimized 184.58 km vs baseline 256.48 km, -28.0 % (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "sailing time, all vessels: optimized 6.94 h vs baseline 8.60 h, -19.3 % (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "longest single route: optimized 4.38 h vs baseline 4.06 h (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "targets covered: optimized 6 vs baseline 6 (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "distance per target: optimized 30.76 km vs baseline 42.75 km (recalculated)"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "same targets covered by both plans"
+    },
+    {
+      "group": "E comparison",
+      "level": "OK",
+      "text": "the optimized plan cleans at least as much oil as the baseline (199.2 vs 199.6 m3)"
+    }
+  ],
+  "counts": {
+    "OK": 129,
+    "WARN": 3,
+    "FAIL": 0
+  },
+  "drift_dir": "outputs/sites/S1/drift",
+  "routing_dir": "outputs/sites/S1/routing",
+  "fleet": "outputs/fleet/gulf_standard.json",
+  "simulation_id": "openoil-25.85N-55.65E-20261023T1200Z",
+  "release": {
+    "latitude": 25.85,
+    "longitude": 55.65
+  },
+  "targets": {
+    "dispatch_hours": 6.0,
+    "follow": "particle_id",
+    "oil_afloat_at_dispatch_m3": 204.048,
+    "targeted_m3": 204.048,
+    "untargeted_m3": 0,
+    "targets": [
+      {
+        "target_id": "T01-1",
+        "oil_m3": 71.93569076124135,
+        "dispatch_m3": 73.559304,
+        "position_hours": 8.8,
+        "meet_hours": 8.8,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "drifted_km": 1.04,
+        "particles": 721,
+        "spread90_km": 1.71,
+        "lat": 25.845871719637227,
+        "lon": 55.73468607479683
+      },
+      {
+        "target_id": "T01-2",
+        "oil_m3": 72.68127139726299,
+        "dispatch_m3": 73.559304,
+        "position_hours": 7.33,
+        "meet_hours": 7.33,
+        "served_by": "RAK-OSRV-SAQR",
+        "drifted_km": 0.58,
+        "particles": 721,
+        "spread90_km": 1.45,
+        "lat": 25.847356897661243,
+        "lon": 55.73001803896124
+      },
+      {
+        "target_id": "T02",
+        "oil_m3": 42.486860270473464,
+        "dispatch_m3": 44.074368,
+        "position_hours": 12.23,
+        "meet_hours": 12.23,
+        "served_by": "RAK-OSRV-SAQR",
+        "drifted_km": 2.94,
+        "particles": 216,
+        "spread90_km": 1.93,
+        "lat": 25.86876434882165,
+        "lon": 55.7568913883102
+      },
+      {
+        "target_id": "T03",
+        "oil_m3": 5.413794022836441,
+        "dispatch_m3": 5.509296,
+        "position_hours": 8.05,
+        "meet_hours": 8.05,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "drifted_km": 0.74,
+        "particles": 27,
+        "spread90_km": 1.11,
+        "lat": 25.8497794597874,
+        "lon": 55.74894836210193
+      },
+      {
+        "target_id": "T04",
+        "oil_m3": 4.089478465926155,
+        "dispatch_m3": 4.285008,
+        "position_hours": 13.92,
+        "meet_hours": 13.92,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "drifted_km": 2.91,
+        "particles": 21,
+        "spread90_km": 2.44,
+        "lat": 25.85324336413822,
+        "lon": 55.73478077330762
+      },
+      {
+        "target_id": "T05",
+        "oil_m3": 2.599018481802001,
+        "dispatch_m3": 2.6526240000000003,
+        "position_hours": 8.5,
+        "meet_hours": 8.5,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "drifted_km": 1.02,
+        "particles": 13,
+        "spread90_km": 1.01,
+        "lat": 25.860523659168337,
+        "lon": 55.752856382213174
+      },
+      {
+        "target_id": "T06",
+        "oil_m3": 0.408096,
+        "dispatch_m3": 0.408096,
+        "position_hours": 6,
+        "meet_hours": null,
+        "served_by": null,
+        "drifted_km": 0.0,
+        "particles": 2,
+        "spread90_km": 0.11,
+        "lat": 25.869905,
+        "lon": 55.70872
+      }
+    ]
+  },
+  "fleet_rows": [
+    {
+      "vessel_id": "RAK-FRV-FALCON",
+      "depot": "port_saqr_rak",
+      "knots": 22.0,
+      "capacity_m3": 60.0,
+      "available_hours": 10.0,
+      "straight_km_to_release": 41.3
+    },
+    {
+      "vessel_id": "RAK-OSRV-SAQR",
+      "depot": "port_saqr_rak",
+      "knots": 15.0,
+      "capacity_m3": 250.0,
+      "available_hours": 16.0,
+      "straight_km_to_release": 41.3
+    },
+    {
+      "vessel_id": "HAMRIYAH-OSRV-RESERVE",
+      "depot": "hamriyah_sharjah",
+      "knots": 14.0,
+      "capacity_m3": 300.0,
+      "available_hours": 20.0,
+      "straight_km_to_release": 44.8
+    }
+  ],
+  "optimized": {
+    "routes": [
+      {
+        "vessel_id": "RAK-OSRV-SAQR",
+        "targets": [
+          "T01-2",
+          "T02"
+        ],
+        "oil_m3": 115.17,
+        "emulsion_m3": 238.3,
+        "capacity_m3": 250.0,
+        "distance_km": 71.1,
+        "travel_hours": 2.56,
+        "cleanup_hours": 7.94,
+        "finish_hours": 10.5,
+        "available_hours": 16.0,
+        "_exact": {
+          "oil": 115.16813166773645,
+          "km": 71.09210835671091,
+          "sailing": 2.55800620166634,
+          "finish": 10.501789136585248
+        }
+      },
+      {
+        "vessel_id": "HAMRIYAH-OSRV-RESERVE",
+        "targets": [
+          "T03",
+          "T05",
+          "T01-1",
+          "T04"
+        ],
+        "oil_m3": 84.04,
+        "emulsion_m3": 176.2,
+        "capacity_m3": 300.0,
+        "distance_km": 113.5,
+        "travel_hours": 4.38,
+        "cleanup_hours": 5.87,
+        "finish_hours": 10.25,
+        "available_hours": 20.0,
+        "_exact": {
+          "oil": 84.03798173180594,
+          "km": 113.49180321228579,
+          "sailing": 4.3785417905974455,
+          "finish": 10.25164099867489
+        }
+      }
+    ],
+    "unserved": [
+      "T06"
+    ],
+    "unserved_m3": 0.408096,
+    "idle": [
+      "RAK-FRV-FALCON"
+    ],
+    "status": "feasible",
+    "message": "sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); planned 2 round(s), stopped because the solver aimed within 2 km and every planned stop fit; kept round 1 (the best as sailed), where the solver aimed 1.5 km on average (2.9 km at most) from where the patches were met; moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil",
+    "total_oil_m3": 199.6142093995424
+  },
+  "baseline": {
+    "routes": [
+      {
+        "vessel_id": "RAK-FRV-FALCON",
+        "targets": [
+          "T05",
+          "T03",
+          "T04"
+        ],
+        "oil_m3": 12.31,
+        "emulsion_m3": 24.3,
+        "capacity_m3": 60.0,
+        "distance_km": 79.1,
+        "travel_hours": 1.94,
+        "cleanup_hours": 0.81,
+        "finish_hours": 2.75,
+        "available_hours": 10.0,
+        "_exact": {
+          "oil": 12.31446641905875,
+          "km": 79.09285751447734,
+          "sailing": 1.9408337631153647,
+          "finish": 2.7519734012740167
+        }
+      },
+      {
+        "vessel_id": "RAK-OSRV-SAQR",
+        "targets": [
+          "T02",
+          "T01-1"
+        ],
+        "oil_m3": 114.99,
+        "emulsion_m3": 239.8,
+        "capacity_m3": 250.0,
+        "distance_km": 72.1,
+        "travel_hours": 2.59,
+        "cleanup_hours": 7.99,
+        "finish_hours": 10.59,
+        "available_hours": 16.0,
+        "_exact": {
+          "oil": 114.99403423665564,
+          "km": 72.09835859594806,
+          "sailing": 2.5942126725657766,
+          "finish": 10.588251134446145
+        }
+      },
+      {
+        "vessel_id": "HAMRIYAH-OSRV-RESERVE",
+        "targets": [
+          "T01-2"
+        ],
+        "oil_m3": 72.3,
+        "emulsion_m3": 147.6,
+        "capacity_m3": 300.0,
+        "distance_km": 105.3,
+        "travel_hours": 4.06,
+        "cleanup_hours": 4.92,
+        "finish_hours": 8.98,
+        "available_hours": 20.0,
+        "_exact": {
+          "oil": 72.29800876326013,
+          "km": 105.2844035159224,
+          "sailing": 4.061898283793303,
+          "finish": 8.982942197544027
+        }
+      }
+    ],
+    "unserved": [
+      "T06"
+    ],
+    "unserved_m3": 0.408096,
+    "idle": [],
+    "status": "feasible",
+    "message": "baseline: nearest (interception) target first; sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil",
+    "total_oil_m3": 200.0146054189745
+  },
+  "metrics": {
+    "reported": {
+      "total_oil_m3": 199.6142093995424,
+      "optimized_oil_recovered_m3": 199.2061133995424,
+      "baseline_oil_recovered_m3": 199.6065094189745,
+      "oil_recovered_change_percent": -0.20059266634018524,
+      "optimized_response_hours": 10.501375522148786,
+      "baseline_response_hours": 10.588465793319177,
+      "response_hours_change_percent": -0.8225013223855413,
+      "optimized_distance_km": 184.5839115689967,
+      "baseline_distance_km": 256.4756196263478,
+      "distance_change_percent": -28.030620673453527,
+      "optimized_travel_hours": 6.936547992263785,
+      "baseline_travel_hours": 8.596944719474443,
+      "travel_hours_change_percent": -19.313800209153413,
+      "optimized_longest_route_hours": 4.3785417905974455,
+      "baseline_longest_route_hours": 4.061898283793303,
+      "optimized_targets_covered": 6.0,
+      "baseline_targets_covered": 6.0,
+      "targets_covered_difference": 0.0,
+      "same_targets_covered": 1.0,
+      "optimized_distance_km_per_target": 30.763985261499453,
+      "baseline_distance_km_per_target": 42.7459366043913
+    },
+    "recalculated": {
+      "optimized_oil_recovered_m3": 199.2061133995424,
+      "optimized_response_hours": 10.501789136585248,
+      "optimized_distance_km": 184.5839115689967,
+      "optimized_travel_hours": 6.936547992263785,
+      "optimized_longest_route_hours": 4.3785417905974455,
+      "optimized_targets_covered": 6,
+      "optimized_distance_km_per_target": 30.763985261499453,
+      "baseline_oil_recovered_m3": 199.60650941897453,
+      "baseline_response_hours": 10.588251134446145,
+      "baseline_distance_km": 256.4756196263478,
+      "baseline_travel_hours": 8.596944719474443,
+      "baseline_longest_route_hours": 4.061898283793303,
+      "baseline_targets_covered": 6,
+      "baseline_distance_km_per_target": 42.7459366043913,
+      "oil_recovered_change_percent": -0.20059266634019943,
+      "response_hours_change_percent": -0.8165843137174394,
+      "distance_change_percent": -28.030620673453527,
+      "travel_hours_change_percent": -19.313800209153413,
+      "targets_covered_difference": 0,
+      "same_targets_covered": 1.0,
+      "total_oil_m3": 199.6142093995424
+    }
+  },
+  "afloat_by_hour": {
+    "0.0": 300.0,
+    "1.0": 228.298,
+    "2.0": 220.151,
+    "3.0": 214.038,
+    "4.0": 209.673,
+    "5.0": 206.518,
+    "6.0": 204.048,
+    "7.0": 202.123,
+    "8.0": 200.57,
+    "9.0": 199.28,
+    "10.0": 198.304,
+    "11.0": 197.713,
+    "12.0": 196.94,
+    "13.0": 195.879,
+    "14.0": 194.635,
+    "15.0": 193.375,
+    "16.0": 192.2,
+    "17.0": 191.12,
+    "18.0": 190.134,
+    "19.0": 189.154,
+    "20.0": 188.123,
+    "21.0": 187.001,
+    "22.0": 185.843,
+    "23.0": 184.729,
+    "24.0": 183.575
+  },
+  "stranded_by_hour": {},
+  "water_fraction_by_hour": {
+    "0.0": 0.0,
+    "1.0": 0.077,
+    "2.0": 0.209,
+    "3.0": 0.31,
+    "4.0": 0.38,
+    "5.0": 0.429,
+    "6.0": 0.465,
+    "7.0": 0.491,
+    "8.0": 0.51,
+    "9.0": 0.524,
+    "10.0": 0.533,
+    "11.0": 0.537,
+    "12.0": 0.544,
+    "13.0": 0.556,
+    "14.0": 0.571,
+    "15.0": 0.586,
+    "16.0": 0.599,
+    "17.0": 0.611,
+    "18.0": 0.621,
+    "19.0": 0.631,
+    "20.0": 0.643,
+    "21.0": 0.656,
+    "22.0": 0.67,
+    "23.0": 0.683,
+    "24.0": 0.695
+  },
+  "tank_basis": "emulsion"
+}

@@ -271,7 +271,13 @@ __MACOSX/
 # runs/ also holds the dashboard's live Run detection results (runs/dashboard/, config.LIVE_DETECTION_DIR)
 runs/
 logs/
-outputs/
+# outputs/ is tracked (real S1-S4 results); only backups, incoming copies and temporary files stay out.
+outputs/_backup*/
+outputs/_incoming/
+outputs/**/*.bak
+outputs/**/*_backup*
+outputs/**/*_old*
+outputs/**/tmp*/
 wandb/
 lightning_logs/
 

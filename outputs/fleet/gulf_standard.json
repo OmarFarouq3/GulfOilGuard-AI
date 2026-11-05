@@ -1,0 +1,123 @@
+{
+  "scenario_name": "gulf_standard",
+  "vessels": [
+    {
+      "vessel_id": "RAK-FRV-FALCON",
+      "location": {
+        "latitude": 25.985,
+        "longitude": 56.035
+      },
+      "speed_m_per_s": 11.32,
+      "capacity_m3": 60.0,
+      "available_hours": 10.0
+    },
+    {
+      "vessel_id": "RAK-OSRV-SAQR",
+      "location": {
+        "latitude": 25.985,
+        "longitude": 56.035
+      },
+      "speed_m_per_s": 7.72,
+      "capacity_m3": 250.0,
+      "available_hours": 16.0
+    },
+    {
+      "vessel_id": "HAMRIYAH-OSRV-RESERVE",
+      "location": {
+        "latitude": 25.4773,
+        "longitude": 55.4798
+      },
+      "speed_m_per_s": 7.2,
+      "capacity_m3": 300.0,
+      "available_hours": 20.0
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "RAK-SPILL-01",
+      "location": {
+        "latitude": 25.84,
+        "longitude": 55.82
+      },
+      "oil_volume_m3": 45.0
+    },
+    {
+      "target_id": "RAK-SPILL-02",
+      "location": {
+        "latitude": 25.87,
+        "longitude": 55.85
+      },
+      "oil_volume_m3": 30.0
+    },
+    {
+      "target_id": "RAK-SPILL-03",
+      "location": {
+        "latitude": 25.9,
+        "longitude": 55.83
+      },
+      "oil_volume_m3": 55.0
+    },
+    {
+      "target_id": "RAK-SPILL-04",
+      "location": {
+        "latitude": 25.93,
+        "longitude": 55.88
+      },
+      "oil_volume_m3": 25.0
+    },
+    {
+      "target_id": "RAK-SPILL-05",
+      "location": {
+        "latitude": 25.95,
+        "longitude": 55.84
+      },
+      "oil_volume_m3": 60.0
+    },
+    {
+      "target_id": "RAK-SPILL-06",
+      "location": {
+        "latitude": 25.98,
+        "longitude": 55.91
+      },
+      "oil_volume_m3": 40.0
+    },
+    {
+      "target_id": "RAK-SPILL-07",
+      "location": {
+        "latitude": 26.0,
+        "longitude": 55.87
+      },
+      "oil_volume_m3": 35.0
+    },
+    {
+      "target_id": "RAK-SPILL-08",
+      "location": {
+        "latitude": 26.03,
+        "longitude": 55.93
+      },
+      "oil_volume_m3": 50.0
+    },
+    {
+      "target_id": "RAK-SPILL-09",
+      "location": {
+        "latitude": 26.05,
+        "longitude": 55.9
+      },
+      "oil_volume_m3": 70.0
+    },
+    {
+      "target_id": "RAK-SPILL-10",
+      "location": {
+        "latitude": 26.08,
+        "longitude": 55.96
+      },
+      "oil_volume_m3": 40.0
+    }
+  ],
+  "summary": {
+    "num_vessels": 3,
+    "total_fleet_capacity_m3": 610.0,
+    "num_targets": 10,
+    "total_oil_volume_m3": 450.0
+  }
+}

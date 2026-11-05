@@ -1,0 +1,137 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.486874424789384,
+          25.69583268785547
+        ]
+      },
+      "properties": {
+        "target_id": "T01-1",
+        "oil_volume_m3": 52.454772854549375,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 129.52841619513018,
+        "water_fraction": 0.5950327009671141,
+        "source_hours": 10,
+        "meet_hours": 7.82,
+        "meet_time": "2026-10-23T19:49:00Z",
+        "drifted_km": 0.99,
+        "position_hours": 7.82
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.50620338838833,
+          25.70213242200276
+        ]
+      },
+      "properties": {
+        "target_id": "T01-2",
+        "oil_volume_m3": 51.42736309219338,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 138.60364970933315,
+        "water_fraction": 0.6289609746926424,
+        "source_hours": 10,
+        "meet_hours": 12.14,
+        "meet_time": "2026-10-24T00:08:00Z",
+        "drifted_km": 2.5,
+        "position_hours": 12.14
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.48916554048977,
+          25.706994621396756
+        ]
+      },
+      "properties": {
+        "target_id": "T02",
+        "oil_volume_m3": 64.41318610684974,
+        "served_by": "RAK-OSRV-SAQR",
+        "emulsion_m3": 163.51631661521358,
+        "water_fraction": 0.6060748710575057,
+        "source_hours": 10,
+        "meet_hours": 8.44,
+        "meet_time": "2026-10-23T20:27:00Z",
+        "drifted_km": 1.25,
+        "position_hours": 8.44
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.498302747379924,
+          25.71941755052505
+        ]
+      },
+      "properties": {
+        "target_id": "T03",
+        "oil_volume_m3": 9.991426964076496,
+        "served_by": "RAK-OSRV-SAQR",
+        "emulsion_m3": 28.117001920641197,
+        "water_fraction": 0.6446482099237754,
+        "source_hours": 10,
+        "meet_hours": 13.96,
+        "meet_time": "2026-10-24T01:58:00Z",
+        "drifted_km": 3.23,
+        "position_hours": 13.96
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.468625894815965,
+          25.698704581064604
+        ]
+      },
+      "properties": {
+        "target_id": "T04",
+        "oil_volume_m3": 10.175539981051571,
+        "served_by": "HAMRIYAH-OSRV-RESERVE",
+        "emulsion_m3": 23.95695351326841,
+        "water_fraction": 0.5752573474997181,
+        "source_hours": 10,
+        "meet_hours": 6.94,
+        "meet_time": "2026-10-23T18:57:00Z",
+        "drifted_km": 0.52,
+        "position_hours": 6.94
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          55.505199999999995,
+          25.705465
+        ]
+      },
+      "properties": {
+        "target_id": "T05",
+        "oil_volume_m3": 0.38856,
+        "served_by": null,
+        "emulsion_m3": 0.8558590308370045,
+        "water_fraction": 0.546,
+        "source_hours": 10,
+        "meet_hours": null,
+        "meet_time": null,
+        "drifted_km": 0.0,
+        "position_hours": 6
+      }
+    }
+  ]
+}

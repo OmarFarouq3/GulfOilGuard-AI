@@ -1,0 +1,40 @@
+Drift forecast: openoil-25.45N-55.35E-20261023T1200Z  (SYNTHETIC)
+  25 steps from 0 to 24 h; vessels leave at 6 h
+  patches cut into cells at dispatch, then followed by their particle ids
+  oil afloat at dispatch 200.3 m3 -> 7 moving targets holding 200.3 m3 (0.0 m3 in small patches not targeted)
+  assumption: tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  emulsion: water fraction 50% at dispatch, 68% at 24 h, so 1 m3 of oil fills 2.00 to 3.14 m3 of tank
+Fleet: gulf_standard, 3 vessels
+
+OPTIMIZED PLAN (OR-Tools, re-planned for moving oil)
+  Status:  feasible
+  Message: sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); T03 (25.429, 55.429) was on land and moved 2.0 km to the nearest water; planned 2 round(s), stopped because the solver aimed within 2 km and every planned stop fit; kept round 2 (the best as sailed), where the solver aimed 1.4 km on average (2.0 km at most) from where the patches were met; moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  RAK-FRV-FALCON: (no targets)  |  0.0 km, 0.00 h sailing, tank 0.0 / 60 m3
+  RAK-OSRV-SAQR: T01-2  |  180.2 km, 6.48 h sailing, tank 150.0 / 250 m3
+  HAMRIYAH-OSRV-RESERVE: T05 -> T01-1 -> T04 -> T03 -> T02  |  26.3 km, 1.02 h sailing, tank 277.4 / 300 m3
+  Rule check: passed
+
+BASELINE (nearest interception first)
+  Status:  feasible
+  Message: baseline: nearest (interception) target first; sea-grid distances around land (2.2 km cells, approximate, not validated operational routes); moving oil: vessels leave 6 h after the release; each target is where the vessel meets its patch, with the oil left then; every vessel sails back to the port it started from (assumed home port), one trip each; cleanup rate 30 m3/h (assumed); unserved: T06 (less than 0.5 m3 left by the time a vessel gets there (stranded, weathered or too small to be worth a trip)); patches cut into cells at dispatch, then followed by their particle ids; tank use and cleanup time counted as emulsion, oil / (1 - water fraction), with the slick-average water fraction from meta.json at the meeting time (the same for every patch); oil recovered is pure oil
+  RAK-FRV-FALCON: (no targets)  |  0.0 km, 0.00 h sailing, tank 0.0 / 60 m3
+  RAK-OSRV-SAQR: T01-2  |  180.2 km, 6.48 h sailing, tank 150.0 / 250 m3
+  HAMRIYAH-OSRV-RESERVE: T05 -> T02 -> T01-1 -> T03 -> T04  |  18.9 km, 0.73 h sailing, tank 281.1 / 300 m3
+  Rule check: passed
+
+COMPARISON (oil as each plan finds it)
+                                    optimized   baseline
+  Oil recovered (m3)                      196        196
+  Response time, back in port (h)       11.48      11.48
+  Targets covered                           6          6
+  Distance (km)                         206.6      199.2
+  Sailing time, all vessels (h)          7.50       7.22
+  Longest single route (h)               6.48       6.48
+  Distance per target (km)               34.4       33.2
+  Oil change: +0.3% (of 196 m3 in all targets)   Response time change: +0.0%
+  Distance change: +3.7%   Sailing time change: +4.0%
+  Share of the oil afloat at dispatch recovered: optimized 98%, baseline 98%
+  Last patch cleaned 10.07 h after dispatch (baseline 9.91 h); the response time above adds the trip back to port.
+  Patches drifted 1.4 km on average (max 2.6 km) between dispatch and the vessel reaching them: how far off a plan with frozen oil would aim.
+
+Wrote dashboard files, comparison.json and baseline/ to outputs/sites/S3/routing (labelled as a simulated scenario)
