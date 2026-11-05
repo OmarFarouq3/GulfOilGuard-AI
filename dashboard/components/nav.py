@@ -9,7 +9,7 @@ from __future__ import annotations
 import streamlit as st
 
 import config
-from components import illustrations
+from components import app_icon, illustrations
 from components.data import DEMO_STATE_KEY, Stage, demo_mode, dev_mode, spills_stage
 from components.labels import STAGE_STATUS
 from services import image_picker, report_loader, scenario, selection, settings
@@ -41,7 +41,7 @@ def top_bar(pages: dict[str, st.Page], stages: dict[str, Stage]) -> None:
     """Brand on the left, response timeline in the middle, options gear on the right."""
     with st.container(horizontal=True, key="gog-topbar", vertical_alignment="center", gap="medium"):
         st.html(
-            f'<div class="gog-brand">{illustrations.img(illustrations.LOGO, "gog-logo")}'
+            f'<div class="gog-brand">{app_icon.logo_html() or illustrations.img(illustrations.LOGO, "gog-logo")}'
             '<div><div class="gog-brand-name">GulfOilGuard<span>-AI</span></div>'
             '<div class="gog-brand-tag">Oil spill response · Arabian Gulf</div></div></div>',
             width="content",

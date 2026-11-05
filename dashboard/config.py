@@ -22,6 +22,7 @@ import yaml
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DASHBOARD_DIR.parent
+ICON_FILE = REPO_ROOT / "assets" / "icon" / "icon.jpeg"  # app icon: browser tab and top bar (components/app_icon.py)
 SETTINGS_FILE = DASHBOARD_DIR / "settings.yaml"
 
 

@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from components import nav, ui
+from components import app_icon, nav, ui
 from components.data import all_stages, reconcile_selection
 
 st.set_page_config(
     page_title="GulfOilGuard-AI",
-    page_icon=":material/water_drop:",
+    page_icon=app_icon.page_icon(),  # assets/icon/icon.jpeg
     layout="wide",
     initial_sidebar_state="collapsed",
 )
