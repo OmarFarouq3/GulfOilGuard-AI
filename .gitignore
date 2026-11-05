@@ -299,5 +299,7 @@ secrets/
 *.pem
 
 # Local radar image dataset (repo root only; dashboard/assets/ stays tracked)
-/assets/
-# /assets/ is local-only, except the ten sample images in assets/images/train that were committed earlier.
+/assets/*
+# /assets/ is local-only, except the ten sample images in assets/images/train that were committed earlier
+# and the app icon below. "/assets/*" (not "/assets/") so that a sub-folder can be un-ignored.
+!/assets/icon/
