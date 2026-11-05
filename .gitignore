@@ -263,10 +263,12 @@ __pycache__/
 # Operating system files
 .DS_Store
 Thumbs.db
+desktop.ini
 __MACOSX/
 ._*
 
 # Training outputs
+# runs/ also holds the dashboard's live Run detection results (runs/dashboard/, config.LIVE_DETECTION_DIR)
 runs/
 logs/
 outputs/
