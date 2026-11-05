@@ -39,7 +39,7 @@ must provide or can read.
   * `gulf_drift_t12.json`: 3 vessels, 8 targets derived from the 24-hour Gulf drift simulation at T+12h (25.85° N, 55.65° E release).
   * `constrained_triage.json`: 2 vessels vs 4 high-volume targets, testing solver drop penalties and coastal prioritization.
 
-* **`routing_model.py` & `vessel_routing.py` (Haris)**:
+* **`routing_model.py` (Haris)**:
   * Google OR-Tools Vehicle Routing Problem (VRP) solver.
   * Enforces vessel capacity ($m^3$, counted as **emulsion** for drift targets: weathered oil takes up sea water, so a tank fills with oil / (1 − water fraction), see 3.1), maximum shift duration (`available_hours`), service/skimming time, and **return to port**: every vessel sails back to the position it started from, which is taken as its home port because the shared schema has none (agreed with the team lead). The trip back counts for distance, sailing time and the shift limit. **One trip per vessel**: a vessel fills its tank at most once (no unloading and going out again).
 

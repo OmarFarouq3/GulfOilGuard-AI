@@ -195,7 +195,7 @@ Developed for the Ericsson Sustainability Challenge 2026.
 
 The project has a basic PyTorch U-Net, real-data training with checkpoint saving/resuming, validation metrics, and mask prediction. The completed baseline achieved 0.8689 Dice and 0.7682 oil-class IoU on 1,615 Refined SOS validation pairs. See [the model card and team handoff](docs/detection_model_card.md) for results and limitations, and [the detection training guide](docs/detection_training.md) for commands. Drift simulation and route optimization remain unimplemented and raise `NotImplementedError`. The dashboard displays scaffold status only. Earlier progress statements above describe the project's original setup.
 
-Start with [architecture](docs/architecture.md), [team assignments](docs/team_tasks.md), [integration plan](docs/integration_plan.md), [data resources](docs/datasets.md), and [shared contracts](shared/README.md). Component responsibilities are in each module README.
+Start with [architecture](docs/architecture.md), [integration plan](docs/integration_plan.md), [data resources](docs/datasets.md), and [shared contracts](shared/README.md). Component responsibilities are in each module README.
 
 Create a local environment manually with `python -m venv .venv`, activate it on Windows with `.venv\Scripts\Activate.ps1`, then install the planned stack with `python -m pip install -r requirements.txt` after reviewing platform compatibility, especially OpenDrift. Nothing is installed automatically; versions remain unpinned until tested. Launch the status dashboard from the repository root with `streamlit run dashboard/app.py`.
 
