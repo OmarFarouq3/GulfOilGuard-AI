@@ -108,8 +108,9 @@ GulfOilGuard-AI/
 ├── requirements.txt  full pipeline + dashboard (includes dashboard/requirements.txt)
 └── README.md
 
-Not in the repository (git-ignored, local only): outputs/, checkpoints/, data/,
-assets/images/ (except ten sample images), runs/, .env
+In the repository: outputs/ (real S1-S4 results) and checkpoints/unet_best.pth.
+Not in the repository (local only): data/, assets/images/ (except ten sample images),
+runs/, .env, and backups inside outputs/
 ```
 
 Team Collaboration
@@ -188,10 +189,9 @@ Start with [architecture](docs/architecture.md), [integration plan](docs/integra
    python -m pip install -r requirements.txt
    ```
 
-2. Get the data. **`outputs/` and `checkpoints/` are not in the repository** (they are git-ignored), so a fresh clone has neither:
-   - `outputs/` holds the results the dashboard shows: `outputs/sites/S1…S4/` (each site's drift run, routing plan and validation), `outputs/fleet/`, `outputs/detection/` and `outputs/report/`. Get the current folder from the team's shared drive, or regenerate it with the module commands in [drift/README.md](drift/README.md) and [optimization/README.md](optimization/README.md). The file contract is in [dashboard/README.md](dashboard/README.md).
-   - `checkpoints/unet_best.pth` is the trained U-Net, needed only for **Run detection**. It is shared through the team's file-sharing channel; see [the model card](docs/detection_model_card.md) ("Get and use the trained weights"). Without it, Detect offers a simulated detection, labelled as such.
-   - Radar images: `assets/images/` (local; ten sample images are committed under `assets/images/train/`), or set `GOG_IMAGE_DIR`; see [.env.example](.env.example).
+2. Data. **`outputs/` is included in the repository**, so a fresh clone shows the real results for the four sites S1–S4: `outputs/sites/S1…S4/` (each site's drift run, routing plan and validation), `outputs/fleet/`, `outputs/detection/`, `outputs/report/` and `outputs/drift/` (backups and incoming copies inside `outputs/` stay local). The file contract is in [dashboard/README.md](dashboard/README.md); to regenerate the results, see [drift/README.md](drift/README.md) and [optimization/README.md](optimization/README.md).
+   - `checkpoints/unet_best.pth`, the trained U-Net for **Run detection**, is included too. Without it, Detect offers a simulated detection, labelled as such.
+   - Radar images: `assets/images/` is local (ten sample images are committed under `assets/images/train/`). Settings go in a `.env` file; copy [.env.example](.env.example). **Without a `.env` the app scans all of `assets/images/`** (about 12 s on the first load with the full dataset, and again after a minute); `GOG_IMAGE_DIR=assets/images/val` in `.env` makes it about 1 s.
    - **No data at all?** Write a complete sample scenario and point the dashboard at it. Every sample file is marked `"synthetic": true`, so the pages are labelled **Simulated scenario**:
 
      ```powershell
@@ -199,7 +199,7 @@ Start with [architecture](docs/architecture.md), [integration plan](docs/integra
      $env:GULFOILGUARD_OUTPUTS = "sample_outputs"
      ```
 
-     Without any outputs the dashboard still starts: each page shows an empty state saying what will appear once the files exist. The **Demo scenario** switch in the options panel (or `?demo=1`) shows a simulated incident on every page, labelled as simulated.
+     The **Demo scenario** switch in the options panel (or `?demo=1`) shows a simulated incident on every page, labelled as simulated.
 
 3. Launch it **from the repository root** (so `.streamlit/config.toml` and its theme are used):
 
