@@ -13,3 +13,5 @@ scipy
 streamlit
 plotly
 pytest
+bottleneck
+pyshp
