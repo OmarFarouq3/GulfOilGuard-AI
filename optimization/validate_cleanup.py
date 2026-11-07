@@ -9,8 +9,10 @@ OR-Tools, so it can be run by anyone who has the outputs:
   optimization/fixtures/gulf_standard.json      the fleet (Nihal)
 
 What is checked, in five groups:
-  A. drift input    particle ids unique per step (no oil counted twice), oil afloat per step
-                    equals meta.json, oil only goes down, the 0/6/12/24 h steps are there
+  A. drift input    the run belongs to its site (simulation id, release point and the particles
+                    at 0 h agree, and match --release when given), particle ids unique per step
+                    (no oil counted twice), oil afloat per step equals meta.json, oil only goes
+                    down, the 0/6/12/24 h steps are there, oil stranded on the coast
   B. targets        every particle afloat at dispatch is in exactly one patch (targeted +
                     untargeted = afloat), split parts add up to their patch, targets.geojson
                     matches the patches rebuilt from the drift, how spread out each patch is
@@ -34,12 +36,13 @@ Run from the repository root:
 
 import argparse
 import json
+import re
 from dataclasses import replace
 from datetime import datetime, timedelta
 from math import cos, hypot, isnan, radians
 from pathlib import Path
 
-from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, REPO_ROOT
+from optimization.config import DEFAULT_CONFIG, DEFAULT_DRIFT_CONFIG, GULF_REGION, REPO_ROOT
 from optimization.drift_targets import build_tracks, load_drift
 from optimization.scenario import GULF_DEPOTS
 from optimization.scenario_io import load_scenario
@@ -48,6 +51,9 @@ from shared.schemas import GeoCoordinate
 KNOTS_PER_M_PER_S = 1.943844
 VOLUME_TOL = 0.01  # m3: files round volumes to 3 decimals
 SPREAD_WARN_KM = 1.5  # a patch wider than this is not one skimming position
+RELEASE_TOL_KM = 1.0  # OpenDrift releases inside a 500 m circle around the release point
+GRID_CELL_KM = GULF_REGION.cell_deg * 111.2  # sea-grid distances run between cell centres: up to a cell off per leg
+LESS_OIL_TOL = 0.01  # share: an optimized plan cleaning 1 % less oil than the baseline is flagged
 EMULSION_TOL = 0.001  # share: meet_hours is rounded to 0.01 h, which moves the water fraction a little
 TIME_TOL = 0.02  # h: meet_hours is rounded to 0.01 h
 
@@ -113,13 +119,65 @@ def _read(path: Path):
 # --- A. drift input -------------------------------------------------------------------------
 
 
-def check_drift(drift_dir: Path, r: Report) -> dict:
+def _sim_id_parts(sim_id: str) -> tuple[float, float, str] | None:
+    """(lat, lon, start 'YYYYMMDDTHHMMZ') from an id like openoil-25.85N-55.65E-20261023T1200Z."""
+    m = re.search(r"(\d+(?:\.\d+)?)([NS])-(\d+(?:\.\d+)?)([EW])-(\d{8}T\d{4}Z)", sim_id or "")
+    if not m:
+        return None
+    lat = float(m[1]) * (1 if m[2] == "N" else -1)
+    lon = float(m[3]) * (1 if m[4] == "E" else -1)
+    return lat, lon, m[5]
+
+
+def check_provenance(meta: dict, at_zero: list[tuple[GeoCoordinate, float]], expected: GeoCoordinate | None,
+                     r: Report) -> dict:
+    """Is this the drift run of this site, and not another site's run moved or relabelled?"""
+    g = "A drift"
+    init = meta.get("initial_location")
+    release = GeoCoordinate(**init) if init else None
+    sim_id = meta.get("simulation_id", "")
+    r.check(g, release is not None, f"meta.json gives the release point ({sim_id or 'no simulation_id'})")
+    if release is None:
+        return {}
+    parts = _sim_id_parts(sim_id)
+    if parts:
+        lat, lon, start = parts
+        r.check(g, abs(lat - release.latitude) < 0.005 and abs(lon - release.longitude) < 0.005,
+                f"simulation id {sim_id} names the release point given in meta.json "
+                f"({release.latitude:g} N, {release.longitude:g} E)")
+        if meta.get("start_time"):
+            when = meta["start_time"].replace("-", "").replace(":", "")[:13] + "Z"
+            r.check(g, when == start, f"simulation id {sim_id} names the start time given in meta.json "
+                    f"({meta['start_time']})")
+        else:
+            r.warn(g, "meta.json has no start_time, so the simulation id's start time cannot be compared")
+    else:
+        r.warn(g, f"simulation id {sim_id!r} does not name a release point, so it cannot be compared")
+    vol = sum(v for _, v in at_zero)
+    if vol > 0:
+        centre = GeoCoordinate(latitude=sum(p.latitude * v for p, v in at_zero) / vol,
+                               longitude=sum(p.longitude * v for p, v in at_zero) / vol)
+        off = _km(centre, release)
+        r.check(g, off <= RELEASE_TOL_KM, f"the particles at 0 h are centred {off * 1000:.0f} m from the release point "
+                "(they were released there, not moved from another run)")
+    else:
+        r.warn(g, "no oil afloat at 0 h in drift.geojson, so the particles cannot be checked against the release point")
+    if expected is not None:
+        off = _km(release, expected)
+        r.check(g, off <= RELEASE_TOL_KM, f"release point {release.latitude:g} N, {release.longitude:g} E is the "
+                f"site's ({expected.latitude:g} N, {expected.longitude:g} E, {off * 1000:.0f} m apart)")
+    return {"release": {"latitude": release.latitude, "longitude": release.longitude}}
+
+
+def check_drift(drift_dir: Path, r: Report, expected_release: GeoCoordinate | None = None) -> dict:
     g = "A drift"
     collection = _read(drift_dir / "drift.geojson")
     meta = _read(drift_dir / "meta.json") if (drift_dir / "meta.json").exists() else {}
     r.check(g, meta.get("synthetic") is True, "meta.json is labelled synthetic (release point is a test point)")
 
     by_step: dict[float, dict[str, list]] = {}
+    at_zero: list[tuple[GeoCoordinate, float]] = []
+    stranded: dict[float, dict[str, float]] = {}
     for f in collection["features"]:
         geom, props = f.get("geometry") or {}, f.get("properties") or {}
         if geom.get("type") not in ("Point", "MultiPoint"):
@@ -129,9 +187,18 @@ def check_drift(drift_dir: Path, r: Report) -> dict:
         step["ids"] += [str(i) for i in ids]
         if props.get("timestamp"):
             step["timestamps"].add(props["timestamp"])
-        if props.get("status", "active") == "active":
+        status = props.get("status", "active")
+        if status == "active":
             step["active_m3"] += props.get("oil_volume_m3", 0.0)
+            if float(props["hours"]) == 0:
+                pts = [geom["coordinates"]] if geom["type"] == "Point" else geom["coordinates"]
+                at_zero += [(_point(c), props.get("oil_volume_m3", 0.0) / len(pts)) for c in pts]
+        elif status == "stranded":
+            s = stranded.setdefault(float(props["hours"]), {"particles": 0, "m3": 0.0})
+            s["particles"] += len(ids)
+            s["m3"] += props.get("oil_volume_m3", 0.0)
 
+    provenance = check_provenance(meta, at_zero, expected_release, r)
     hours = sorted(by_step)
     r.check(g, all(h in by_step for h in (0, 6, 12, 24)), f"forecast steps 0, 6, 12, 24 h present ({len(hours)} steps, "
             f"{hours[0]:g} to {hours[-1]:g} h)")
@@ -167,7 +234,23 @@ def check_drift(drift_dir: Path, r: Report) -> dict:
     if release:
         r.check(g, abs(afloat[0] - release) <= 0.5, f"oil afloat at 0 h ({afloat[0]:.1f}) equals release_volume_m3 ({release:g})")
 
-    return {"meta": meta, "afloat_by_hour": dict(zip(hours, afloat)),
+    # Oil that reached the coast is not a cleanup target (routing takes oil afloat only).
+    reached = sorted(h for h, s in stranded.items() if s["particles"])
+    # meta.json counts the particles not afloat (stranded or other) per hour: drift.geojson must agree.
+    counted = {h: row["stranded_or_other"] for h, row in summary.items() if "stranded_or_other" in row}
+    if counted:
+        off = [h for h in hours if h in counted and counted[h] != stranded.get(h, {}).get("particles", 0)]
+        r.check(g, not off, "particles not afloat per step in drift.geojson equal meta.json stranded_or_other"
+                + ("" if not off else f": differ at {off}"))
+    if reached:
+        last = stranded[reached[-1]]
+        r.warn(g, f"oil reaches the coast: {last['particles']} particles ({last['m3']:.1f} m3) stranded by "
+                  f"{reached[-1]:g} h, the first at {reached[0]:g} h. Routing only targets oil afloat, so shoreline "
+                  "oil is outside the cleanup plan")
+    else:
+        r.ok(g, "no oil stranded on the coast during the forecast")
+    return {"meta": meta, "afloat_by_hour": dict(zip(hours, afloat)), **provenance,
+            "stranded_by_hour": {h: stranded[h] for h in reached},
             "water_fraction_by_hour": {h: row.get("mean_water_fraction") for h, row in summary.items()}}
 
 
@@ -197,6 +280,13 @@ def check_targets(drift_dir: Path, routing_dir: Path, vessels, comparison: dict,
     r.ok(g, f"tank basis of the plan: {drift_info['tank_basis']}"
          + ("" if (comparison.get("drift") or {}).get("tank_basis")
             else " (comparison.json has no tank_basis: made before emulsion counting)"))
+    plan_sim = (comparison.get("drift") or {}).get("simulation_id")
+    if plan_sim:
+        sim = drift_info["meta"].get("simulation_id")
+        r.check(g, plan_sim == sim, f"the plan was made from this drift run (comparison.json: {plan_sim}, "
+                f"meta.json: {sim})")
+    else:
+        r.warn(g, "comparison.json does not name its drift run; the targets are still checked against this drift below")
     forecast = load_drift(drift_dir, replace(DEFAULT_DRIFT_CONFIG, count_emulsion=emulsion))
     dispatch = float((comparison.get("drift") or {}).get("dispatch_hours", DEFAULT_DRIFT_CONFIG.dispatch_hours))
     if not comparison:
@@ -391,13 +481,17 @@ def check_routes(routing_dir: Path, vessels, drift_info: dict, r: Report, label:
         r.check(g, abs(sailing - p["estimated_travel_hours"]) < 0.01,
                 f"{vid}: sailing {p['estimated_travel_hours']:.2f} h = {km:.1f} km / "
                 f"{v.speed_m_per_s * KNOTS_PER_M_PER_S:.1f} kn (rechecked {sailing:.2f} h)")
-        # The distance cannot be shorter than straight lines through the stops; the drawn sea path
-        # (grid cell centres) is a little longer than the routed distance, so it is an upper bound.
+        # The distance cannot be much shorter than straight lines through the stops: sea-grid distances
+        # run between cell centres, so each leg may come out up to about one cell (2.2 km) short. The
+        # drawn sea path (cell centres, zigzag) is a little longer than the routed distance: an upper bound.
         straight = _line_km(f["geometry"]["coordinates"])
         drawn = _line_km(p["sea_path"]) if p.get("sea_path") else None
-        r.check(g, km >= 0.99 * straight and (drawn is None or km <= drawn * 1.01),
-                f"{vid}: {km:.1f} km is between the straight line through its stops ({straight:.1f} km)"
-                + ("" if drawn is None else f" and its drawn sea path ({drawn:.1f} km)"), level_if_not="WARN")
+        legs = max(1, len(coords) - 1)
+        low = straight - legs * GRID_CELL_KM if drawn is not None else 0.99 * straight
+        r.check(g, km >= low and (drawn is None or km <= drawn * 1.01),
+                f"{vid}: {km:.1f} km is between the straight line through its stops ({straight:.1f} km"
+                + (f", less up to {GRID_CELL_KM:.1f} km per leg for the sea grid" if drawn is not None and km < straight else "")
+                + ")" + ("" if drawn is None else f" and its drawn sea path ({drawn:.1f} km)"), level_if_not="WARN")
         # finish_hours must be sailing + cleanup, both as rechecked above.
         finish = p["estimated_travel_hours"] + cleanup
         r.check(g, abs(finish - p["finish_hours"]) <= max(0.01, EMULSION_TOL * finish),
@@ -538,6 +632,12 @@ def check_comparison(comparison: dict, optimized: dict, baseline: dict | None, r
         r.ok(g, f"{label}: optimized {shown(o)} vs baseline {shown(b)}{extra} (recalculated)")
     r.ok(g, "same targets covered by both plans" if mine["same_targets_covered"] else
          "the plans cover different targets, so read coverage before distance and time")
+    # A feasible plan can still be a poor one: the optimizer should never clean clearly less than nearest-first.
+    o, b = mine["optimized_oil_recovered_m3"], mine["baseline_oil_recovered_m3"]
+    r.check(g, o >= b * (1 - LESS_OIL_TOL), f"the optimized plan cleans at least as much oil as the baseline "
+            f"({o:.1f} vs {b:.1f} m3)" + ("" if o >= b * (1 - LESS_OIL_TOL) else
+            f": it cleans {b - o:.1f} m3 ({(b - o) / b:.0%}) LESS. Show the baseline plan for this scenario, "
+            "or fix the optimizer"), level_if_not="WARN")
     return {"reported": m, "recalculated": mine}
 
 
@@ -553,32 +653,26 @@ def describe_fixture(path: Path) -> dict:
             "max_km_between_targets": round(far, 2)}
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--drift-dir", default=str(REPO_ROOT / "outputs" / "drift"))
-    ap.add_argument("--routing-dir", default=str(REPO_ROOT / "outputs" / "routing"))
-    ap.add_argument("--fleet", default=str(REPO_ROOT / "optimization" / "fixtures" / "gulf_standard.json"))
-    ap.add_argument("--synthetic-fixture", default=str(REPO_ROOT / "optimization" / "fixtures" / "gulf_drift_t12.json"))
-    ap.add_argument("--json", help="also write every check and number to this file")
-    args = ap.parse_args()
-    drift_dir, routing_dir = Path(args.drift_dir), Path(args.routing_dir)
+def validate(drift_dir: Path, routing_dir: Path, fleet: str | Path, expected_release: GeoCoordinate | None = None,
+             synthetic_fixture: str | Path | None = None) -> tuple[Report, dict]:
+    """Run every check on one drift run and its plan. Returns the report and every number."""
     # run_drift_plan writes the plan into routing_dir and the baseline into baseline/; a copy
     # shared by hand may hold them as Optimized/ and Baseline/ instead
     plan_dir = next((d for d in (routing_dir / "Optimized", routing_dir / "optimized") if d.is_dir()), routing_dir)
     baseline_dir = next((d for d in (routing_dir / "baseline", routing_dir / "Baseline") if d.is_dir()), None)
 
     r = Report()
-    _, vessels, _ = load_scenario(args.fleet)
+    _, vessels, _ = load_scenario(fleet)
     # comparison.json (dispatch hour, baseline) is optional: the dashboard needs only the three files
     comparison = _read(routing_dir / "comparison.json") if (routing_dir / "comparison.json").exists() else {}
-    drift = check_drift(drift_dir, r)
+    drift = check_drift(drift_dir, r, expected_release)
     # what the plan put in the tanks; plans made before emulsion counting have no tank_basis
     drift["tank_basis"] = (comparison.get("drift") or {}).get("tank_basis") or "pure oil"
     init = drift["meta"].get("initial_location")
     release = GeoCoordinate(**init) if init else None
     result = {
-        "drift_dir": str(drift_dir), "routing_dir": str(routing_dir), "fleet": args.fleet,
-        "simulation_id": drift["meta"].get("simulation_id"),
+        "drift_dir": str(drift_dir), "routing_dir": str(routing_dir), "fleet": str(fleet),
+        "simulation_id": drift["meta"].get("simulation_id"), "release": drift.get("release"),
         "targets": check_targets(drift_dir, plan_dir, vessels, comparison, drift, r),
         "fleet_rows": check_fleet(vessels, release, _read(plan_dir / "summary.json").get("message", ""), r),
     }
@@ -590,12 +684,16 @@ def main() -> None:
         result["metrics"] = check_comparison(comparison, result["optimized"], result.get("baseline"), r)
     else:
         r.warn("E comparison", f"no comparison.json in {routing_dir}: baseline not checked")
-    if args.synthetic_fixture and Path(args.synthetic_fixture).exists():
-        result["synthetic_fixture"] = describe_fixture(Path(args.synthetic_fixture))
+    if synthetic_fixture and Path(synthetic_fixture).exists():
+        result["synthetic_fixture"] = describe_fixture(Path(synthetic_fixture))
     result["afloat_by_hour"] = drift["afloat_by_hour"]
+    result["stranded_by_hour"] = drift["stranded_by_hour"]
     result["water_fraction_by_hour"] = drift["water_fraction_by_hour"]
     result["tank_basis"] = drift["tank_basis"]
+    return r, result
 
+
+def print_report(r: Report) -> None:
     group = None
     for row in r.rows:
         if row["group"] != group:
@@ -604,11 +702,34 @@ def main() -> None:
         print(f"  [{row['level']:4}] {row['text']}")
     c = r.counts()
     print(f"\n{c['OK']} OK, {c['WARN']} WARN, {c['FAIL']} FAIL")
+
+
+def write_json(path: str | Path, r: Report, result: dict) -> None:
+    Path(path).write_text(json.dumps({"checks": r.rows, "counts": r.counts(), **result}, indent=2, default=str),
+                          encoding="utf-8")
+
+
+def parse_point(text: str) -> GeoCoordinate:
+    """'25.70,55.40' -> GeoCoordinate."""
+    lat, lon = (float(x) for x in text.split(","))
+    return GeoCoordinate(latitude=lat, longitude=lon)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--drift-dir", default=str(REPO_ROOT / "outputs" / "drift"))
+    ap.add_argument("--routing-dir", default=str(REPO_ROOT / "outputs" / "routing"))
+    ap.add_argument("--fleet", default=str(REPO_ROOT / "optimization" / "fixtures" / "gulf_standard.json"))
+    ap.add_argument("--release", type=parse_point, help="the site's release point, LAT,LON: the drift run must be from there")
+    ap.add_argument("--synthetic-fixture", default=str(REPO_ROOT / "optimization" / "fixtures" / "gulf_drift_t12.json"))
+    ap.add_argument("--json", help="also write every check and number to this file")
+    args = ap.parse_args()
+    r, result = validate(Path(args.drift_dir), Path(args.routing_dir), args.fleet, args.release, args.synthetic_fixture)
+    print_report(r)
     if args.json:
-        Path(args.json).write_text(json.dumps({"checks": r.rows, "counts": c, **result}, indent=2, default=str),
-                                   encoding="utf-8")
+        write_json(args.json, r, result)
         print(f"wrote {args.json}")
-    raise SystemExit(1 if c["FAIL"] else 0)
+    raise SystemExit(1 if r.counts()["FAIL"] else 0)
 
 
 if __name__ == "__main__":

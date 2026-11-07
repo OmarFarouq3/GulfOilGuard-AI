@@ -67,7 +67,10 @@ must provide or can read.
   * One-command CLI pipeline to solve a scenario, run baseline evaluation, and export the plan.
 
 * **`validate_cleanup.py` (Nihal)**:
-  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency, no oil counted twice, targets match the drift, fleet depots, tank and cleanup time (on the plan's `tank_basis`: emulsion, or pure oil for older plans), sailing time (distance / speed), `finish_hours` (sailing + cleanup), working hours, meeting times in order, return to port, every target either served or listed unserved, and every metric in `comparison.json` recalculated from the route and target files. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
+  * Checks a finished drift plan again from the raw files, with no OR-Tools needed: drift consistency (and that the run belongs to its site's release point), oil stranded on the coast, no oil counted twice, targets match the drift, fleet depots, tank and cleanup time (on the plan's `tank_basis`: emulsion, or pure oil for older plans), sailing time (distance / speed), `finish_hours` (sailing + cleanup), working hours, meeting times in order, return to port, every target either served or listed unserved, and every metric in `comparison.json` recalculated from the route and target files. Every line is OK, WARN or FAIL. See section 2F; the results are in `docs/cleanup_scenario_validation.md`.
+
+* **`validate_sites.py` (Nihal)**:
+  * Runs `validate_cleanup` on all four demo sites (`outputs/sites/S1` to `S4`), checks that each site has its own drift run (not a translated copy of another site's), and writes one summary table for the demo. See section 2F.
 
 ---
 
@@ -244,10 +247,21 @@ python -m optimization.validate_cleanup --drift-dir outputs/maqqavi --routing-di
 | `--drift-dir` | `outputs/drift` | folder with `drift.geojson` and `meta.json` |
 | `--routing-dir` | `outputs/routing` | the plan (`routes.geojson`, `targets.geojson`, `summary.json`) or `Optimized/`, plus optional `comparison.json` and `baseline/` or `Baseline/` |
 | `--fleet` | `optimization/fixtures/gulf_standard.json` | the vessels **the plan was made with**. A plan made before the fleet changed needs that older file (on OneDrive: `Team C/Fleet/gulf_standard_old_depots.json`), otherwise its routes do not start at the vessels' ports and the check fails |
+| `--release` | none | the site's release point, `LAT,LON`: the drift run must be from there (its `meta.json`, simulation id and particles at 0 h are checked against it) |
 | `--synthetic-fixture` | `optimization/fixtures/gulf_drift_t12.json` | summarised in the JSON for the synthetic vs real comparison |
 | `--json` | none | also write every check and number to this file |
 
-**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state (for example the emulsion load of an older pure-oil plan, a patch wider than 1.5 km, an unserved target, a missing `comparison.json`). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice). The command exits with code 1 if anything fails.
+**All four demo sites at once** (`validate_sites.py`). It reads `outputs/sites/S1` to `S4`, each with `drift/` and `routing/`, as in `drift/MAQQAVI_PROGRESS.md`. It validates each site against its own release point. It then compares the sites' particle movements with each other: a site whose particles move exactly like another site's is a translated copy of that run, not its own forecast, and fails. It ends with a summary table for the demo.
+
+```bash
+python -m optimization.validate_sites --fleet outputs/fleet/gulf_standard.json --write
+```
+
+`--write` saves `validation.txt` and `validation.json` in each site folder, and `sites_summary.md` and `sites_summary.json` in `outputs/sites/`. `--details` prints every check of every site; without it only the FAILs and the table are printed. `--sites S1 S3` checks only those sites. The sites are compared up to the last forecast hour they share, so a copy cut short is still caught; a pair with no particle id or hour in common is reported as not compared, and the command exits with code 1.
+
+The validator has its own tests, `tests/test_validate_cleanup.py`: small made-up drift runs and plans, one per check, so each check is shown to catch its error and a bad input fails instead of crashing.
+
+**How to read it.** `OK` = the rule holds. `WARN` = allowed, but an assumption to state or something to look at (for example the emulsion load of an older pure-oil plan, a patch wider than 1.5 km, an unserved target, oil reaching the coast, a missing `comparison.json`, or an optimized plan that cleans clearly less oil than the baseline). `FAIL` = a broken rule (oil counted twice, over a tank, over a shift, not back in port, a target served twice, a drift run that is not the site's own). The command exits with code 1 if anything fails.
 
 **Change the depots or the fleet.** Edit `GULF_DEPOTS` or the scenario functions in `scenario.py`, then regenerate all four fixtures and check that every vessel is on water (needs the land file from step 0.2):
 
